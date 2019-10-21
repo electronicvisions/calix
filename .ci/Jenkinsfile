@@ -3,6 +3,6 @@
 wafDefaultPipeline(projects: ["calix"],
                    container: [app: "visionary-dls"],
                    testSlurmResource: [partition: "cube", wafer: 62, "fpga-without-aout": 3],
-                   configureOptions: "--test-timeout=500 --clone-depth=1",
+                   testTimeout: 600,
                    testOptions: "-j1 --test-execall",
                    notificationChannel: "#dls-software")
