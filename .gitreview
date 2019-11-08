@@ -1,5 +1,5 @@
 [gerrit]
-host=gerrit.bioai.eu
+host=brainscales-r.kip.uni-heidelberg.de
 port=29418
 project=calix
 defaultbranch=master
