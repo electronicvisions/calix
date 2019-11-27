@@ -6,6 +6,7 @@ from waflib.extras.symwaf2ic import get_toplevel_path
 def depends(dep):
     dep("code-format")
     dep("haldls")
+    dep("libnux")
 
 
 def options(opt):
@@ -51,6 +52,15 @@ def build(bld):
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle")
         )
+
+    bld.program(
+        features = 'cxx objcopy',
+        objcopy_bfdname = 'binary',
+        target = 'template_HelloWorld.bin',
+        source = ['src/ppu/calix/HelloWorld.cpp'],
+        use = ['nux_vx', 'nux_runtime_vx'],
+        env = bld.all_envs['nux_vx'],
+    )
 
     bld.add_post_fun(summary)
 
