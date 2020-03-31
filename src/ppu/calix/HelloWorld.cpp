@@ -1,6 +1,6 @@
 #include <s2pp.h>
 
-template<int N>
+template <int N>
 class HelloWorld
 {
 public:
