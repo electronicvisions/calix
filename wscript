@@ -1,3 +1,4 @@
+import os
 from os.path import join
 from waflib.extras.test_base import summary
 from waflib.extras.symwaf2ic import get_toplevel_path
@@ -24,6 +25,8 @@ def configure(cfg):
 
 
 def build(bld):
+    bld.env.DLSvx_HARDWARE_AVAILABLE = "cube" == os.environ.get("SLURM_JOB_PARTITION")
+
     bld(name='calix_pylib',
         features='py pylint pycodestyle',
         source=bld.path.ant_glob('src/py/**/*.py'),
@@ -50,7 +53,8 @@ def build(bld):
         use='calix_pylib',
         install_path='${PREFIX}/bin/tests',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
-        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle")
+        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
+        skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE
         )
 
     bld.program(
