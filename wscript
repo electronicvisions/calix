@@ -67,8 +67,3 @@ def build(bld):
     )
 
     bld.add_post_fun(summary)
-
-
-def doc(dox):
-    pass
-
