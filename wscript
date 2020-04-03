@@ -57,13 +57,11 @@ def build(bld):
         skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE
         )
 
-    bld.program(
-        features = 'cxx objcopy',
-        objcopy_bfdname = 'binary',
-        target = 'template_HelloWorld.bin',
-        source = ['src/ppu/calix/HelloWorld.cpp'],
-        use = ['nux_vx', 'nux_runtime_vx'],
-        env = bld.all_envs['nux_vx'],
-    )
+    bld.program(features='cxx',
+                target='template_HelloWorld.bin',
+                source=['src/ppu/calix/HelloWorld.cpp'],
+                use=['nux_vx', 'nux_runtime_vx'],
+                env=bld.all_envs['nux_vx'],
+                )
 
     bld.add_post_fun(summary)
