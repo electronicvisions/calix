@@ -1,7 +1,6 @@
 @Library("jenlib") _
 
 wafDefaultPipeline(projects: ["calix"],
-                   moduleOptions: [modules: ["ppu-toolchain"]],
                    container: [app: "dls"],
                    testSlurmResource: [partition: "cube", wafer: 62, "fpga-without-aout": 3],
                    testTimeout: 600,
