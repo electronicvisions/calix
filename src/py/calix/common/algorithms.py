@@ -78,7 +78,7 @@ class BinarySearch(base.Algorithm):
 
         # Set start parameters as middle of parameter range
         self.initial_parameters = \
-            np.ones(self.calibration.n_instances, dtype=np.int) \
+            np.ones(self.calibration.n_instances, dtype=int) \
             * int(possibilities / 2) + self.calibration.parameter_range.lower
 
     def run(self, connection: hxcomm.ConnectionHandle,
@@ -116,7 +116,7 @@ class BinarySearch(base.Algorithm):
 
         last_parameters = np.empty((self.n_steps_best,
                                     self.calibration.n_instances),
-                                   dtype=np.int)
+                                   dtype=int)
         last_deviations = np.empty((self.n_steps_best,
                                     self.calibration.n_instances))
 
@@ -321,7 +321,7 @@ class LinearSearch(base.Algorithm):
             parameters = self.initial_parameters
         if isinstance(parameters, numbers.Integral):
             parameters = np.ones(self.calibration.n_instances,
-                                 dtype=np.int) * parameters
+                                 dtype=int) * parameters
         if not isinstance(self.step_size, numbers.Integral):
             raise TypeError(
                 "The step size for ParameterSweep needs to be a single "
@@ -329,7 +329,7 @@ class LinearSearch(base.Algorithm):
 
         running = np.ones(self.calibration.n_instances, dtype=np.bool)
         last_parameters = np.empty((2, self.calibration.n_instances),
-                                   dtype=np.int)
+                                   dtype=int)
         last_deviations = np.ones((2, self.calibration.n_instances)) * np.inf
 
         for run in range(self.max_steps):
@@ -444,7 +444,7 @@ class PredictiveModel(base.Algorithm):
             probe_parameters = self.probe_parameters
         else:
             probe_parameters = np.ones(
-                self.calibration.n_instances, dtype=np.int
+                self.calibration.n_instances, dtype=int
             ) * self.probe_parameters
 
         builder = sta.PlaybackProgramBuilder()
@@ -532,7 +532,7 @@ class PolynomialPrediction(PredictiveModel):
         """
 
         offset = self.probe_parameters - self.polynomial(probe_results)
-        return np.rint(self.polynomial(target_result) + offset).astype(np.int)
+        return np.rint(self.polynomial(target_result) + offset).astype(int)
 
 
 class LinearPrediction(PolynomialPrediction):

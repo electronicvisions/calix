@@ -499,6 +499,7 @@ def set_analog_neuron_config(builder: sta.PlaybackProgramBuilder,
         halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_sd_exc: 1022,
         halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_sd_inh: 1022,
         halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: 1022,
+        halco.CapMemCellOnCapMemBlock.neuron_i_bias_threshold_comparator: 200
     }
     builder = helpers.capmem_set_quadrant_cells(builder, parameters)
 

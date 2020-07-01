@@ -89,12 +89,6 @@ class NeuronThresholdCalibration(base.Calibration):
                 halco.CapMemRowOnCapMemBlock.v_reset:
                 hal.CapMemCell.Value.min})
 
-        # Set threshold comparator bias current
-        builder = helpers.capmem_set_quadrant_cells(
-            builder, config={
-                halco.CapMemCellOnCapMemBlock.
-                neuron_i_bias_threshold_comparator: 200})
-
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         sta.run(connection, builder.done())
 
