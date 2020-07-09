@@ -8,7 +8,7 @@ changing the leak potential in one neuron after another.
 
 import unittest
 import numpy as np
-from dlens_vx_v1 import sta, halco, hal
+from dlens_vx_v2 import sta, halco, hal
 
 from calix.common import cadc, helpers
 from calix.hagen import neuron_helpers
@@ -38,15 +38,18 @@ class TestCADCAssignment(ConnectionSetup):
         :return: Builder with configurationa appended.
         """
         builder = helpers.capmem_set_quadrant_cells(
-            builder, config={  # cell at debug output
+            builder, config={
+                halco.CapMemCellOnCapMemBlock.
+                neuron_i_bias_leak_source_follower: 100,
+                halco.CapMemCellOnCapMemBlock.neuron_i_bias_readout_amp: 110,
+                halco.CapMemCellOnCapMemBlock.neuron_v_bias_casc_n: 340,
+                # cell at debug output:
                 halco.CapMemCellOnCapMemBlock.stp_v_charge_0: 50})
 
         builder = helpers.capmem_set_neuron_cells(
             builder, config={
                 halco.CapMemRowOnCapMemBlock.v_leak: 1000,
-                halco.CapMemRowOnCapMemBlock.i_bias_leak: 1000,
-                halco.CapMemRowOnCapMemBlock.i_bias_source_follower: 500,
-                halco.CapMemRowOnCapMemBlock.i_bias_readout: 1018})
+                halco.CapMemRowOnCapMemBlock.i_bias_leak: 1000})
 
         # Neuron Config: Enable readout and set leak strong
         neuron_config = hal.NeuronConfig()

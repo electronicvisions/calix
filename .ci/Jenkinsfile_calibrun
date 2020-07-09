@@ -22,11 +22,6 @@ enum HxVersion {
 	}
 }
 
-Map<HxVersion, String> HxVersionGerritQuery = [
-		(HxVersion.HXv1): "11720",
-		(HxVersion.HXv2): "13234",
-]
-
 class HxCubeSetup implements Serializable {
 	static final int GERRIT_HXCUBE_ID = 2
 
@@ -109,11 +104,18 @@ if __name__ == '__main__':
 }
 
 Closure calibrationPipeline = { HxVersion version ->
-	// Drop the triggering changeset until we can make this job changeset-free.
-	withEnv(["GERRIT_CHANGE_NUMBER=${HxVersionGerritQuery[version]}",
-	         "GERRIT_HOST=gerrit.bioai.eu",
-	         "GERRIT_PORT=29418"]) {
-		wafSetup(projects: ["calix", "hwdb"])
+	if (version == HxVersion.HXv1)
+	{
+		wafSetup(projects: ["calix@EOL_hxv1", "hwdb"], ignoreGerritChanges: true)
+	}
+	else if (version == HxVersion.HXv2)
+	{
+		// Drop the triggering changeset until we can make this job changeset-free.
+		withEnv(["GERRIT_CHANGE_NUMBER=13234",
+			 "GERRIT_HOST=gerrit.bioai.eu",
+			 "GERRIT_PORT=29418"]) {
+			wafSetup(projects: ["calix", "hwdb"])
+		}
 	}
 
 	stage("Build for ${version}") {

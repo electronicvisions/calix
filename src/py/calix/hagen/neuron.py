@@ -8,7 +8,7 @@ from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import sta, halco, hal, hxcomm
+from dlens_vx_v2 import sta, halco, hal, hxcomm
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import neuron_helpers, neuron_evaluation, \
@@ -86,9 +86,9 @@ class _CalibrationResultInternal:
 
     v_leak: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
     v_reset: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
-    v_syn_exc: np.ndarray = np.empty(
+    i_syn_exc_shift: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    v_syn_inh: np.ndarray = np.empty(
+    i_syn_inh_shift: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_bias_leak: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
@@ -96,9 +96,9 @@ class _CalibrationResultInternal:
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_inh_gm: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_res: np.ndarray = np.empty(
+    i_syn_exc_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_res: np.ndarray = np.empty(
+    i_syn_inh_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     success: np.ndarray = np.ones(halco.NeuronConfigOnDLS.size, dtype=bool)
 
@@ -114,14 +114,19 @@ class _CalibrationResultInternal:
         conversion = {
             halco.CapMemRowOnCapMemBlock.v_leak: self.v_leak,
             halco.CapMemRowOnCapMemBlock.v_reset: self.v_reset,
-            halco.CapMemRowOnCapMemBlock.v_syn_exc: self.v_syn_exc,
-            halco.CapMemRowOnCapMemBlock.v_syn_inh: self.v_syn_inh,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift:
+            self.i_syn_exc_shift,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift:
+            self.i_syn_inh_shift,
             halco.CapMemRowOnCapMemBlock.i_bias_leak: self.i_bias_leak,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: self.i_syn_exc_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: self.i_syn_inh_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_res:
-            self.i_syn_exc_res,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_res: self.i_syn_inh_res
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm:
+            self.i_syn_exc_gm,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm:
+            self.i_syn_inh_gm,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
+            self.i_syn_exc_tau,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
+            self.i_syn_inh_tau
         }
 
         # convert parameters
@@ -147,8 +152,8 @@ def calibrate(
         connection: hxcomm.ConnectionHandle, *,
         target_leak_read: Union[int, np.ndarray] = 120,
         tau_mem: pq.quantity.Quantity = 60 * pq.us,
-        tau_syn: pq.quantity.Quantity = 0 * pq.us,
-        i_synin_gm: int = 100, target_noise: Optional[float] = 1.2,
+        tau_syn: pq.quantity.Quantity = 0.32 * pq.us,
+        i_synin_gm: int = 300, target_noise: Optional[float] = None,
         readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
         initial_configuration: Optional[
             Callable[[hxcomm.ConnectionHandle], None]] = None
@@ -222,12 +227,12 @@ def calibrate(
         of each neuron. It can also be shaped (2,) for the excitatory
         and inhibitory synaptic input of all neurons, or shaped (512,)
         for both inputs per neuron.
-    :param i_synin_gm: Target excitatory synaptic input OTA bias current.
-        The amplitudes of inputs using this target current is measured,
-        and the median of all neurons' amplitudes is taken as target
+    :param i_synin_gm: Target synaptic input OTA bias current.
+        The amplitudes of excitatory inputs using this target current are
+        measured, and the median of all neurons' amplitudes is taken as target
         for calibration of the synaptic input strengths.
         The inhibitory synaptic input gets calibrated to match the excitatory.
-        Values of 60-100 are proposed here. Choosing high values yields
+        Some 300 LSB are proposed here. Choosing high values yields
         higher noise and lower time constants on the neurons, choosing
         low values yields less gain in a multiplication.
     :param target_noise: Noise amplitude in an integration process to
@@ -296,37 +301,37 @@ def calibrate(
     # Calibrate synaptic input time constant using MADC
     if np.all(tau_syn == 0 * pq.us):
         noise = 5  # applied to similarly configured CapMem cells
-        calib_result.i_syn_exc_res = \
+        calib_result.i_syn_exc_tau = \
             hal.CapMemCell.Value.max - noise + helpers.capmem_noise(
                 -noise, noise + 1, size=halco.NeuronConfigOnDLS.size)
-        calib_result.i_syn_inh_res = \
+        calib_result.i_syn_inh_tau = \
             hal.CapMemCell.Value.max - noise + helpers.capmem_noise(
                 -noise, noise + 1, size=halco.NeuronConfigOnDLS.size)
         builder = sta.PlaybackProgramBuilder()
         calibration = neuron_synin.ExcSynTimeConstantCalibration()
         builder = calibration.configure_parameters(
-            builder, calib_result.i_syn_exc_res)
+            builder, calib_result.i_syn_exc_tau)
         calibration = neuron_synin.InhSynTimeConstantCalibration()
         builder = calibration.configure_parameters(
-            builder, calib_result.i_syn_inh_res)
+            builder, calib_result.i_syn_inh_tau)
         sta.run(connection, builder.done())
     elif np.ndim(tau_syn) > 0 and \
             tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
         calibration = neuron_synin.ExcSynTimeConstantCalibration()
-        calib_result.i_syn_exc_res = calibration.run(
+        calib_result.i_syn_exc_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
             target=tau_syn[0]).calibrated_parameters
         calibration = neuron_synin.InhSynTimeConstantCalibration()
-        calib_result.i_syn_inh_res = calibration.run(
+        calib_result.i_syn_inh_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
             target=tau_syn[1]).calibrated_parameters
     else:
         calibration = neuron_synin.ExcSynTimeConstantCalibration()
-        calib_result.i_syn_exc_res = calibration.run(
+        calib_result.i_syn_exc_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
             target=tau_syn).calibrated_parameters
         calibration = neuron_synin.InhSynTimeConstantCalibration()
-        calib_result.i_syn_inh_res = calibration.run(
+        calib_result.i_syn_inh_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
             target=tau_syn).calibrated_parameters
 
@@ -358,7 +363,7 @@ def calibrate(
     exc_synin_calibration = neuron_synin.ExcSynBiasCalibration(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
-            i_synin_gm + 150, hal.CapMemCell.Value.max)))
+            i_synin_gm + 250, hal.CapMemCell.Value.max)))
     result = exc_synin_calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_exc_gm = result.calibrated_parameters
@@ -372,7 +377,7 @@ def calibrate(
     calibration = neuron_synin.InhSynBiasCalibration(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
-            i_synin_gm + 150, hal.CapMemCell.Value.max)),
+            i_synin_gm + 250, hal.CapMemCell.Value.max)),
         target=exc_synin_calibration.target)
     calibration.n_events = exc_synin_calibration.n_events
     result = calibration.run(
@@ -385,7 +390,7 @@ def calibrate(
         target=target_cadc_reads)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.v_syn_inh = result.calibrated_parameters
+    calib_result.i_syn_inh_shift = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
@@ -398,7 +403,7 @@ def calibrate(
         target=target_cadc_reads)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.v_syn_exc = result.calibrated_parameters
+    calib_result.i_syn_exc_shift = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
@@ -437,7 +442,7 @@ def calibrate(
             target=target_cadc_reads)
         result = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch())
-        calib_result.v_syn_exc = result.calibrated_parameters
+        calib_result.i_syn_exc_shift = result.calibrated_parameters
         calib_result.success = np.all([
             calib_result.success, result.success], axis=0)
 
@@ -446,7 +451,7 @@ def calibrate(
             target=target_cadc_reads)
         result = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch())
-        calib_result.v_syn_inh = result.calibrated_parameters
+        calib_result.i_syn_inh_shift = result.calibrated_parameters
         calib_result.success = np.all([
             calib_result.success, result.success], axis=0)
 

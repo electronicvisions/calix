@@ -7,7 +7,7 @@ with the addresses.
 import unittest
 from typing import Optional
 import numpy as np
-from dlens_vx_v1 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
 from calix.common import helpers
 from calix.hagen import synapse_driver

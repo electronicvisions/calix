@@ -6,7 +6,7 @@ from typing import Optional
 import os
 from dataclasses import dataclass
 import numpy as np
-from dlens_vx_v1 import halco, hal, sta, logger, hxcomm
+from dlens_vx_v2 import halco, hal, sta, logger, hxcomm
 
 from calix.common import helpers, algorithms, base, \
     cadc_helpers, cadc_evaluation

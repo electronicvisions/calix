@@ -9,7 +9,7 @@ from typing import List, Union, Optional
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
-from dlens_vx_v1 import sta, logger, hxcomm
+from dlens_vx_v2 import sta, logger, hxcomm
 
 from calix.common.boundary_check import check_range_boundaries
 

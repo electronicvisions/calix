@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Tuple, Union, List, Optional
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, sta, halco, lola, hxcomm
+from dlens_vx_v2 import hal, sta, halco, lola, hxcomm
 
 from calix.common import cadc_helpers, helpers
 from calix import constants
@@ -274,7 +274,9 @@ def neuron_config_default() -> hal.NeuronConfig:
         hal.NeuronConfig.MembraneCapacitorSize.max
     neuron_config.enable_synaptic_input_excitatory = True
     neuron_config.enable_synaptic_input_inhibitory = True
-    neuron_config.enable_leak_degeneration = True
+    neuron_config.enable_synaptic_input_excitatory_high_resistance = False
+    neuron_config.enable_synaptic_input_inhibitory_high_resistance = False
+    neuron_config.enable_leak_degeneration = False
     neuron_config.enable_leak_division = True
     neuron_config.enable_fire = True  # necessary for hal.NeuronResetQuad
     neuron_config.enable_reset_multiplication = True
@@ -479,27 +481,28 @@ def set_analog_neuron_config(builder: sta.PlaybackProgramBuilder,
 
     # set individual neuron parameters to sensible defaults
     parameters = {
-        halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: 0,
-        halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: 0,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm: 0,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm: 0,
         halco.CapMemRowOnCapMemBlock.i_bias_leak: i_leak,
         halco.CapMemRowOnCapMemBlock.v_leak: v_leak,
         halco.CapMemRowOnCapMemBlock.i_bias_reset: 1015,
         halco.CapMemRowOnCapMemBlock.v_reset: v_leak,
-        halco.CapMemRowOnCapMemBlock.v_syn_exc: 655,
-        halco.CapMemRowOnCapMemBlock.v_syn_inh: 645,
-        halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_res: 1021,
-        halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_res: 1020,
-        halco.CapMemRowOnCapMemBlock.i_bias_source_follower: 490,
-        halco.CapMemRowOnCapMemBlock.i_bias_readout: 1000
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop: 300,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop: 300,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift: 310,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift: 310,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau: 1017,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau: 1017
     }
     builder = helpers.capmem_set_neuron_cells(builder, parameters)
 
     # set per-quadrant parameters
     parameters = {
-        halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_sd_exc: 1022,
-        halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_sd_inh: 1022,
+        halco.CapMemCellOnCapMemBlock.neuron_v_bias_casc_n: 250,
+        halco.CapMemCellOnCapMemBlock.neuron_i_bias_readout_amp: 110,
+        halco.CapMemCellOnCapMemBlock.neuron_i_bias_leak_source_follower: 100,
         halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: 1022,
-        halco.CapMemCellOnCapMemBlock.neuron_i_bias_threshold_comparator: 200
+        halco.CapMemCellOnCapMemBlock.neuron_i_bias_spike_comparator: 200
     }
     builder = helpers.capmem_set_quadrant_cells(builder, parameters)
 
@@ -662,11 +665,11 @@ def reconfigure_synaptic_input(
     config = dict()
     if excitatory_biases is not None:
         config.update({
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm:
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm:
             excitatory_biases})
     if inhibitory_biases is not None:
         config.update({
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm:
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm:
             inhibitory_biases})
     builder = helpers.capmem_set_neuron_cells(builder, config)
 

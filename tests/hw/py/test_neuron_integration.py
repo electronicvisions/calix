@@ -8,7 +8,7 @@ import unittest
 import os
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v2 import hal, sta, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
 from calix.hagen import neuron, neuron_helpers
@@ -36,7 +36,7 @@ class TestNeuronCalib(ConnectionSetup):
     def measure_amplitudes(
             cls,
             connection: hxcomm.ConnectionHandle, *,
-            excitatory: bool = True, n_events: int = 15,
+            excitatory: bool = True, n_events: int = 10,
             wait_between_events: pq.quantity.Quantity = 1.5 * pq.us,
             n_runs: int = 30) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -332,11 +332,11 @@ class TestNeuronCalib(ConnectionSetup):
             sta.PlaybackProgramBuilder(),
             {halco.CapMemRowOnCapMemBlock.v_leak: 600,
              halco.CapMemRowOnCapMemBlock.v_reset: 610,
-             halco.CapMemRowOnCapMemBlock.v_syn_exc: 650,
-             halco.CapMemRowOnCapMemBlock.v_syn_inh: 660,
+             halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift: 310,
+             halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift: 310,
              halco.CapMemRowOnCapMemBlock.i_bias_leak: 250,
-             halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: 0,
-             halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: 0})
+             halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm: 0,
+             halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         sta.run(self.connection, builder.done())
 

@@ -6,8 +6,8 @@ from typing import Callable, Set, Type
 import calix
 from calix.common import exceptions
 from calix.common.base import Algorithm, Calibration
-from dlens_vx_v1.sta import ExperimentInit, generate, run
-from dlens_vx_v1.hxcomm import ManagedConnection, ConnectionHandle
+from dlens_vx_v2.sta import ExperimentInit, generate, run
+from dlens_vx_v2.hxcomm import ManagedConnection, ConnectionHandle
 
 
 class GenericCalibrationTest(unittest.TestCase):

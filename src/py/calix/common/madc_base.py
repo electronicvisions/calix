@@ -7,7 +7,7 @@ from typing import Optional, List, Tuple
 import os
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, sta, halco, hxcomm
+from dlens_vx_v2 import hal, sta, halco, hxcomm
 
 from calix.common import base, helpers
 

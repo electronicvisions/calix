@@ -1,6 +1,6 @@
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
 from calix.common import base, helpers
 from calix import constants
@@ -32,17 +32,16 @@ class NeuronThresholdCalibration(base.Calibration):
     * The reset potential is set to the minimum after calibration.
 
     :ivar safe_margin: Amount to increase spike threshold after
-        the calibration. Given in CapMem LSB. For the default value
-        of 18, a spike is usually triggered for a single input of
-        weight 32, for a hagen-mode-like calibration on HICANN-X v1.
-    :ivar accumulation_time: Time to record spikes for
-        during calibration.
+        the calibration. Given in CapMem LSB. The default value of 40
+        seems to work for inputs of weight 32, for a hagen-mode-like
+        calibration on HICANN-X v2.
+    :ivar accumulation_time: Time to record spikes for during calibration.
     :ivar target: Target number of spikes during accumulation time.
         Has to be non-zero as the spike threshold would otherwise
         drift upwards, not allowing small inputs to trigger a spike.
     """
 
-    def __init__(self, safe_margin: int = 18):
+    def __init__(self, safe_margin: int = 40):
         super().__init__(
             parameter_range=base.ParameterRange(
                 hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),

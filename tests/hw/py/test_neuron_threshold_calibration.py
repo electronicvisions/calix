@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
 from calix.common import algorithms, cadc, helpers
 from calix.hagen import neuron, neuron_potentials, neuron_helpers
@@ -132,8 +132,8 @@ class NeuronThresholdTest(ConnectionSetup):
 
         # The number of spikes observed after input can be reduced by
         # dropped spike packets since all neurons fire in a short timeframe.
-        expected_spikes_required = 200  # per bin when spike is expected
-        other_spikes_allowed = 100  # per bin when no spike shoud happen
+        expected_spikes_required = 250  # per bin when spike is expected
+        other_spikes_allowed = 20  # per bin when no spike shoud happen
 
         # Assert expected spikes are present
         self.assertTrue(
@@ -143,9 +143,9 @@ class NeuronThresholdTest(ConnectionSetup):
             + f"{spikes_recorded[spikes_expected]}")
 
         # Assert bins without input have only few spikes
-        self.assertGreater(
+        self.assertEqual(
             np.sum(spikes_recorded[~spikes_expected] < other_spikes_allowed),
-            len(spikes_recorded) - np.sum(spikes_expected) - 3,
+            len(spikes_recorded) - np.sum(spikes_expected),
             "Too many timeframes without spikes expected have spikes: "
             + f"{spikes_recorded[~spikes_expected]}")
 

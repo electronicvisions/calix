@@ -6,7 +6,7 @@ i.e. for multiply-accumulate operation.
 from typing import Tuple
 from dataclasses import dataclass
 import numpy as np
-from dlens_vx_v1 import sta, hxcomm
+from dlens_vx_v2 import sta, hxcomm, halco, hal
 
 from calix.common import base, cadc, helpers
 from calix.hagen import neuron, synapse_driver
@@ -67,6 +67,11 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     :param connection: Connection to the chip to calibrate.
     :param cadc_kwargs: Optional parameters for CADC calibration.
     :param neuron_kwargs: Optional parameters for neuron calibration.
+        The leak bias is set to zero by default, which disables leakage
+        entirely. Manually specify a membrane time constant (example:
+        neuron_kwargs["tau_mem"] = 60) to avoid this. Note that even
+        if the leak bias is set to zero, some pseudo-leakage may occur
+        through the synaptic input OTAs.
 
     :return: HagenCalibrationResult, containing cadc, neuron and
         synapse driver results.
@@ -79,7 +84,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     """
 
     # calibrate CADCs
-    kwargs = {"dynamic_range": base.ParameterRange(100, 450)}
+    kwargs = {"dynamic_range": base.ParameterRange(150, 500)}
     if cadc_kwargs is not None:
         kwargs.update(cadc_kwargs)
     cadc_result = cadc.calibrate(connection, **kwargs)
@@ -91,6 +96,20 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # calibrate synapse drivers
     synapse_driver_result = synapse_driver.calibrate(connection)
+
+    # set leak biases to zero
+    # We want to have only integration on the neurons, no leakage.
+    if "tau_mem" not in neuron_kwargs:
+        builder = sta.PlaybackProgramBuilder()
+        helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: 0})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+        sta.run(connection, builder.done())
+
+        for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+            neuron_result.parameters[neuron_coord][
+                halco.CapMemRowOnCapMemBlock.i_bias_leak] = \
+                hal.CapMemCell.Value(0)
 
     return HagenCalibrationResult(
         cadc_result, neuron_result, synapse_driver_result)

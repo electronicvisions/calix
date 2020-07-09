@@ -2,7 +2,7 @@ import numbers
 from typing import Optional, Union, ClassVar
 import unittest
 import numpy as np
-from dlens_vx_v1 import sta
+from dlens_vx_v2 import sta
 
 from calix.common import algorithms, base
 

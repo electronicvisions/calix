@@ -7,7 +7,7 @@ from typing import Union, Dict, Optional, Tuple
 import warnings
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, sta, halco
+from dlens_vx_v2 import hal, sta, halco
 
 
 def wait_for_us(builder: sta.PlaybackProgramBuilder, waiting_time: float

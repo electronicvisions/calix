@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from dlens_vx_v1 import halco, sta, logger, hxcomm
+from dlens_vx_v2 import halco, sta, logger, hxcomm
 
 from calix.common import algorithms, base, cadc
 from calix.hagen import neuron
@@ -30,13 +30,13 @@ class STPCalibrationTest(ConnectionSetup):
         """
 
         amplitudes = np.empty(halco.SynapseDriverOnDLS.size)
-        address = 15
+        address = 32
 
         builder = sta.PlaybackProgramBuilder()
         builder = hagen_driver.set_synapses_diagonal(
-            builder, address=address, weight=32)
+            builder, address=address)
         amplitudes = hagen_driver.measure_syndrv_amplitudes(
-            connection, builder, address=address, n_events=20)
+            connection, builder, address=address, n_events=12)
 
         self.log.INFO(
             f"Amplitude at address {address}: "
@@ -77,7 +77,7 @@ class STPCalibrationTest(ConnectionSetup):
                 calibrated_amplitudes)
         block_deviations = np.std(block_results, axis=1)
         self.log.INFO("Deviations per CapMem block: ", block_deviations)
-        self.assertLess(np.max(block_deviations), 5,
+        self.assertLess(np.max(block_deviations), 6,
                         "Amplitudes differ strongly within at least one "
                         + "CapMem block.")
 

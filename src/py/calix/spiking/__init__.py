@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from calix.common import cadc, helpers
 from calix.spiking import neuron
 from calix import constants
-from dlens_vx_v1 import sta, hxcomm
+from dlens_vx_v2 import sta, hxcomm
 
 
 @dataclass

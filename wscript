@@ -30,7 +30,7 @@ def build(bld):
     bld(name='calix_pylib',
         features='py pylint pycodestyle',
         source=bld.path.ant_glob('src/py/**/*.py'),
-        use='dlens_vx_v1',
+        use='dlens_vx_v2',
         install_path='${PREFIX}/lib',
         install_from='src/py',
         relative_trick=True,

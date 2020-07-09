@@ -1,5 +1,5 @@
 import unittest
-from dlens_vx_v1 import sta, hxcomm
+from dlens_vx_v2 import sta, hxcomm
 
 
 class ConnectionSetup(unittest.TestCase):

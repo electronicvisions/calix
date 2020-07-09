@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import copy
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, sta, halco, logger, lola, hxcomm
+from dlens_vx_v2 import hal, sta, halco, logger, lola, hxcomm
 
 from calix.common import algorithms, base, cadc_helpers, helpers
 from calix.hagen import neuron_helpers
@@ -63,7 +63,7 @@ class _SynapseDriverResultInternal:
 
     ramp_current: np.ndarray = np.empty(
         halco.NeuronConfigBlockOnDLS.size, dtype=int)
-    offset: np.ndarray = np.empty(
+    hagen_dac_offset: np.ndarray = np.empty(
         halco.SynapseDriverOnDLS.size, dtype=int)
     success: np.ndarray = np.ones(halco.SynapseDriverOnDLS.size, dtype=bool)
 
@@ -90,9 +90,11 @@ class _SynapseDriverResultInternal:
             result.capmem_cells.update({coord: config})
 
         for coord, offset in zip(
-                halco.iter_all(halco.SynapseDriverOnDLS), self.offset):
+                halco.iter_all(halco.SynapseDriverOnDLS),
+                self.hagen_dac_offset):
             config = syndrv_config_enabled()
-            config.offset = hal.SynapseDriverConfig.Offset(offset)
+            config.hagen_dac_offset = hal.SynapseDriverConfig.HagenDACOffset(
+                offset)
             result.synapse_driver_configs.update({coord: config})
 
         for coord, success in zip(
@@ -105,8 +107,6 @@ class _SynapseDriverResultInternal:
 # default address to use for events:
 # This results in medium amplitudes as the activations range
 # from 0 to 31 and are encoded via the addresses.
-# Due to a bug on HICANN-DLS v1, we need to set this address
-# correctly in the synapses.
 _DEFAULT_STIMULATION_ADDRESS = hal.SynapseQuad.Label(15)
 
 
@@ -125,9 +125,9 @@ def preconfigure_capmem(builder: sta.PlaybackProgramBuilder
     builder = helpers.capmem_set_quadrant_cells(builder, parameters)
 
     builder.write(halco.CapMemCellOnDLS.hagen_ibias_dac_top,
-                  hal.CapMemCell(1022))
+                  hal.CapMemCell(990))
     builder.write(halco.CapMemCellOnDLS.hagen_ibias_dac_bottom,
-                  hal.CapMemCell(1022))
+                  hal.CapMemCell(990))
 
     return builder
 
@@ -141,10 +141,8 @@ def set_synapses_diagonal(builder: sta.PlaybackProgramBuilder,
     """
     Configure a diagonal matrix with the given address.
 
-    The activation is encoded in the lower 5 address bits. Due to a
-    bug on HICANN-X v1 the whole address is forwarded to the synapses.
-    As a result one has to set the correct address in the synapses
-    to forward the events to the neurons.
+    The activation is encoded in the lower 5 address bits, which will
+    not be forwarded to the synapses by the synapse drivers.
 
     Blocks of synapses with a size of 8x8 are placed diagonally in each
     synapse array. As a result, each synapse driver drives 8 neighboring
@@ -152,11 +150,18 @@ def set_synapses_diagonal(builder: sta.PlaybackProgramBuilder,
     connected to different PADI buses. By iterating over the 4 different
     PADI buses, the amplitude of each single driver can be determined.
 
+    Caution: The given address is truncated to the most significant bit
+    before being written to the synapses!
+
     :param builder: Builder to append configuration instructions to.
-    :param address: Address to configure the enabled synapses to. Other
-        synapses are set to zero. If the given address is zero, other
-        synapses are set to one.
+    :param address: Address range to configure the enabled synapses to.
+        If the given address is in the range 0...31, the enabled synapses
+        are set to address 0 and the disabled synapses to address 32.
+        If the given address is in the range 32...63, the synapses are
+        configured vice versa.
     :param weight: Weight to configure the enabled synapses to.
+
+    :raises ValueError: If synapse address is invalid.
 
     :return: Builder with configuration appended.
     """
@@ -165,11 +170,14 @@ def set_synapses_diagonal(builder: sta.PlaybackProgramBuilder,
     n_blocks = int(halco.SynapseOnSynapseRow.size / neurons_per_driver)
 
     weights = np.identity(n_blocks, dtype=int) * int(weight)
-    if address != 0:
-        addresses = np.identity(n_blocks, dtype=int) * int(address)
+    if address in range(0, 32):
+        addresses = np.ones((n_blocks, n_blocks), dtype=int) * 32
+        addresses[np.identity(n_blocks, dtype=np.bool)] = 0
+    elif address in range(32, 64):
+        addresses = np.zeros((n_blocks, n_blocks), dtype=int)
+        addresses[np.identity(n_blocks, dtype=np.bool)] = 32
     else:
-        addresses = np.ones((n_blocks, n_blocks), dtype=int)
-        addresses[np.identity(n_blocks, dtype=np.bool)] = int(address)
+        raise ValueError(f"Given address is not in range 0...63: {address}")
 
     weights = np.repeat(weights, neurons_per_driver, axis=1)
     weights = np.repeat(weights, neurons_per_driver, axis=0)
@@ -196,7 +204,7 @@ def syndrv_config_enabled() -> hal.SynapseDriverConfig:
     :returns: config container for enabled synapse driver.
     """
     synapse_driver_config = hal.SynapseDriverConfig()
-    synapse_driver_config.enable_address_out = True
+    synapse_driver_config.enable_address_out = False
     synapse_driver_config.enable_receiver = True
     synapse_driver_config.row_mode_top = \
         hal.SynapseDriverConfig.RowMode.excitatory
@@ -204,6 +212,7 @@ def syndrv_config_enabled() -> hal.SynapseDriverConfig:
         hal.SynapseDriverConfig.RowMode.excitatory
     synapse_driver_config.enable_stp = True
     synapse_driver_config.enable_hagen_modulation = True
+    synapse_driver_config.enable_hagen_dac = True
     synapse_driver_config.row_address_compare_mask = 0b00000
 
     return synapse_driver_config
@@ -215,8 +224,8 @@ def measure_syndrv_amplitudes(
         builder: sta.PlaybackProgramBuilder = None, *,
         address: hal.SynapseQuad.Label =
         _DEFAULT_STIMULATION_ADDRESS,
-        n_runs: int = 20, n_events: int = 10,
-        wait_time: pq.quantity.Quantity = 2 * pq.us) -> np.ndarray:
+        n_runs: int = 20, n_events: int = 8,
+        wait_time: pq.quantity.Quantity = 1.5 * pq.us) -> np.ndarray:
     """
     Measure membrane potentials before and after PADI events are
     injected in one PADI bus after another.
@@ -340,9 +349,9 @@ class STPRampCalibration(base.Calibration):
     """
 
     def __init__(self, test_address: hal.SynapseQuad.Label =
-                 _DEFAULT_STIMULATION_ADDRESS):
+                 hal.SynapseQuad.Label(15)):
         super().__init__(
-            parameter_range=base.ParameterRange(200, 711),
+            parameter_range=base.ParameterRange(300, 811),
             n_instances=halco.CapMemBlockOnDLS.size,
             inverted=False,
             errors=["STP ramp current for quadrants {0} has reached {1}"] * 2)
@@ -350,8 +359,7 @@ class STPRampCalibration(base.Calibration):
         self.target_drivers: Optional[List[halco.SynapseDriverOnDLS]] = None
 
     def set_synapses_row(self, builder: sta.PlaybackProgramBuilder,
-                         address: hal.SynapseQuad.Label =
-                         _DEFAULT_STIMULATION_ADDRESS
+                         address: Optional[hal.SynapseQuad.Label] = None
                          ) -> sta.PlaybackProgramBuilder:
         """
         Configure synapses such that every second neuron receives input
@@ -368,24 +376,45 @@ class STPRampCalibration(base.Calibration):
         repeated for both synapse arrays.
 
         :param builder: Builder to append configuration to.
-        :param address: Address to configure synapses to.
+        :param address: Address range to configure the enabled synapses to.
+            If the given address is in the range 0...31, the enabled synapses
+            are set to address 0 and the disabled synapses to address 32.
+            If the given address is in the range 32...63, the synapses are
+            configured vice versa.
+            If None, the ivar test_address will be used.
 
         :return: Builder with configuration appended.
         """
 
-        # Set all synapses to zero
+        if address is None:
+            address = self.test_address
+
+        # Set all synapses to unused address
+        disabled_address = 1  # just set any bit in the lower five bits
+        enabled_address = 0 if address in range(
+            0, hal.SynapseQuad.Label.size // 2) else \
+            hal.SynapseQuad.Label.size // 2
+        addresses = np.ones(
+            (halco.SynapseOnSynapseRow.size,
+             halco.SynapseRowOnSynram.size), dtype=int
+        ) * disabled_address
+        synapses = lola.SynapseMatrix()
+        synapses.labels.from_numpy(addresses)
+
         for synram in halco.iter_all(halco.SynramOnDLS):
-            builder.write(synram, lola.SynapseMatrix())
+            builder.write(synram, synapses)
 
         # Set every second neuron for the two drivers per synram
         capmems_on_hemisphere = halco.CapMemBlockOnHemisphere.size
         for driver_coord in self.target_drivers:
-            addresses = np.zeros(halco.SynapseOnSynapseRow.size, dtype=int)
-            weights = np.zeros_like(addresses)
-
             capmem_block_id = int(driver_coord.toCapMemBlockOnDLS().toEnum())
+            addresses = np.ones(halco.SynapseQuadColumnOnDLS.size
+                                * halco.EntryOnQuad.size,
+                                dtype=int) * disabled_address
             addresses[capmem_block_id % capmems_on_hemisphere::
-                      capmems_on_hemisphere] = address
+                      capmems_on_hemisphere] = enabled_address
+
+            weights = np.zeros_like(addresses)
             weights[capmem_block_id % capmems_on_hemisphere::
                     capmems_on_hemisphere] = hal.SynapseQuad.Weight.max
 
@@ -428,19 +457,18 @@ class STPRampCalibration(base.Calibration):
         return output_data
 
     @staticmethod
-    def preconfigure_syndrvs(builder: sta.PlaybackProgramBuilder,
-                             offset: hal.SynapseDriverConfig.Offset
+    def preconfigure_syndrvs(builder: sta.PlaybackProgramBuilder
                              ) -> sta.PlaybackProgramBuilder:
         """
         Enable synapse drivers and set offset.
 
         :param builder: Builder to append configuration.
-        :param offset: Offset for the synapse drivers.
 
         :return: Builder with configuration appended.
         """
         synapse_driver_config = syndrv_config_enabled()
-        synapse_driver_config.offset = offset
+        synapse_driver_config.hagen_dac_offset = \
+            int(hal.SynapseDriverConfig.HagenDACOffset.max / 2)
 
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
             builder.write(coord, synapse_driver_config)
@@ -451,7 +479,7 @@ class STPRampCalibration(base.Calibration):
     def measure_amplitudes(
             builder: sta.PlaybackProgramBuilder,
             address: hal.SynapseQuad.Label, n_runs: int = 20,
-            n_events: int = 10, wait_time: pq.quantity.Quantity = 2 * pq.us
+            n_events: int = 8, wait_time: pq.quantity.Quantity = 1.5 * pq.us
     ) -> Tuple[sta.PlaybackProgramBuilder,
                List[sta.ContainerTicket_CADCSampleRow],
                List[sta.ContainerTicket_CADCSampleRow]]:
@@ -565,8 +593,7 @@ class STPRampCalibration(base.Calibration):
 
     def measure_and_evaluate(self, connection: hxcomm.ConnectionHandle,
                              builder: sta.PlaybackProgramBuilder,
-                             address: hal.SynapseQuad.Label =
-                             _DEFAULT_STIMULATION_ADDRESS
+                             address: hal.SynapseQuad.Label
                              ) -> np.ndarray:
         """
         Initiate the measurement of amplitudes of one driver per CapMem
@@ -653,11 +680,9 @@ class STPRampCalibration(base.Calibration):
 
         # Find one "good" driver per block:
         builder = sta.PlaybackProgramBuilder()
-        builder = self.preconfigure_syndrvs(
-            builder, hal.SynapseDriverConfig.Offset(int(
-                hal.SynapseDriverConfig.Offset.max / 2)))
+        builder = self.preconfigure_syndrvs(builder)
         builder = self.configure_parameters(
-            builder, 300 * np.ones(halco.CapMemBlockOnDLS.size, dtype=int))
+            builder, 500 * np.ones(halco.CapMemBlockOnDLS.size, dtype=int))
         builder = set_synapses_diagonal(builder, address=10)
         results = measure_syndrv_amplitudes(
             connection, builder, address=10, n_runs=100)
@@ -687,7 +712,7 @@ class STPRampCalibration(base.Calibration):
         builder = self.configure_parameters(
             builder, 700 * np.ones(halco.CapMemBlockOnDLS.size, dtype=int))
         amplitude_target = self.measure_and_evaluate(
-            connection, builder, address=2)
+            connection, builder, address=0)
 
         # Calculate amplitude target by rule of three and magic factor
         # Assuming the `amplitude_target` is the expected amplitude
@@ -697,7 +722,7 @@ class STPRampCalibration(base.Calibration):
         self.target = amplitude_target / hal.PADIEvent.HagenActivation.max \
             * (hal.PADIEvent.HagenActivation.max
                - int(self.test_address)) \
-            * 0.85  # magic factor
+            * 1.0  # magic factor
 
         log.DEBUG(f"Set target high amplitudes: {amplitude_target}")
         log.DEBUG(f"Set read target at address {self.test_address}: "
@@ -733,12 +758,14 @@ class STPRampCalibration(base.Calibration):
                + f"{self.result.calibrated_parameters}")
 
 
-class STPOffsetCalibration(base.Calibration):
+class HagenDACOffsetCalibration(base.Calibration):
     """
-    Search STP offset settings such that drivers yield the same amplitudes.
+    Search Hagen-mode DAC offset settings such that drivers
+    yield the same pulse lengths.
 
     Can configure offsets to the drivers and measure their amplitudes with
     STP in hagen mode enabled.
+
     Initially, amplitudes at half the maximum offset are measured and
     the median is taken as target for calibration.
 
@@ -753,16 +780,19 @@ class STPOffsetCalibration(base.Calibration):
     :ivar default_syndrv_config: Synapse driver config to use during
         calibration, with everything but the offset configured.
         Used in configure_parameters, only the offset is set there.
+    :ivar test_address: Address used during amplitude measurement, should
+        result in a medium STP state. Set to 15 by default.
     """
 
     def __init__(self):
         super().__init__(
             parameter_range=base.ParameterRange(
-                hal.SynapseDriverConfig.Offset.min,
-                hal.SynapseDriverConfig.Offset.max),
+                hal.SynapseDriverConfig.HagenDACOffset.min,
+                hal.SynapseDriverConfig.HagenDACOffset.max),
             n_instances=halco.SynapseDriverOnDLS.size,
             inverted=True)
         self.default_syndrv_config = syndrv_config_enabled()
+        self.test_address = hal.SynapseQuad.Label(15)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -778,7 +808,7 @@ class STPOffsetCalibration(base.Calibration):
 
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
             synapse_driver_config = copy.deepcopy(self.default_syndrv_config)
-            synapse_driver_config.offset = hal.SynapseDriverConfig.Offset(
+            synapse_driver_config.hagen_dac_offset = int(
                 parameters[int(coord.toEnum())])
 
             builder.write(coord, synapse_driver_config)
@@ -797,7 +827,8 @@ class STPOffsetCalibration(base.Calibration):
         :return: Array of synapse drivers' output amplitudes.
         """
 
-        return measure_syndrv_amplitudes(connection, builder)
+        return measure_syndrv_amplitudes(
+            connection, builder, address=self.test_address)
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
@@ -810,15 +841,15 @@ class STPOffsetCalibration(base.Calibration):
         """
 
         builder = sta.PlaybackProgramBuilder()
-        builder = set_synapses_diagonal(builder)  # set to medium activation
+        builder = set_synapses_diagonal(builder, address=self.test_address)
         builder = self.configure_parameters(
             builder, np.ones(halco.SynapseDriverOnDLS.size, dtype=int)
-            * int(hal.SynapseDriverConfig.Offset.max / 2))
+            * (hal.SynapseDriverConfig.HagenDACOffset.max // 2))
         results = self.measure_results(connection, builder)
         self.target = np.median(results)
 
         logger.get(
-            "calix.hagen.synapse_driver.STPOffsetCalibration.prelude"
+            "calix.hagen.synapse_driver.HagenDACOffsetCalibration.prelude"
         ).DEBUG(
             "Deviation of synapse driver amplitudes before offset calib: "
             + f"{np.std(results):4.2f}")
@@ -833,7 +864,7 @@ class STPOffsetCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         logger.get(
-            "calix.hagen.synapse_driver.STPOffsetCalibration.postlude"
+            "calix.hagen.synapse_driver.HagenDACOffsetCalibration.postlude"
         ).INFO(
             "Deviation of synapse driver amplitudes after offset calib: "
             + f"{np.std(results):4.2f}")
@@ -852,7 +883,7 @@ def calibrate(connection: hxcomm.ConnectionHandle
     (3) set the ramp current such that the activation scales amplitudes
     sensibly.
 
-    The STP offsets are calibrated for each driver afterwards.
+    The hagen-mode DAC offsets are calibrated for each driver afterwards.
 
     Requirements:
     - Chip is initialized and CADCs as well as neurons have been
@@ -884,9 +915,9 @@ def calibrate(connection: hxcomm.ConnectionHandle
         calib_result.success[int(coord.toEnum())] = \
             result.success[int(coord.toCapMemBlockOnDLS().toEnum())]
 
-    # Calibrate STP offsets
-    calibration = STPOffsetCalibration()
-    calib_result.offset = calibration.run(
+    # Calibrate hagen-mode DAC offsets
+    calibration = HagenDACOffsetCalibration()
+    calib_result.hagen_dac_offset = calibration.run(
         connection, algorithm=algorithms.BinarySearch()).calibrated_parameters
     # success not checked since hitting range boundaries is expected
 

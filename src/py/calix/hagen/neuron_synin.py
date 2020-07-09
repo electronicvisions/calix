@@ -10,7 +10,7 @@ import os
 import numpy as np
 import quantities as pq
 from scipy.optimize import curve_fit
-from dlens_vx_v1 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v2 import hal, sta, halco, logger, hxcomm
 
 from calix.common import algorithms, base, madc_base, cadc_helpers, helpers, \
     exceptions
@@ -166,7 +166,7 @@ class SynReferenceCalibration(base.Calibration):
         logger.get(
             "calix.hagen.neuron_synin.SynReferenceCalibration.postlude"
         ).INFO(
-            ("Calibrated v_syn_{0}, CADC statistics: "
+            ("Calibrated i_bias_syn_in_{0}_shift, CADC statistics: "
              + "{1:5.2f} +- {2:4.2f}").format(
                  self._log_abbreviation,
                  np.mean(results[self.result.success]),
@@ -179,8 +179,9 @@ class ExcSynReferenceCalibration(SynReferenceCalibration):
     """
 
     _log_abbreviation = "exc"
-    _capmem_parameter_coord = halco.CapMemRowOnCapMemBlock.v_syn_exc
-    _inverted = False
+    _capmem_parameter_coord = \
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift
+    _inverted = True
     _bias_current_keyword = "excitatory_biases"
 
 
@@ -190,8 +191,9 @@ class InhSynReferenceCalibration(SynReferenceCalibration):
     """
 
     _log_abbreviation = "inh"
-    _capmem_parameter_coord = halco.CapMemRowOnCapMemBlock.v_syn_inh
-    _inverted = True  # current is removed from membrane --> inverted
+    _capmem_parameter_coord = \
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift
+    _inverted = False
     _bias_current_keyword = "inhibitory_biases"
 
 
@@ -214,8 +216,8 @@ class SynBiasCalibration(base.Calibration):
       are not too large, so that the amplitudes resulting from a single
       stimulus don't already saturate the usable dynamic range at the CADC.
 
-    :ivar v_syn_ref_calib: Instance of a SynReferenceCalibration, configured
-        with the given target_leak_read. The  synaptic input reference
+    :ivar syn_ref_calib: Instance of a SynReferenceCalibration, configured
+        with the given target_leak_read. The synaptic input reference
         potentials are recalibrated every time after changing the synaptic
         input OTA bias current.
     :ivar n_events: Number of events to send during integration of amplitudes
@@ -228,16 +230,15 @@ class SynBiasCalibration(base.Calibration):
 
     def __init__(self, target_leak_read: np.ndarray,
                  parameter_range: base.ParameterRange
-                 = base.ParameterRange(0, 255),
+                 = base.ParameterRange(hal.CapMemCell.Value.min,
+                                       hal.CapMemCell.Value.max),
                  target: Optional[np.ndarray] = None):
         """
         :param target_leak_read: Target CADC read for synaptic input
             reference potential calibration, which is called after each
             change of the bias current.
         :param parameter_range: Allowed range of synaptic input OTA
-            bias current. Defaults to (0, 255) to prevent failing
-            the calibration from too much noise induced by the
-            synaptic input.
+            bias current.
         :param target: Target amplitudes for events. If given, the
             measurement of target amplitudes in prelude is skipped.
             This can be useful when calibrating inhibitory and excitatory
@@ -247,7 +248,7 @@ class SynBiasCalibration(base.Calibration):
         super().__init__(
             parameter_range=parameter_range,
             n_instances=halco.NeuronConfigOnDLS.size, inverted=False)
-        self.v_syn_ref_calib = self._reference_calib_type(
+        self.syn_ref_calib = self._reference_calib_type(
             target=target_leak_read)
         self.target = target
 
@@ -330,17 +331,17 @@ class SynBiasCalibration(base.Calibration):
 
         if self.target is None:
             # Recalibrate synaptic input reference potential (once)
-            self.v_syn_ref_calib.run(
+            self.syn_ref_calib.run(
                 connection, algorithm=algorithms.NoisyBinarySearch())
 
             # Measure current amplitudes, use median as target
-            reliable_amplitudes = 70  # use amplitude lower than this
+            reliable_amplitudes = 60  # use amplitude lower than this
             max_retries = 50  # adjust n_events at most that many times
 
             for _ in range(max_retries):
                 self.target = int(np.median(self.measure_amplitudes(
                     connection, builder=sta.PlaybackProgramBuilder(),
-                    recalibrate_v_syn=False)))
+                    recalibrate_syn_ref=False)))
                 if self.target < reliable_amplitudes:
                     break
                 self.n_events = int(self.n_events * 0.8)
@@ -383,7 +384,7 @@ class SynBiasCalibration(base.Calibration):
 
     def measure_amplitudes(self, connection: hxcomm.ConnectionHandle,
                            builder: sta.PlaybackProgramBuilder,
-                           recalibrate_v_syn: bool = True
+                           recalibrate_syn_ref: bool = True
                            ) -> np.ndarray:
         """
         Send stimuli to all neurons using a few rows of synapses (as
@@ -398,15 +399,15 @@ class SynBiasCalibration(base.Calibration):
         :param connection: Connection to the chip to run on.
         :param builder: Builder to append stimulate/read instructions, then
             gets executed.
-        :param recalibrate_v_syn: Switch if the synaptic input reference
-            potentials have to be recalibrated before measuring amplitudes.
+        :param recalibrate_syn_ref: Switch if the synaptic input reference
+            has to be recalibrated before measuring amplitudes.
 
         :return: Array of amplitudes resulting from stimulation.
         """
 
         # Recalibrate synaptic input reference potential
-        if recalibrate_v_syn:
-            self.v_syn_ref_calib.run(
+        if recalibrate_syn_ref:
+            self.syn_ref_calib.run(
                 connection, algorithm=algorithms.NoisyBinarySearch())
 
         # Send test events to neurons
@@ -503,7 +504,7 @@ class SynBiasCalibration(base.Calibration):
         log = logger.get("calix.hagen.neuron_synin"
                          + ".SynBiasCalibration.postlude")
         log.INFO(
-            ("Calibrated i_bias_syn_{0}, amplitudes: "
+            ("Calibrated i_bias_synin_{0}_gm, amplitudes: "
              + "{1:5.2f} +- {2:4.2f}").format(
                  self._log_abbreviation,
                  np.mean(results[self.result.success]),
@@ -520,7 +521,7 @@ class ExcSynBiasCalibration(SynBiasCalibration):
 
     _reference_calib_type = ExcSynReferenceCalibration
     _row_mode = hal.SynapseDriverConfig.RowMode.excitatory
-    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm
+    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm
     _expected_sign = 1
     _log_abbreviation = "exc"
 
@@ -532,7 +533,7 @@ class InhSynBiasCalibration(SynBiasCalibration):
 
     _reference_calib_type = InhSynReferenceCalibration
     _row_mode = hal.SynapseDriverConfig.RowMode.inhibitory
-    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm
+    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm
     _expected_sign = -1
     _log_abbreviation = "inh"
 
@@ -560,15 +561,31 @@ class SynTimeConstantCalibration(madc_base.Calibration):
     * Synaptic events can reach the neurons, i.e. the synapse DAC bias
       is set and the `hal.ColumnCurrentSwitch`es allow currents from
       the synapses through.
+
+    :ivar neuron_config_default: List of desired neuron configurations.
+        Necessary to enable high resistance mode.
     """
 
-    def __init__(self, target: pq.quantity.Quantity = 1.2 * pq.us):
+    def __init__(self, target: pq.quantity.Quantity = 1.2 * pq.us,
+                 neuron_configs: Optional[List[hal.NeuronConfig]] = None):
+        """
+        :param neuron_configs: List of neuron configurations. If None, the
+            hagen-mode default neuron config is used.
+        """
+
         super().__init__(
             parameter_range=base.ParameterRange(
                 hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
             inverted=True)
         self._wait_before_stimulation = 5 * pq.us
         self.target = target
+
+        if neuron_configs is None:
+            self.neuron_config_default = [
+                neuron_helpers.neuron_config_default()
+            ] * halco.NeuronConfigOnDLS.size
+        else:
+            self.neuron_config_default = neuron_configs
 
     @property
     @abstractmethod
@@ -621,8 +638,8 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         # `neuron_config_disabled()`, but this transmission gate is
         # not capable of disconnecting more than 1.2 V on HX-v1.
         builder = helpers.capmem_set_neuron_cells(
-            builder, {halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: 0,
-                      halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: 0})
+            builder, {halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm: 0,
+                      halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # Enable all synapse drivers and set them to the desired row mode.
@@ -692,7 +709,8 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         :return: Neuron config with readout disabled.
         """
 
-        config = neuron_helpers.neuron_config_default()
+        config = hal.NeuronConfig(
+            self.neuron_config_default[int(neuron_coord.toEnum())])
         config.enable_synaptic_input_excitatory = False
         config.enable_synaptic_input_inhibitory = False
         config.enable_readout = False
@@ -726,6 +744,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         def fitfunc(time_t, scale, tau, offset):
             return scale * np.exp(-time_t / tau) + offset
 
+        # fit synaptic input time constant
         fit_slice = slice(145, 1150)
         neuron_fits = list()
         for neuron_id, neuron_data in enumerate(samples):
@@ -749,7 +768,7 @@ class ExcSynTimeConstantCalibration(SynTimeConstantCalibration):
     Calibrate excitatory synaptic input time constant.
     """
 
-    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_res
+    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau
     _row_mode = hal.SynapseDriverConfig.RowMode.excitatory
     _readout_source = hal.NeuronConfig.ReadoutSource.exc_synin
 
@@ -759,6 +778,6 @@ class InhSynTimeConstantCalibration(SynTimeConstantCalibration):
     Calibrate inhibitory synaptic input time constant.
     """
 
-    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_res
+    _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau
     _row_mode = hal.SynapseDriverConfig.RowMode.inhibitory
     _readout_source = hal.NeuronConfig.ReadoutSource.inh_synin

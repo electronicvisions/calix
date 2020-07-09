@@ -2,7 +2,7 @@ import unittest
 from typing import Optional
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import hal, halco, sta, hxcomm, logger, lola
+from dlens_vx_v2 import hal, halco, sta, hxcomm, logger, lola
 
 from calix.common import helpers
 from calix.hagen import neuron_helpers
@@ -140,10 +140,12 @@ class TestNeuronCalib(ConnectionSetup):
         Test spike response afterwards.
         """
 
-        neuron.calibrate(
-            self.connection,
-            i_synin_gm=np.ones(
-                halco.NeuronConfigOnDLS.size, dtype=int) * 400)
+        neuron_kwargs = {
+            "i_synin_gm": np.ones(
+                halco.NeuronConfigOnDLS.size, dtype=int) * 600,
+        }
+
+        neuron.calibrate(self.connection, **neuron_kwargs)
 
         self.helper_test_spikes()
 

@@ -7,7 +7,7 @@ from typing import Dict, Optional, Union, List
 from dataclasses import dataclass
 import numpy as np
 import quantities as pq
-from dlens_vx_v1 import sta, halco, hal, hxcomm
+from dlens_vx_v2 import sta, halco, hal, hxcomm
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
@@ -46,18 +46,19 @@ class NeuronCalibResult:
 
         # write static CapMem config
         config = {
-            halco.CapMemRowOnCapMemBlock.i_bias_reset: 1015,
-            halco.CapMemRowOnCapMemBlock.i_bias_source_follower: 490,
-            halco.CapMemRowOnCapMemBlock.i_bias_readout: 1000}
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop: 300,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop: 300,
+            halco.CapMemRowOnCapMemBlock.i_bias_reset: 1015}
         builder = helpers.capmem_set_neuron_cells(builder, config)
 
         # set per-quadrant parameters
         config = {
-            halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_sd_exc: 1022,
-            halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_sd_inh: 1022,
+            halco.CapMemCellOnCapMemBlock.neuron_v_bias_casc_n: 250,
+            halco.CapMemCellOnCapMemBlock.neuron_i_bias_readout_amp: 110,
+            halco.CapMemCellOnCapMemBlock.neuron_i_bias_leak_source_follower:
+            100,
             halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: 1022,
-            halco.CapMemCellOnCapMemBlock.neuron_i_bias_threshold_comparator:
-            500}
+            halco.CapMemCellOnCapMemBlock.neuron_i_bias_spike_comparator: 500}
         builder = helpers.capmem_set_quadrant_cells(builder, config)
 
         # enable readout buffers
@@ -111,9 +112,9 @@ class _CalibrationResultInternal:
     v_reset: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
     v_threshold: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    v_syn_exc: np.ndarray = np.empty(
+    i_syn_exc_shift: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    v_syn_inh: np.ndarray = np.empty(
+    i_syn_inh_shift: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_bias_leak: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
@@ -121,9 +122,9 @@ class _CalibrationResultInternal:
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_inh_gm: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_res: np.ndarray = np.empty(
+    i_syn_exc_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_res: np.ndarray = np.empty(
+    i_syn_inh_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     refractory_counters: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
@@ -135,6 +136,7 @@ class _CalibrationResultInternal:
     def set_neuron_configs_default(
             self, membrane_capacitance: Union[int, np.ndarray],
             tau_mem: pq.quantity.Quantity,
+            tau_syn: pq.quantity.Quantity,
             readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None):
         """
         Fill neuron configs with the given membrane capacitances, but
@@ -144,6 +146,8 @@ class _CalibrationResultInternal:
 
         :param membrane_capacitance: Desired membrane capacitance (in LSB).
         :param tau_mem: Desired membrane time constant.
+        :param tau_syn: Synaptic input time constant. Used to
+            decide whether the high resistance mode is enabled.
         :param readout_neuron: Neuron to enable readout for.
         """
 
@@ -168,6 +172,14 @@ class _CalibrationResultInternal:
                 return array
 
         self.neuron_configs = list()
+        if np.ndim(tau_syn) > 0 \
+                and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
+            tau_syn_exc = tau_syn[0]
+            tau_syn_inh = tau_syn[1]
+        else:
+            tau_syn_exc = tau_syn
+            tau_syn_inh = tau_syn
+
         for neuron_id in range(halco.NeuronConfigOnDLS.size):
             config = neuron_helpers.neuron_config_default()
             config.enable_threshold_comparator = True
@@ -177,16 +189,28 @@ class _CalibrationResultInternal:
                        ) == neuron_id:
                     config.enable_readout = True
 
+            tau_exc = find_neuron_value(tau_syn_exc, neuron_id)
+            tau_inh = find_neuron_value(tau_syn_inh, neuron_id)
             tau = find_neuron_value(tau_mem, neuron_id)
             c_mem = find_neuron_value(membrane_capacitance, neuron_id)
             config.membrane_capacitor_size = c_mem
 
-            # min. tau with division at C = 63: some 50 us
-            if float(tau.rescale(pq.us)) > 50 * c_mem / 63:
+            # min. tau with division at C = 63: some 20 us
+            if float(tau.rescale(pq.us)) > 20 * c_mem / 63:
                 config.enable_leak_division = True
-            # min. tau in "normal mode" at C = 63: some 5.5 us
-            if float(tau.rescale(pq.us)) < 5.5 * c_mem / 63:
+            # min. tau in "normal mode" at C = 63: some 2 us
+            if float(tau.rescale(pq.us)) < 2 * c_mem / 63:
                 config.enable_leak_multiplication = True
+
+            # min. tau_syn with high resistance mode: some 20 us
+            if tau_exc < 20 * pq.us:
+                config.enable_synaptic_input_excitatory_high_resistance = False
+            else:
+                config.enable_synaptic_input_excitatory_high_resistance = True
+            if tau_inh < 20 * pq.us:
+                config.enable_synaptic_input_inhibitory_high_resistance = False
+            else:
+                config.enable_synaptic_input_inhibitory_high_resistance = True
 
             self.neuron_configs.append(config)
 
@@ -205,14 +229,19 @@ class _CalibrationResultInternal:
             halco.CapMemRowOnCapMemBlock.v_leak: self.v_leak,
             halco.CapMemRowOnCapMemBlock.v_reset: self.v_reset,
             halco.CapMemRowOnCapMemBlock.v_threshold: self.v_threshold,
-            halco.CapMemRowOnCapMemBlock.v_syn_exc: self.v_syn_exc,
-            halco.CapMemRowOnCapMemBlock.v_syn_inh: self.v_syn_inh,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift:
+            self.i_syn_exc_shift,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift:
+            self.i_syn_inh_shift,
             halco.CapMemRowOnCapMemBlock.i_bias_leak: self.i_bias_leak,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: self.i_syn_exc_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: self.i_syn_inh_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_res:
-            self.i_syn_exc_res,
-            halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_res: self.i_syn_inh_res
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm:
+            self.i_syn_exc_gm,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm:
+            self.i_syn_inh_gm,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
+            self.i_syn_exc_tau,
+            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
+            self.i_syn_inh_tau
         }
 
         # convert CapMem parameters
@@ -336,6 +365,8 @@ def calibrate(
             "Target refractory time is out of feasible range.")
 
     calib_result = _CalibrationResultInternal()
+    calib_result.set_neuron_configs_default(
+        membrane_capacitance, tau_mem, tau_syn, readout_neuron)
 
     # calculate refractory time
     # clock scaler 0 means 125 MHz refractory clock, i.e. 8 ns per cycle
@@ -366,12 +397,9 @@ def calibrate(
         builder, readout_neuron=readout_neuron)
     sta.run(connection, builder.done())
 
-    # disable synaptic inputs initially
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=0)
-
     # calibrate synaptic input time constant to given target
-    calibration = neuron_synin.ExcSynTimeConstantCalibration()
+    calibration = neuron_synin.ExcSynTimeConstantCalibration(
+        neuron_configs=calib_result.neuron_configs)
     if np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
         result = calibration.run(
@@ -381,11 +409,12 @@ def calibrate(
         result = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
             target=tau_syn)
-    calib_result.i_syn_exc_res = result.calibrated_parameters
+    calib_result.i_syn_exc_tau = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
-    calibration = neuron_synin.InhSynTimeConstantCalibration()
+    calibration = neuron_synin.InhSynTimeConstantCalibration(
+        neuron_configs=calib_result.neuron_configs)
     if np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
         result = calibration.run(
@@ -395,9 +424,22 @@ def calibrate(
         result = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
             target=tau_syn)
-    calib_result.i_syn_inh_res = result.calibrated_parameters
+    calib_result.i_syn_inh_tau = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
+
+    # Configure neurons without syn. input and threshold disabled
+    builder = sta.PlaybackProgramBuilder()
+    for neuron_coord, neuron_config in zip(
+            halco.iter_all(halco.NeuronConfigOnDLS),
+            calib_result.neuron_configs):
+        neuron_config = hal.NeuronConfig(neuron_config)  # copy
+        neuron_config.enable_threshold_comparator = False
+        builder.write(neuron_coord, neuron_config)
+    sta.run(connection, builder.done())
+
+    neuron_helpers.reconfigure_synaptic_input(
+        connection, excitatory_biases=0, inhibitory_biases=0)
 
     # calibrate leak at threshold (in order to calibrate threshold at
     # leak afterwards):
@@ -418,12 +460,15 @@ def calibrate(
     builder = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
 
-    # re-apply syn. input time constant calib
+    # re-apply syn. input time constant calib which we need,
+    # and re-apply spike threshold which may affect CapMem crosstalk
     builder = helpers.capmem_set_neuron_cells(
-        builder, {halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_res:
-                  calib_result.i_syn_exc_res,
-                  halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_res:
-                  calib_result.i_syn_inh_res})
+        builder, {halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
+                  calib_result.i_syn_exc_tau,
+                  halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
+                  calib_result.i_syn_inh_tau,
+                  halco.CapMemRowOnCapMemBlock.v_threshold:
+                  calib_result.v_threshold})
     builder = helpers.wait(builder, constants.capmem_level_off_time)
     sta.run(connection, builder.done())
 
@@ -432,7 +477,8 @@ def calibrate(
         connection, excitatory_biases=0, inhibitory_biases=0)
 
     # calibrate leak near middle of CADC range
-    calibration = neuron_potentials.LeakPotentialCalibration(120)
+    # choose 100 since some neurons can not reach higher leak potentials
+    calibration = neuron_potentials.LeakPotentialCalibration(100)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     # decide how to execute synin calib
@@ -501,7 +547,6 @@ def calibrate(
             else i_synin_gm[1]
 
     # set desired neuron configs, disable syn. input and spikes again
-    calib_result.set_neuron_configs_default(membrane_capacitance, tau_mem)
     builder = sta.PlaybackProgramBuilder()
     for neuron_coord, neuron_config in zip(
             halco.iter_all(halco.NeuronConfigOnDLS),
@@ -527,7 +572,7 @@ def calibrate(
         target=target_cadc_reads)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.v_syn_exc = result.calibrated_parameters
+    calib_result.i_syn_exc_shift = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
@@ -537,7 +582,7 @@ def calibrate(
         target=target_cadc_reads)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.v_syn_inh = result.calibrated_parameters
+    calib_result.i_syn_inh_shift = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 

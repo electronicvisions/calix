@@ -11,8 +11,8 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Union, List
 
-from dlens_vx_v1.hxcomm import ConnectionHandle, ManagedConnection
-from dlens_vx_v1.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
+from dlens_vx_v2.hxcomm import ConnectionHandle, ManagedConnection
+from dlens_vx_v2.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
     run, to_json, to_portablebinary
 
 import calix.hagen
