@@ -8,7 +8,6 @@ boolean executeHwTests = [
 Map<String, Object> pipelineOptions = [
 		projects           : ["calix"],
 		container          : [app: "dls"],
-		testTimeout        : 600,
 		notificationChannel: "#dls-software"
 ]
 
