@@ -1,0 +1,169 @@
+import com.cloudbees.groovy.cps.NonCPS
+import static java.util.UUID.randomUUID
+
+@Library("jenlib") _
+
+/**
+ * Root for all calibration deployments done by this Jenkinsfile.
+ * Folder structure will follow this blueprint: '$deploymentRoot/$setupUID/{stable/testing}/{date,cXXXpXX_date}'
+ */
+final String deploymentRoot = "/wang/data/calibration/hicann-dls-sr-hx/"
+
+enum HxVersion {
+	HXv1(1),
+	HXv2(2)
+
+	final int chipRevision
+
+	HxVersion(int chipRevision) {
+		this.chipRevision = chipRevision
+	}
+}
+
+Map<HxVersion, String> HxVersionGerritQuery = [
+		(HxVersion.HXv1): "11720",
+		(HxVersion.HXv2): "11447",
+]
+
+class HxCubeSetup implements Serializable {
+	static final int GERRIT_HXCUBE_ID = 2
+
+	int hxCubeId
+	int chipId
+	int setupVersion
+
+	HxCubeSetup(int hxCubeId, int chipId, int setupVersion) {
+		this.hxCubeId = hxCubeId
+		this.chipId = chipId
+		this.setupVersion = setupVersion
+	}
+
+	int getWaferId() {
+		return hxCubeId + 60
+	}
+
+	@NonCPS
+	String getUniqueIdentifier() {
+		return "hxcube${hxCubeId}chip${chipId}_${setupVersion}"
+	}
+
+	@NonCPS
+	@Override
+	String toString() {
+		return "HxCubeSetup(${uniqueIdentifier})"
+	}
+}
+
+/**
+ * Compile a list of hx cube setups as listed in the hwdb. Filter on a given HICANN-X revision.
+ */
+List<HxCubeSetup> getCubeSetups(HxVersion version) {
+	String hwdbQuery = """
+from typing import Dict
+from numbers import Integral
+import json
+from pyhwdb import HXCubeSetupEntry, database
+
+
+def get_hxcube_entries(database: database) -> Dict[Integral, HXCubeSetupEntry]:
+    return {i: database.get_hxcube_entry(i) for i in database.get_hxcube_ids()}
+
+
+def serialize_setups(setups: Dict[Integral, HXCubeSetupEntry]) -> str:
+    dict_setups = {}
+    for setup_id, setup in setups.items():
+        # Get all available fields, vars() does not work due to issue #3639
+        fields = [f for f in dir(setup) if
+                  not callable(getattr(setup, f)) and not f.startswith("__")]
+        dict_setups[setup_id] = {key: str(getattr(setup, key))
+                                 for key in fields}
+    return json.dumps(dict_setups)
+
+
+if __name__ == '__main__':
+    db = database()
+    db.load(db.get_default_path())
+    hx_setups = get_hxcube_entries(db)
+    print(serialize_setups(hx_setups))
+"""
+	String queryResultString = null
+	runOnSlave(label: "frontend") {
+		String tempFilePath = "${pwd(tmp: true)}/${randomUUID().toString()}.py"
+		writeFile(file: tempFilePath, text: hwdbQuery)
+		withModules(modules: ["localdir"]) {
+			queryResultString = jesh(script: "python ${tempFilePath}", returnStdout: true).trim()
+		}
+	}
+	Map<String, Object> queryResult = readJSON(text: queryResultString, returnPojo: true)
+
+	return queryResult.findAll { it.value.chip_revision.toInteger() == version.chipRevision }.collect {
+		new HxCubeSetup(((String) it.key).toInteger(),
+		                ((String) it.value.handwritten_chip_serial).toInteger(),
+		                1)  // TODO, not yet in hwdb: issue #3641
+	}
+}
+
+Closure calibrationPipeline = { HxVersion version ->
+	// Drop the triggering changeset until we can make this job changeset-free.
+	withEnv(["GERRIT_CHANGE_NUMBER=${HxVersionGerritQuery[version]}"]) {
+		wafSetup(projects: ["calix", "hwdb"])
+	}
+
+	stage("Build for ${version}") {
+		onSlurmResource(partition: "jenkins", "cpus-per-task": "8") {
+			jesh("waf configure install --test-execnone --with-pybind")
+		}
+	}
+
+	Set<HxCubeSetup> calibratedSetups = []
+	stage("Setup IDs for ${version}") {
+		List<HxCubeSetup> setups = getCubeSetups(version)
+		calibratedSetups.addAll(setups.findAll { it.hxCubeId == HxCubeSetup.GERRIT_HXCUBE_ID })
+
+		if (!isTriggeredByGerrit()) {
+			calibratedSetups.addAll(setups)
+		}
+
+		echo("Calibrating ${version} setups: ${calibratedSetups}")
+	}
+
+	Map<String, Closure> calibrationRuns = calibratedSetups.collectEntries { setup ->
+		[((String) "Setup: ${setup.hxCubeId}"): {
+			onSlurmResource(partition: "cube",
+			                wafer: setup.waferId,
+			                "fpga-without-aout": 3) {
+				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
+				jesh("generate_default_calibration.py ${deploymentFolder}")
+
+				if (jesh(script: "basename \"`dirname \\\"${deploymentFolder}\\\"`\"",
+				         returnStdout: true).trim() == "stable") {
+					jesh("ln -sf \"${deploymentFolder}\" `dirname \"${deploymentFolder}\"`/latest")
+				}
+			}
+		}]
+	}
+
+	stage("Run Calibrations for ${version}") {
+		withModules(modules: ["localdir"]) {
+			parallel calibrationRuns
+		}
+	}
+}
+
+
+try {
+	inSingularity(app: "dls") {
+		withWaf() {
+			HxVersion.values().each { version ->
+				calibrationPipeline(version)
+
+				runOnSlave(label: "frontend") {
+					cleanWs()
+				}
+			}
+		}
+	}
+} catch (Throwable t) {
+	notifyFailure(mattermostChannel: "#dls-software")
+	throw t
+}
