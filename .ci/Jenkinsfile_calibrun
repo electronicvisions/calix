@@ -133,7 +133,8 @@ Closure calibrationPipeline = { HxVersion version ->
 		[((String) "Setup: ${setup.hxCubeId}"): {
 			onSlurmResource(partition: "cube",
 			                wafer: setup.waferId,
-			                "fpga-without-aout": 3) {
+			                "fpga-without-aout": 3,
+			                time: "10:00") {
 				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
 				jesh("generate_default_calibration.py ${deploymentFolder}")
 
