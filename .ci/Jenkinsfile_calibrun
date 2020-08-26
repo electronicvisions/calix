@@ -138,9 +138,10 @@ Closure calibrationPipeline = { HxVersion version ->
 				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
 				jesh("generate_default_calibration.py ${deploymentFolder}")
 
-				if (jesh(script: "basename \"`dirname \\\"${deploymentFolder}\\\"`\"",
+				if (jesh(script: "basename \"\$(dirname \\\"${deploymentFolder}\\\")\"",
 				         returnStdout: true).trim() == "stable") {
-					jesh("ln -sf \"${deploymentFolder}\" `dirname \"${deploymentFolder}\"`/latest")
+					jesh("test -f \$(dirname \"${deploymentFolder}\")/latest && unlink \$(dirname \"${deploymentFolder}\")/latest")
+					jesh("ln -s \"${deploymentFolder}\" \$(dirname \"${deploymentFolder}\")/latest")
 				}
 			}
 		}]
