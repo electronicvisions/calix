@@ -136,7 +136,12 @@ Closure calibrationPipeline = { HxVersion version ->
 			                "fpga-without-aout": 3,
 			                time: "10:00") {
 				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
-				jesh("generate_default_calibration.py ${deploymentFolder}")
+				boolean calibrationSuccessful = jesh(script: "generate_default_calibration.py ${deploymentFolder}",
+				                                     returnStatus: true) == 0
+				if (!calibrationSuccessful) {
+					unstable("Calibration was not successful.")
+					return
+				}
 
 				if (jesh(script: "basename \"\$(dirname \\\"${deploymentFolder}\\\")\"",
 				         returnStdout: true).trim() == "stable") {
