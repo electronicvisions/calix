@@ -53,7 +53,8 @@ def build(bld):
         install_path='${PREFIX}/bin/tests',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
-        skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE
+        skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE,
+        test_timeout=600
         )
 
     bld.add_post_fun(summary)
