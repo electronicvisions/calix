@@ -29,11 +29,13 @@ class HxCubeSetup implements Serializable {
 	static final int GERRIT_HXCUBE_ID = 2
 
 	int hxCubeId
+	int fpgaId
 	int chipId
 	int setupVersion
 
-	HxCubeSetup(int hxCubeId, int chipId, int setupVersion) {
+	HxCubeSetup(int hxCubeId, int fpgaId, int chipId, int setupVersion) {
 		this.hxCubeId = hxCubeId
+		this.fpgaId = fpgaId
 		this.chipId = chipId
 		this.setupVersion = setupVersion
 	}
@@ -44,7 +46,7 @@ class HxCubeSetup implements Serializable {
 
 	@NonCPS
 	String getUniqueIdentifier() {
-		return "hxcube${hxCubeId}chip${chipId}_${setupVersion}"
+		return "hxcube${hxCubeId}fpga${fpgaId}chip${chipId}_${setupVersion}"
 	}
 
 	@NonCPS
@@ -66,18 +68,22 @@ from pyhwdb import HXCubeSetupEntry, database
 
 
 def get_hxcube_entries(database: database) -> Dict[Integral, HXCubeSetupEntry]:
-    return {i: database.get_hxcube_entry(i) for i in database.get_hxcube_ids()}
+    return {i: database.get_hxcube_setup_entry(i) for i in database.get_hxcube_ids()}
 
 
 def serialize_setups(setups: Dict[Integral, HXCubeSetupEntry]) -> str:
-    dict_setups = {}
+    list_setups = []
     for setup_id, setup in setups.items():
-        # Get all available fields, vars() does not work due to issue #3639
-        fields = [f for f in dir(setup) if
-                  not callable(getattr(setup, f)) and not f.startswith("__")]
-        dict_setups[setup_id] = {key: str(getattr(setup, key))
-                                 for key in fields}
-    return json.dumps(dict_setups)
+        for i, fpga in setup.fpgas.items():
+            if fpga.wing:
+                fields = {
+                    "setup_id": str(setup_id),
+                    "fpga": str(i),
+                    "handwritten_chip_serial": str(fpga.wing.handwritten_chip_serial),
+                    "chip_revision": str(fpga.wing.chip_revision),
+                }
+                list_setups.append(fields)
+    return json.dumps(list_setups)
 
 
 if __name__ == '__main__':
@@ -94,11 +100,12 @@ if __name__ == '__main__':
 			queryResultString = jesh(script: "python ${tempFilePath}", returnStdout: true).trim()
 		}
 	}
-	Map<String, Object> queryResult = readJSON(text: queryResultString, returnPojo: true)
+	List<Object> queryResult = readJSON(text: queryResultString, returnPojo: true)
 
-	return queryResult.findAll { it.value.chip_revision.toInteger() == version.chipRevision }.collect {
-		new HxCubeSetup(((String) it.key).toInteger(),
-		                ((String) it.value.handwritten_chip_serial).toInteger(),
+	return queryResult.findAll { it.chip_revision.toInteger() == version.chipRevision }.collect {
+		new HxCubeSetup(((String) it.setup_id).toInteger(),
+		                ((String) it.fpga).toInteger(),
+		                ((String) it.handwritten_chip_serial).toInteger(),
 		                1)  // TODO, not yet in hwdb: issue #3641
 	}
 }
@@ -133,7 +140,7 @@ Closure calibrationPipeline = { HxVersion version ->
 		[((String) "Setup: ${setup.hxCubeId}"): {
 			onSlurmResource(partition: "cube",
 			                wafer: setup.waferId,
-			                "fpga-without-aout": 3,
+			                "fpga-without-aout": setup.fpgaId,
 			                time: "10:00") {
 				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
 				boolean calibrationSuccessful = jesh(script: "generate_default_calibration.py ${deploymentFolder}",
