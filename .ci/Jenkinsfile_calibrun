@@ -31,22 +31,17 @@ class HxCubeSetup implements Serializable {
 	int hxCubeId
 	int fpgaId
 	int chipId
-	int setupVersion
+	String uniqueIdentifier
 
-	HxCubeSetup(int hxCubeId, int fpgaId, int chipId, int setupVersion) {
+	HxCubeSetup(int hxCubeId, int fpgaId, int chipId, String uniqueIdentifier) {
 		this.hxCubeId = hxCubeId
 		this.fpgaId = fpgaId
 		this.chipId = chipId
-		this.setupVersion = setupVersion
+		this.uniqueIdentifier = uniqueIdentifier
 	}
 
 	int getWaferId() {
 		return hxCubeId + 60
-	}
-
-	@NonCPS
-	String getUniqueIdentifier() {
-		return "hxcube${hxCubeId}fpga${fpgaId}chip${chipId}_${setupVersion}"
 	}
 
 	@NonCPS
@@ -81,6 +76,7 @@ def serialize_setups(setups: Dict[Integral, HXCubeSetupEntry]) -> str:
                     "fpga": str(i),
                     "handwritten_chip_serial": str(fpga.wing.handwritten_chip_serial),
                     "chip_revision": str(fpga.wing.chip_revision),
+                    "unique_id": setup.get_unique_branch_identifier(fpga.wing.handwritten_chip_serial),
                 }
                 list_setups.append(fields)
     return json.dumps(list_setups)
@@ -106,7 +102,7 @@ if __name__ == '__main__':
 		new HxCubeSetup(((String) it.setup_id).toInteger(),
 		                ((String) it.fpga).toInteger(),
 		                ((String) it.handwritten_chip_serial).toInteger(),
-		                1)  // TODO, not yet in hwdb: issue #3641
+		                (String) it.unique_id)
 	}
 }
 
