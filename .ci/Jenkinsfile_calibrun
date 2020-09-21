@@ -141,7 +141,8 @@ Closure calibrationPipeline = { HxVersion version ->
 			onSlurmResource(partition: "cube",
 			                wafer: setup.waferId,
 			                "fpga-without-aout": setup.fpgaId,
-			                time: "10:00") {
+			                time: "10:00",
+			                deadline: "now+4hour") {
 				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
 				boolean calibrationSuccessful = jesh(script: "generate_default_calibration.py ${deploymentFolder}",
 				                                     returnStatus: true) == 0
