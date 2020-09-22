@@ -141,6 +141,7 @@ Closure calibrationPipeline = { HxVersion version ->
 			onSlurmResource(partition: "cube",
 			                wafer: setup.waferId,
 			                "fpga-without-aout": setup.fpgaId,
+			                reservation: "pdauer_33",
 			                time: "10:00",
 			                deadline: "now+4hour") {
 				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
