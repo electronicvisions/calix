@@ -150,8 +150,7 @@ Closure calibrationPipeline = { HxVersion version ->
 
 				if (jesh(script: "basename \"\$(dirname \\\"${deploymentFolder}\\\")\"",
 				         returnStdout: true).trim() == "stable") {
-					jesh("test -L \$(dirname \"${deploymentFolder}\")/latest && unlink \$(dirname \"${deploymentFolder}\")/latest")
-					jesh("ln -s \"${deploymentFolder}\" \$(dirname \"${deploymentFolder}\")/latest")
+					jesh("ln -sfT \"${deploymentFolder}\" \$(dirname \"${deploymentFolder}\")/latest")
 				}
 			}
 		}]
