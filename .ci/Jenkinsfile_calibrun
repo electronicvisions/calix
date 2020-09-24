@@ -134,23 +134,24 @@ Closure calibrationPipeline = { HxVersion version ->
 
 	Map<String, Closure> calibrationRuns = calibratedSetups.collectEntries { setup ->
 		[((String) "Setup: ${setup.hxCubeId}"): {
-			onSlurmResource(partition: "cube",
-			                wafer: setup.waferId,
-			                "fpga-without-aout": setup.fpgaId,
-			                reservation: "pdauer_33",
-			                time: "10:00",
-			                deadline: "now+4hour") {
-				String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
-				boolean calibrationSuccessful = jesh(script: "generate_default_calibration.py ${deploymentFolder}",
-				                                     returnStatus: true) == 0
-				if (!calibrationSuccessful) {
-					unstable("Calibration was not successful.")
-					return
-				}
+			conditionalTimeout(enable: !isTriggeredByGerrit(), time: 4, unit: "HOURS") {
+				onSlurmResource(partition: "cube",
+				                wafer: setup.waferId,
+				                "fpga-without-aout": setup.fpgaId,
+				                reservation: "pdauer_33",
+				                time: "10:00") {
+					String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
+					boolean calibrationSuccessful = jesh(script: "generate_default_calibration.py ${deploymentFolder}",
+					                                     returnStatus: true) == 0
+					if (!calibrationSuccessful) {
+						unstable("Calibration was not successful.")
+						return
+					}
 
-				if (jesh(script: "basename \"\$(dirname \\\"${deploymentFolder}\\\")\"",
-				         returnStdout: true).trim() == "stable") {
-					jesh("ln -sfT \"${deploymentFolder}\" \$(dirname \"${deploymentFolder}\")/latest")
+					if (jesh(script: "basename \"\$(dirname \\\"${deploymentFolder}\\\")\"",
+					         returnStdout: true).trim() == "stable") {
+						jesh("ln -sfT \"${deploymentFolder}\" \$(dirname \"${deploymentFolder}\")/latest")
+					}
 				}
 			}
 		}]
