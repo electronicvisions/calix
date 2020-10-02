@@ -143,13 +143,6 @@ Closure calibrationPipeline = { HxVersion version ->
 				                reservation: "pdauer_33",
 				                time: "10:00") {
 					String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
-
-					// Reconfigure FPGA bitfile on gerrit-triggered setups
-					if (setup.hxCubeId == setup.GERRIT_HXCUBE_ID) {
-						configureHxCubeBitfile()
-					}
-
-					// Run calibration
 					boolean calibrationSuccessful = jesh(script: "generate_default_calibration.py ${deploymentFolder}",
 					                                     returnStatus: true) == 0
 					if (!calibrationSuccessful) {
