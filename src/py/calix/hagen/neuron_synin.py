@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+
 """
 Provides functions to calibrate the neurons' synaptic input
 reference potentials and synaptic input OTA bias currents.
@@ -805,3 +807,225 @@ class InhSynTimeConstantCalibration(SynTimeConstantCalibration):
     _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau
     _row_mode = hal.SynapseDriverConfig.RowMode.inhibitory
     _readout_source = hal.NeuronConfig.ReadoutSource.inh_synin
+
+
+class SynReferenceCalibMADC(madc_base.Calibration):
+    """
+    Calibrate synaptic input reference potentials using the MADC.
+
+    This calibration requires the leak bias currents to be zero, which
+    is set in the prelude. The leak bias currents are NOT restored,
+    since the target use case is PPU-based hagen mode integration with
+    leakage disabled.
+
+    As for all calibrations based on the MADC calibration, neuron
+    configurations and readout configuration are changed during
+    calibration and restored afterwards.
+
+    To measure the current output of the synaptic input OTA, the membrane
+    potential is observed while floating (with the leak term disabled).
+    Initially, the membrane is reset. Once the refractory period ends and
+    the reset is released, we fit to the membrane potential: If a constant
+    current flows onto the membrane, it increases or decreases linearly.
+    We search the reference potential settings for minimum constant currents,
+    i.e. such that the membrane potential stays constant after the reset is
+    released.
+
+    Requirements:
+    * The synaptic input is enabled and configured with the desired bias
+      currents (i_bias_synin_{exc,inh}_gm).
+    * The refractory time has to be set as `expected_refractory_time`.
+      We use this parameter to select the start time of the fit.
+
+    :ivar n_runs: Take the average of multiple measurements in each
+        step of the calibration. Defaults to 1 (no averaging).
+    :ivar expected_refractory_time: Configured refractory time. Used
+        to determine the start point of the linear fit, which should
+        begin once the reset is released and the membrane potential
+        starts drifting.
+    """
+
+    def __init__(self):
+        super().__init__(
+            parameter_range=base.ParameterRange(
+                hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
+            inverted=self._inverted)
+        self.target = np.zeros(halco.NeuronConfigOnDLS.size)
+        self.sampling_time = 55 * pq.us
+        self.wait_between_neurons = 70 * pq.us
+        self.n_runs = 1  # averaging of results
+        self.expected_refractory_time = 2 * pq.us
+
+    @property
+    @abstractmethod
+    def _reference_potential_coord(self) -> halco.CapMemRowOnCapMemBlock:
+        """
+        Coordinate of the CapMem reference potential for the synaptic
+        input OTA.
+        """
+
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def _inverted(self) -> halco.CapMemRowOnCapMemBlock:
+        """
+        Select whether the parameter change needs to be inverted.
+        """
+
+        raise NotImplementedError
+
+    def prelude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Prepares chip for calibration.
+
+        Enables the MADC and sets the leak bias currents to zero.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        # prepare MADC
+        super().prelude(connection)
+
+        builder = sta.PlaybackProgramBuilder()
+
+        # disable leak OTA
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: 0})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+
+        # run program
+        sta.run(connection, builder.done())
+
+    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
+                             parameters: np.ndarray
+                             ) -> sta.PlaybackProgramBuilder:
+        """
+        Configures the given array of synaptic input reference potentials.
+
+        :param builder: Builder to append configuration instructions to.
+        :param parameters: Array of reference potentials to set up.
+
+        :return: Builder with configuration appended.
+        """
+
+        builder = helpers.capmem_set_neuron_cells(
+            builder,
+            {self._reference_potential_coord: parameters})
+
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+        return builder
+
+    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+                  neuron_coord: halco.NeuronConfigOnDLS,
+                  stimulation_time: hal.Timer.Value
+                  ) -> sta.PlaybackProgramBuilder:
+        """
+        Reset the neuron's membrane potential.
+
+        :param builder: Builder to append resets to.
+        :param neuron_coord: Coordinate of neuron which is currently recorded.
+        :param stimulation_time: Timer value at beginning of stimulation.
+
+        :return: Builder with reset appended.
+        """
+
+        builder.write(neuron_coord.toNeuronResetOnDLS(), hal.NeuronReset())
+        return builder
+
+    def neuron_config_disabled(self, neuron_coord) -> hal.NeuronConfig:
+        """
+        Return a neuron config with readout disabled.
+
+        :return: Neuron config with readout disabled.
+        """
+
+        config = neuron_helpers.neuron_config_default()
+        return config
+
+    def neuron_config_readout(self, neuron_coord) -> hal.NeuronConfig:
+        """
+        Return a neuron config with readout enabled.
+
+        :return: Neuron config with readout enabled.
+        """
+
+        config = self.neuron_config_disabled(neuron_coord)
+        config.readout_source = hal.NeuronConfig.ReadoutSource.membrane
+        config.enable_readout = True
+        return config
+
+    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+        """
+        Evaluates the obtained MADC samples.
+
+        To each neuron's MADC samples, a linear function is fitted,
+        and the slope is returned.
+
+        :param samples: MADC samples obtained for each neuron.
+
+        :return: Numpy array of fitted slopes.
+        """
+
+        def fitfunc(time, slope, offset):
+            return slope * time + offset
+
+        # fit synaptic input time constant
+        fit_slice = slice(
+            int((self._wait_before_stimulation + self.expected_refractory_time
+                 ).rescale(pq.s) * self.madc_config.calculate_sample_rate(
+                     self.madc_input_frequency)),
+            int(int(self.madc_config.number_of_samples) * 0.9))
+        neuron_fits = list()
+        for neuron_data in samples:
+            neuron_data = neuron_data[fit_slice]
+            guessed_slope = \
+                (neuron_data["value"][-1] - neuron_data["value"][0]) \
+                / (neuron_data["chip_time"][-1] - neuron_data["chip_time"][0])
+            guessed_offset = neuron_data["value"][0]
+            neuron_fits.append(curve_fit(
+                fitfunc,
+                neuron_data["chip_time"] - neuron_data["chip_time"][0],
+                neuron_data["value"], p0=[guessed_slope, guessed_offset])[0])
+
+        return np.array(neuron_fits)[:, 0]
+
+    def measure_results(self, connection: hxcomm.ConnectionHandle,
+                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+        """
+        Executes multiple measurements on chip, returns the mean result.
+
+        :param connection: Connection to the chip to calibrate.
+        :param builder: Builder to append measurement program to.
+
+        :return: Numpy array of mean results.
+        """
+
+        sta.run(connection, builder.done())
+
+        results = np.empty((self.n_runs, halco.NeuronConfigOnDLS.size))
+        for run_id in range(self.n_runs):
+            results[run_id] = super().measure_results(
+                connection, builder=sta.PlaybackProgramBuilder())
+
+        return np.mean(results, axis=0)
+
+
+class ExcSynReferenceCalibMADC(SynReferenceCalibMADC):
+    """
+    Calibrate excitatory synaptic input reference potential.
+    """
+
+    _reference_potential_coord = \
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift
+    _inverted = True
+
+
+class InhSynReferenceCalibMADC(SynReferenceCalibMADC):
+    """
+    Calibrate inhibitory synaptic input reference potential.
+    """
+
+    _reference_potential_coord = \
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift
+    _inverted = False
