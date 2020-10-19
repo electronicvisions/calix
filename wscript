@@ -1,5 +1,6 @@
 import os
 from os.path import join
+from waflib import Utils
 from waflib.extras.test_base import summary
 from waflib.extras.symwaf2ic import get_toplevel_path
 
@@ -33,6 +34,18 @@ def build(bld):
         install_path='${PREFIX}/lib',
         install_from='src/py',
         relative_trick=True,
+        pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
+        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
+        test_timeout=120,
+        )
+
+    bld(name='calix_scripts',
+        features='py pylint pycodestyle',
+        source=bld.path.ant_glob('src/py/calix/scripts/**/*.py'),
+        use='calix_pylib',
+        install_path='${PREFIX}/bin',
+        install_from='src/py/calix/scripts',
+        chmod=Utils.O755,
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
         test_timeout=120,
