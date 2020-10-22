@@ -8,11 +8,12 @@ from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import sta, halco, hal, hxcomm
+from dlens_vx_v2 import sta, halco, hal, hxcomm, lola
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import neuron_helpers, neuron_evaluation, \
     neuron_leak_bias, neuron_synin, neuron_potentials
+from calix import constants
 
 
 @dataclass
@@ -22,9 +23,32 @@ class NeuronCalibResult:
     Holds calibrated parameters for all neurons and their calibration success.
     """
 
-    parameters: Dict[halco.AtomicNeuronOnDLS, Dict[
-        halco.CapMemRowOnCapMemBlock, hal.CapMemCell.Value]]
+    neurons: Dict[halco.AtomicNeuronOnDLS, lola.AtomicNeuron]
+    cocos: dict()  # some coordinate, some container
     success: Dict[halco.AtomicNeuronOnDLS, bool]
+
+    def apply(self, builder: sta.PlaybackProgramBuilder) \
+            -> sta.PlaybackProgramBuilder:
+        """
+        Apply the calibration in the given builder.
+
+        Configures neurons in a "default-working" state with
+        calibration applied, just like after the calibration.
+
+        :param builder: Builder to append configuration instructions to.
+
+        :return: Builder with configuration instructions appended.
+        """
+
+        for neuron_coord, neuron in self.neurons.items():
+            builder.write(neuron_coord, neuron)
+
+        for coord, container in self.cocos.items():
+            builder.write(coord, container)
+
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+
+        return builder
 
     @property
     def success_mask(self) -> np.ndarray:
@@ -41,44 +65,9 @@ class NeuronCalibResult:
 
         return success_mask
 
-    def apply(
-            self,
-            builder: sta.PlaybackProgramBuilder,
-            readout_neuron: halco.AtomicNeuronOnDLS
-            = halco.AtomicNeuronOnDLS(31, 0)
-    ) -> sta.PlaybackProgramBuilder:
-        """
-        Configure the calibration in the given builder.
-        This function does not have to be called after calibration,
-        as the optimum parameters are already configured. It is intended
-        to configure parameters from the calibration function again
-        at a later point.
-
-        :param builder: Builder to append configuration to.
-        :param readout_neuron: Coordinate of the neuron to be connected to
-            a readout pad, i.e. can be observed using an oscilloscope.
-
-        :return: Builder with configuration appended.
-        """
-
-        builder = neuron_helpers.configure_chip(
-            builder, readout_neuron=readout_neuron)
-
-        # Configure CapMem
-        for neuron_coord, params in self.parameters.items():
-            for capmem_row, value in params.items():
-                cell_coord = halco.CapMemCellOnDLS(
-                    cell=halco.CapMemCellOnCapMemBlock(
-                        x=neuron_coord.toCapMemColumnOnCapMemBlock(),
-                        y=capmem_row),
-                    block=neuron_coord.toCapMemBlockOnDLS())
-                builder.write(cell_coord, hal.CapMemCell(value))
-
-        return builder
-
 
 @dataclass
-class _CalibrationResultInternal:
+class CalibrationResultInternal:
     """
     Class providing numpy-array access to calibrated parameters.
     Used internally during calibration.
@@ -90,7 +79,13 @@ class _CalibrationResultInternal:
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_inh_shift: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
+    i_syn_exc_drop: np.ndarray = np.empty(
+        halco.NeuronConfigOnDLS.size, dtype=int)
+    i_syn_inh_drop: np.ndarray = np.empty(
+        halco.NeuronConfigOnDLS.size, dtype=int)
     i_bias_leak: np.ndarray = np.empty(
+        halco.NeuronConfigOnDLS.size, dtype=int)
+    i_bias_reset: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_exc_gm: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
@@ -102,47 +97,82 @@ class _CalibrationResultInternal:
         halco.NeuronConfigOnDLS.size, dtype=int)
     success: np.ndarray = np.ones(halco.NeuronConfigOnDLS.size, dtype=bool)
 
+    def to_atomic_neuron(self,
+                         neuron_coord: halco.AtomicNeuronOnDLS
+                         ) -> lola.AtomicNeuron:
+        """
+        Returns an AtomicNeuron with calibration applied.
+
+        :param neuron_coord: Coordinate of requested neuron.
+
+        :return: Complete AtomicNeuron configuration.
+        """
+
+        neuron_id = neuron_coord.toEnum().value()
+        atomic_neuron = lola.AtomicNeuron()
+        atomic_neuron.set_from(neuron_helpers.neuron_config_default())
+        atomic_neuron.set_from(neuron_helpers.neuron_backend_config_default())
+
+        anl = atomic_neuron.leak
+        anl.v_leak = hal.CapMemCell.Value(self.v_leak[neuron_id])
+        anl.i_bias = hal.CapMemCell.Value(self.i_bias_leak[neuron_id])
+
+        anr = atomic_neuron.reset
+        anr.v_reset = hal.CapMemCell.Value(self.v_reset[neuron_id])
+        anr.i_bias = hal.CapMemCell.Value(self.i_bias_reset[neuron_id])
+
+        anexc = atomic_neuron.excitatory_input
+        anexc.i_shift_reference = hal.CapMemCell.Value(
+            self.i_syn_exc_shift[neuron_id])
+        anexc.i_bias_gm = hal.CapMemCell.Value(
+            self.i_syn_exc_gm[neuron_id])
+        anexc.i_bias_tau = hal.CapMemCell.Value(
+            self.i_syn_exc_tau[neuron_id])
+        anexc.i_drop_input = hal.CapMemCell.Value(
+            self.i_syn_exc_drop[neuron_id])
+
+        aninh = atomic_neuron.inhibitory_input
+        aninh.i_shift_reference = hal.CapMemCell.Value(
+            self.i_syn_inh_shift[neuron_id])
+        aninh.i_bias_gm = hal.CapMemCell.Value(
+            self.i_syn_inh_gm[neuron_id])
+        aninh.i_bias_tau = hal.CapMemCell.Value(
+            self.i_syn_inh_tau[neuron_id])
+        aninh.i_drop_input = hal.CapMemCell.Value(
+            self.i_syn_inh_drop[neuron_id])
+
+        return atomic_neuron
+
     def to_neuron_calib_result(self) -> NeuronCalibResult:
         """
         Conversion to NeuronCalibResult.
-        The numpy arrays get transformed to dicts.
+        The numpy arrays get merged into lola AtomicNeurons.
 
         :return: Equivalent NeuronCalibResult.
         """
 
-        result = NeuronCalibResult(dict(), dict())
-        conversion = {
-            halco.CapMemRowOnCapMemBlock.v_leak: self.v_leak,
-            halco.CapMemRowOnCapMemBlock.v_reset: self.v_reset,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift:
-            self.i_syn_exc_shift,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift:
-            self.i_syn_inh_shift,
-            halco.CapMemRowOnCapMemBlock.i_bias_leak: self.i_bias_leak,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm:
-            self.i_syn_exc_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm:
-            self.i_syn_inh_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
-            self.i_syn_exc_tau,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
-            self.i_syn_inh_tau
-        }
+        result = NeuronCalibResult(dict(), dict(), dict())
 
-        # convert parameters
-        for neuron_id, neuron_coord in enumerate(
-                halco.iter_all(halco.AtomicNeuronOnDLS)):
-            neuron_params = dict()
-            for coord, param in conversion.items():
-                neuron_params.update({
-                    coord: hal.CapMemCell.Value(param[neuron_id])
-                })
-            result.parameters.update({neuron_coord: neuron_params})
+        # set neuron configuration, including CapMem
+        for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+            result.neurons[neuron_coord] = self.to_atomic_neuron(neuron_coord)
 
-        # convert success
-        for neuron_id, neuron_coord in enumerate(
-                halco.iter_all(halco.AtomicNeuronOnDLS)):
-            result.success.update({neuron_coord: self.success[neuron_id]})
+            neuron_id = neuron_coord.toEnum().value()
+            result.success[neuron_coord] = self.success[neuron_id]
+
+        # set global CapMem parameters
+        dumper = sta.PlaybackProgramBuilderDumper()
+        dumper = neuron_helpers.configure_integration(dumper)
+        dumper = neuron_helpers.set_global_capmem_config(dumper)
+        cocolist = dumper.done().tolist()
+
+        for coord, config in cocolist:
+            # remove Timer-commands like waits, we only want to collect
+            # coord/container pairs (and would have many entries for the
+            # timer coordinate otherwise)
+            if coord == halco.TimerOnDLS():
+                continue
+            result.cocos[coord] = config
 
         return result
 
@@ -283,7 +313,7 @@ def calibrate(
 
     # Configure chip for calibration
     builder = sta.PlaybackProgramBuilder()
-    builder = neuron_helpers.configure_chip(
+    builder, initial_config = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
     sta.run(connection, builder.done())
 
@@ -296,27 +326,23 @@ def calibrate(
         initial_configuration(connection)
 
     # Initialize return object
-    calib_result = _CalibrationResultInternal()
+    calib_result = CalibrationResultInternal()
+    calib_result.i_syn_exc_drop = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop]
+    calib_result.i_syn_inh_drop = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop]
+    calib_result.i_bias_reset = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_reset]
+    calib_result.i_syn_exc_tau = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau]
+    calib_result.i_syn_inh_tau = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau]
 
     # Calibrate synaptic input time constant using MADC
     if np.all(tau_syn == 0 * pq.us):
-        noise = 5  # applied to similarly configured CapMem cells
-        calib_result.i_syn_exc_tau = \
-            hal.CapMemCell.Value.max - noise + helpers.capmem_noise(
-                -noise, noise + 1, size=halco.NeuronConfigOnDLS.size)
-        calib_result.i_syn_inh_tau = \
-            hal.CapMemCell.Value.max - noise + helpers.capmem_noise(
-                -noise, noise + 1, size=halco.NeuronConfigOnDLS.size)
-        builder = sta.PlaybackProgramBuilder()
-        calibration = neuron_synin.ExcSynTimeConstantCalibration()
-        builder = calibration.configure_parameters(
-            builder, calib_result.i_syn_exc_tau)
-        calibration = neuron_synin.InhSynTimeConstantCalibration()
-        builder = calibration.configure_parameters(
-            builder, calib_result.i_syn_inh_tau)
-        sta.run(connection, builder.done())
-    elif np.ndim(tau_syn) > 0 and \
-            tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
+        pass
+    elif np.ndim(tau_syn) > 0 \
+            and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
         calibration = neuron_synin.ExcSynTimeConstantCalibration()
         calib_result.i_syn_exc_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),

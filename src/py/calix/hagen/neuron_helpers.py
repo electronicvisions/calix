@@ -4,7 +4,7 @@ them for integration.
 """
 
 from __future__ import annotations
-from typing import Tuple, Union, List, Optional
+from typing import Tuple, Union, List, Optional, Dict
 import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, sta, halco, lola, hxcomm
@@ -285,6 +285,25 @@ def neuron_config_default() -> hal.NeuronConfig:
     return neuron_config
 
 
+def neuron_backend_config_default() -> hal.NeuronBackendConfig:
+    """
+    Return a neuron backend config suitable for hagen mode.
+
+    Only the refractory time settings (counter and clock) are set,
+    otherwise it is default constructed.
+
+    :return: NeuronBackendConfig suitable for integration.
+    """
+
+    neuron_config = hal.NeuronBackendConfig()
+    neuron_config.refractory_time = 70
+
+    # select fast clock for resetting integrated potentials
+    neuron_config.select_input_clock = 1
+
+    return neuron_config
+
+
 def configure_integration(builder: sta.PlaybackProgramBuilder
                           ) -> sta.PlaybackProgramBuilder:
     """
@@ -292,8 +311,7 @@ def configure_integration(builder: sta.PlaybackProgramBuilder
     the neurons in hagen mode.
 
     Configures the chip such that the CADCs can read out neuron membranes.
-    This means setting the switches to connect the columns to the CADC and
-    enabling the readout amplifiers in each neuron.
+    This means setting the switches to connect the columns to the CADC.
 
     :param builder: Builder to append configuration instructions to.
 
@@ -327,11 +345,6 @@ def configure_integration(builder: sta.PlaybackProgramBuilder
     for quad_coord in halco.iter_all(halco.ColumnCurrentQuadOnDLS):
         builder.write(quad_coord, quad_config)
 
-    # Neuron Config
-    neuron_config = neuron_config_default()
-    for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
-        builder.write(neuron_coord, neuron_config)
-
     # Configure refractory clocks:
     # slow clock to measure v_reset: roughly 160 us refractory
     # fast clock to reset membrane in usage: roughly 2 us refractory
@@ -341,14 +354,6 @@ def configure_integration(builder: sta.PlaybackProgramBuilder
 
     for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
         builder.write(coord, neuron_common_config)
-
-    # select fast clock for resetting integrated potentials
-    neuron_config = hal.NeuronBackendConfig()
-    neuron_config.refractory_time = 70
-    neuron_config.select_input_clock = 1
-
-    for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
-        builder.write(coord, neuron_config)
 
     # select timing of reset pulse for neurons
     config = hal.CommonCorrelationConfig()
@@ -457,15 +462,18 @@ def enable_all_synapse_drivers(builder: sta.PlaybackProgramBuilder,
     return builder
 
 
-def set_analog_neuron_config(builder: sta.PlaybackProgramBuilder,
-                             v_leak: Union[int, np.ndarray], i_leak: int
-                             ) -> sta.PlaybackProgramBuilder:
+def set_analog_neuron_config(
+        builder: sta.PlaybackProgramBuilder,
+        v_leak: Union[int, np.ndarray], i_leak: Union[int, np.ndarray]
+) -> Tuple[sta.PlaybackProgramBuilder,
+           Dict[halco.CapMemRowOnCapMemBlock, np.ndarray]]:
     """
     Configure all neurons' CapMem cells to the given v_leak potential and
-    the given i_leak bias current. Also turn off the synaptic input bias
-    currents, since the synaptic inputs can not be used without
-    calibration. The reset bias current is set maximum.
-    Furthermore, static required biases are set.
+    the given i_leak bias current. The other parameters are chosen as
+    usable defaults, the reset potential is set equal to the leak
+    potential. Also, we turn off the synaptic input bias currents,
+    since the synaptic inputs can not be used without calibration. The
+    reset bias current is set maximum.
 
     :param builder: Builder to append the configuration to.
     :param v_leak: CapMem setting of the leak potential for all neurons.
@@ -476,11 +484,13 @@ def set_analog_neuron_config(builder: sta.PlaybackProgramBuilder,
     :param i_leak: CapMem setting of the leak bias current for all
         neurons, noise will be added as for v_leak.
 
-    :return: Builder with configuration instructions appended.
+    :return: Tuple containing:
+        * Builder with configuration instructions appended.
+        * Dict containing the exact configured parameters for each neuron.
     """
 
     # set individual neuron parameters to sensible defaults
-    parameters = {
+    neuron_parameters = {
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm: 0,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm: 0,
         halco.CapMemRowOnCapMemBlock.i_bias_leak: i_leak,
@@ -494,7 +504,20 @@ def set_analog_neuron_config(builder: sta.PlaybackProgramBuilder,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau: 1017,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau: 1017
     }
-    builder = helpers.capmem_set_neuron_cells(builder, parameters)
+    builder = helpers.capmem_set_neuron_cells(builder, neuron_parameters)
+
+    return builder, neuron_parameters
+
+
+def set_global_capmem_config(
+        builder: sta.PlaybackProgramBuilder) -> sta.PlaybackProgramBuilder:
+    """
+    Set required global bias currents to static values.
+
+    :param builder: Builder to append instructions to.
+
+    :return: Builder with instructions appended.
+    """
 
     # set per-quadrant parameters
     parameters = {
@@ -580,7 +603,8 @@ def configure_readout_neurons(
 def configure_chip(builder: sta.PlaybackProgramBuilder,
                    v_leak: int = 700, n_synapse_rows: int = 8,
                    readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
-                   ) -> sta.PlaybackProgramBuilder:
+                   ) -> Tuple[sta.PlaybackProgramBuilder,
+                              Dict[halco.CapMemRowOnCapMemBlock, np.ndarray]]:
     """
     Does all the necessary configurations on the chip to start calibrating
     the neurons for usage in hagen mode.
@@ -598,24 +622,37 @@ def configure_chip(builder: sta.PlaybackProgramBuilder,
         If None, neither the CADC ramp nor the neuron is connected
         to the pads, the readout chain configuration is untouched.
 
-    :return: Builder with configuration instructions appended.
+    :return: Tuple containing:
+        * Builder with configuration instructions appended.
+        * Dict of configured neuron CapMem parameters.
     """
 
-    # Preconfigure chip: Configure Neuron readout
+    # Preconfigure chip: Configure CADC readout, global requirements
     builder = configure_integration(builder)
+
+    # digital neuron configs
+    neuron_config = neuron_config_default()
+    for coord in halco.iter_all(halco.NeuronConfigOnDLS):
+        builder.write(coord, neuron_config)
+
+    backend_config = neuron_backend_config_default()
+    for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
+        builder.write(coord, backend_config)
 
     # Preconfigure chip: Configure synapses and drivers/PADI globally
     builder = configure_synapses(builder, n_synapse_rows)
     builder = configure_stp_and_padi(builder)
 
     # Preconfigure capmem for calibration
-    builder = set_analog_neuron_config(builder, v_leak, i_leak=200)
+    builder, neuron_parameters = set_analog_neuron_config(
+        builder, v_leak, i_leak=200)
+    builder = set_global_capmem_config(builder)
 
     # Preconfigure readout (MADC register)
     if readout_neuron:
         builder = configure_readout_neurons(builder, readout_neuron)
 
-    return builder
+    return builder, neuron_parameters
 
 
 def reconfigure_synaptic_input(

@@ -107,8 +107,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         sta.run(connection, builder.done())
 
         for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
-            neuron_result.parameters[neuron_coord][
-                halco.CapMemRowOnCapMemBlock.i_bias_leak] = \
+            neuron_result.neurons[neuron_coord].leak.i_bias = \
                 hal.CapMemCell.Value(0)
 
     return HagenCalibrationResult(

@@ -3,135 +3,34 @@ Provides an interface for calibrating LIF neurons.
 """
 
 import numbers
-from typing import Dict, Optional, Union, List
+from typing import Optional, Union, List
 from dataclasses import dataclass
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import sta, halco, hal, hxcomm
+from dlens_vx_v2 import sta, halco, hal, hxcomm, lola
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
     neuron_potentials
+import calix.hagen.neuron as hagen_neuron
+from calix.hagen.neuron import NeuronCalibResult
 from calix.spiking import neuron_threshold
 from calix import constants
 
 
 @dataclass
-class NeuronCalibResult:
-    """
-    Result object of a neuron calibration.
-    Holds calibrated parameters for all neurons and their calibration success.
-    """
-
-    capmem_parameters: Dict[halco.AtomicNeuronOnDLS, Dict[
-        halco.CapMemRowOnCapMemBlock, hal.CapMemCell.Value]]
-    neuron_configs: Dict[halco.NeuronConfigOnDLS, hal.NeuronConfig]
-    refractory_counters: Dict[halco.NeuronBackendConfigOnDLS,
-                              hal.NeuronBackendConfig.RefractoryTime]
-    refractory_clock: hal.CommonNeuronBackendConfig.ClockScale
-    success: Dict[halco.AtomicNeuronOnDLS, bool]
-
-    def apply(self, builder: sta.PlaybackProgramBuilder
-              ) -> sta.PlaybackProgramBuilder:
-        """
-        Apply the neuron calibration.
-
-        Configures neurons in a "default-working" state with calibration
-        applied, just like after the calibration.
-
-        :param builder: Builder to append configuration instructions to.
-
-        :return: Builder with configuration instructions appended.
-        """
-
-        # write static CapMem config
-        config = {
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop: 300,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop: 300,
-            halco.CapMemRowOnCapMemBlock.i_bias_reset: 1015}
-        builder = helpers.capmem_set_neuron_cells(builder, config)
-
-        # set per-quadrant parameters
-        config = {
-            halco.CapMemCellOnCapMemBlock.neuron_v_bias_casc_n: 250,
-            halco.CapMemCellOnCapMemBlock.neuron_i_bias_readout_amp: 110,
-            halco.CapMemCellOnCapMemBlock.neuron_i_bias_leak_source_follower:
-            100,
-            halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: 1022,
-            halco.CapMemCellOnCapMemBlock.neuron_i_bias_spike_comparator: 500}
-        builder = helpers.capmem_set_quadrant_cells(builder, config)
-
-        # enable readout buffers
-        builder.write(halco.CapMemCellOnDLS.readout_out_amp_i_bias_0,
-                      hal.CapMemCell(1022))
-        builder.write(halco.CapMemCellOnDLS.readout_out_amp_i_bias_1,
-                      hal.CapMemCell(1022))
-
-        # write neuron CapMem cells
-        for neuron_coord, params in \
-                self.capmem_parameters.items():
-            for capmem_row, value in params.items():
-                cell_coord = halco.CapMemCellOnDLS(
-                    cell=halco.CapMemCellOnCapMemBlock(
-                        x=neuron_coord.toCapMemColumnOnCapMemBlock(),
-                        y=capmem_row),
-                    block=neuron_coord.toCapMemBlockOnDLS())
-                builder.write(cell_coord, hal.CapMemCell(value))
-
-        # write configs
-        for coord, config in self.neuron_configs.items():
-            builder.write(coord, config)
-
-        for coord, counter in self.refractory_counters.items():
-            config = hal.NeuronBackendConfig()
-            config.refractory_time = counter
-            config.select_input_clock = 1
-            builder.write(coord, config)
-
-        config = hal.CommonNeuronBackendConfig()
-        config.enable_clocks = True
-        config.enable_event_registers = True
-        config.clock_scale_slow = 9
-        config.clock_scale_fast = self.refractory_clock
-
-        for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
-            builder.write(coord, config)
-        builder = helpers.wait(builder, constants.capmem_level_off_time)
-
-        return builder
-
-
-@dataclass
-class _CalibrationResultInternal:
+class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
     """
     Class providing array-like access to calibrated parameters.
     Used internally during calibration.
     """
 
-    v_leak: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
-    v_reset: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
     v_threshold: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_shift: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_shift: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_bias_leak: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_gm: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_gm: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_tau: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     refractory_counters: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     refractory_clock: int = 0
     neuron_configs: Optional[List[hal.NeuronConfig]] = None
-    success: np.ndarray = np.ones(
-        halco.NeuronConfigOnDLS.size, dtype=np.bool)
 
     def set_neuron_configs_default(
             self, membrane_capacitance: Union[int, np.ndarray],
@@ -214,64 +113,64 @@ class _CalibrationResultInternal:
 
             self.neuron_configs.append(config)
 
+    def to_atomic_neuron(self,
+                         neuron_coord: halco.AtomicNeuronOnDLS
+                         ) -> lola.AtomicNeuron:
+        """
+        Returns an AtomicNeuron with calibration applied.
+
+        :param neuron_coord: Coordinate of requirested neuron.
+
+        :return: Complete AtomicNeuron configuration.
+        """
+
+        atomic_neuron = super().to_atomic_neuron(neuron_coord)
+        neuron_id = neuron_coord.toEnum().value()
+
+        atomic_neuron.set_from(self.neuron_configs[neuron_id])
+
+        atomic_neuron.threshold.v_threshold = hal.CapMemCell.Value(
+            self.v_threshold[neuron_id])
+
+        anref = atomic_neuron.refractory_period
+        anref.refractory_time = hal.NeuronBackendConfig.RefractoryTime(
+            self.refractory_counters[neuron_id])
+        anref.input_clock = 1
+
+        return atomic_neuron
+
     def to_neuron_calib_result(self) -> NeuronCalibResult:
         """
         Conversion to NeuronCalibResult.
-        The numpy arrays get transformed to dicts.
+        The numpy arrays get merged into lola AtomicNeurons.
 
         :return: Equivalent NeuronCalibResult.
         """
 
-        result = NeuronCalibResult(
-            dict(), dict(), dict(), hal.CommonNeuronBackendConfig.ClockScale(),
-            dict())
-        conversion = {
-            halco.CapMemRowOnCapMemBlock.v_leak: self.v_leak,
-            halco.CapMemRowOnCapMemBlock.v_reset: self.v_reset,
-            halco.CapMemRowOnCapMemBlock.v_threshold: self.v_threshold,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift:
-            self.i_syn_exc_shift,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift:
-            self.i_syn_inh_shift,
-            halco.CapMemRowOnCapMemBlock.i_bias_leak: self.i_bias_leak,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm:
-            self.i_syn_exc_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm:
-            self.i_syn_inh_gm,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
-            self.i_syn_exc_tau,
-            halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
-            self.i_syn_inh_tau
-        }
+        result = super().to_neuron_calib_result()
 
-        # convert CapMem parameters
-        for neuron_id, neuron_coord in enumerate(
-                halco.iter_all(halco.AtomicNeuronOnDLS)):
-            neuron_params = dict()
-            for coord, param in conversion.items():
-                neuron_params.update({
-                    coord: hal.CapMemCell.Value(param[neuron_id])
-                })
-            result.capmem_parameters.update({neuron_coord: neuron_params})
+        # set common correlation config
+        # Restore default, which is configured differently in
+        # the hagen-mode base class via
+        # `neuron_helpers.configure_integration()`.
+        dumper = sta.PlaybackProgramBuilderDumper()
+        config = hal.CommonCorrelationConfig()
+        for coord in halco.iter_all(halco.CommonCorrelationConfigOnDLS):
+            dumper.write(coord, config)
 
-        # convert configs
-        for neuron_id, neuron_coord in enumerate(
-                halco.iter_all(halco.NeuronConfigOnDLS)):
-            result.neuron_configs.update(
-                {neuron_coord: self.neuron_configs[neuron_id]})
-            result.refractory_counters.update(
-                {neuron_coord.toNeuronBackendConfigOnDLS():
-                 hal.NeuronBackendConfig.RefractoryTime(
-                     self.refractory_counters[neuron_id])})
-        result.refractory_clock = hal.CommonNeuronBackendConfig.ClockScale(
-            self.refractory_clock)
+        cocolist = dumper.done().tolist()
+        for coord, config in cocolist:
+            if coord == halco.TimerOnDLS():
+                continue
+            result.cocos[coord] = config
 
-        # convert success
-        if self.success is not None:
-            result.success = dict()
-            for neuron_id, neuron_coord in enumerate(
-                    halco.iter_all(halco.AtomicNeuronOnDLS)):
-                result.success.update({neuron_coord: self.success[neuron_id]})
+        # set common neuron backend config
+        config = hal.CommonNeuronBackendConfig()
+        config.clock_scale_slow = 9
+        config.clock_scale_fast = self.refractory_clock
+
+        for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
+            result.cocos[coord] = config
 
         return result
 
@@ -393,7 +292,7 @@ def calibrate(
     # We start using a hagen-mode-like setup until the synaptic input is
     # calibrated. Afterwards we calibrate parameters like the spike threshold.
     builder = sta.PlaybackProgramBuilder()
-    builder = neuron_helpers.configure_chip(
+    builder, _ = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
     sta.run(connection, builder.done())
 
@@ -457,8 +356,14 @@ def calibrate(
     # therefore we overwrite all previous calibrations (like spike threshold)
     # and cherry-pick the desired ones (like synaptic time constant).
     builder = sta.PlaybackProgramBuilder()
-    builder = neuron_helpers.configure_chip(
+    builder, initial_config = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
+    calib_result.i_syn_exc_drop = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop]
+    calib_result.i_syn_inh_drop = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop]
+    calib_result.i_bias_reset = initial_config[
+        halco.CapMemRowOnCapMemBlock.i_bias_reset]
 
     # re-apply syn. input time constant calib which we need,
     # and re-apply spike threshold which may affect CapMem crosstalk
