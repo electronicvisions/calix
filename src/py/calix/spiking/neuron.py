@@ -36,17 +36,13 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
     def set_neuron_configs_default(
             self, membrane_capacitance: Union[int, np.ndarray],
-            tau_mem: pq.quantity.Quantity,
             tau_syn: pq.quantity.Quantity,
             readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None):
         """
         Fill neuron configs with the given membrane capacitances, but
         otherwise default values.
-        Decide on leak multiplication/division based on target
-        membrane time constant.
 
         :param membrane_capacitance: Desired membrane capacitance (in LSB).
-        :param tau_mem: Desired membrane time constant.
         :param tau_syn: Synaptic input time constant. Used to
             decide whether the high resistance mode is enabled.
         :param readout_neuron: Neuron to enable readout for.
@@ -92,16 +88,8 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
             tau_exc = find_neuron_value(tau_syn_exc, neuron_id)
             tau_inh = find_neuron_value(tau_syn_inh, neuron_id)
-            tau = find_neuron_value(tau_mem, neuron_id)
             c_mem = find_neuron_value(membrane_capacitance, neuron_id)
             config.membrane_capacitor_size = c_mem
-
-            # min. tau with division at C = 63: some 20 us
-            if float(tau.rescale(pq.us)) > 20 * c_mem / 63:
-                config.enable_leak_division = True
-            # min. tau in "normal mode" at C = 63: some 2 us
-            if float(tau.rescale(pq.us)) < 2 * c_mem / 63:
-                config.enable_leak_multiplication = True
 
             # min. tau_syn with high resistance mode: some 20 us
             if tau_exc < 20 * pq.us:
@@ -277,7 +265,7 @@ def calibrate(
 
     calib_result = _CalibrationResultInternal()
     calib_result.set_neuron_configs_default(
-        membrane_capacitance, tau_mem, tau_syn, readout_neuron)
+        membrane_capacitance, tau_syn, readout_neuron)
 
     # calculate refractory time
     # clock scaler 0 means 125 MHz refractory clock, i.e. 8 ns per cycle
@@ -562,11 +550,22 @@ def calibrate(
         calib_result.success, result.success], axis=0)
 
     # calibrate membrane time constant
-    calibration = neuron_leak_bias.MembraneTimeConstCalibMADC(
-        neuron_configs=calib_result.neuron_configs, target=tau_mem)
+    if np.min(tau_mem) >= 3 * pq.us:
+        # if all target time constants are at least 3 us, use offset currents
+        calibration = neuron_leak_bias.MembraneTimeConstCalibOffset(
+            neuron_configs=calib_result.neuron_configs,
+            target=tau_mem)
+    else:
+        # if at least one neuron targets a faster membrane time constant,
+        # use resets in order to achieve enough amplitude for the fits.
+        calibration = neuron_leak_bias.MembraneTimeConstCalibReset(
+            neuron_configs=calib_result.neuron_configs,
+            target=tau_mem)
+
     calib_result.i_bias_leak = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch()
     ).calibrated_parameters
+    calib_result.neuron_configs = calibration.neuron_configs
 
     # calibrate reset
     calibration = neuron_potentials.ResetPotentialCalibration(reset)
@@ -583,6 +582,12 @@ def calibrate(
     calib_result.v_leak = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
+
+    # re-enable spike threshold
+    for neuron_coord, neuron_config in zip(
+            halco.iter_all(halco.NeuronConfigOnDLS),
+            calib_result.neuron_configs):
+        neuron_config.enable_threshold_comparator = True
 
     result = calib_result.to_neuron_calib_result()
     builder = sta.PlaybackProgramBuilder()

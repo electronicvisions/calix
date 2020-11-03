@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+
 """
 Provides functions to set the neurons' leak OTA bias currents
 for different purposes.
@@ -285,22 +287,30 @@ class MembraneTimeConstCalibCADC(base.Calibration):
                   + f"{self.result.calibrated_parameters}")
 
 
-class MembraneTimeConstCalibMADC(madc_base.Calibration):
+class MembraneTimeConstCalibReset(madc_base.Calibration):
     """
-    Use the fast MADC to calibrate the membrane time constant.
+    Measure neuron reset with the MADC to calibrate the membrane time constant.
 
     Due to the MADC's high sample rate, an exponential fit on the decaying
     potential after a reset is used to determine the membrane time
     constant. Leak bias currents are tweaked to reach the desired value.
 
-    This calibration does not alter the neuron configuration, i.e. the
-    membrane capacitance and the leak division/multiplication must be
-    set suitably beforehand.
+    The leak and reset potentials are altered to ensure a good amplitude
+    for the fit between the two potentials. The membrane time constant
+    at a (different) desired leak potential may be slightly
+    different. For target membrane time constants above some 3 us,
+    a step current stimulus can be used instead of a reset, therefore
+    not changing the potentials. See MembraneTimeConstCalibOffset for
+    this method.
+
+    This calibration decides whether leak division or multiplication
+    is required during prelude. The given neuron configs are therefore
+    altered.
 
     Requirements:
     - None -
 
-    :ivar neuron_config_default: List of desired neuron configurations.
+    :ivar neuron_configs: List of desired neuron configurations.
         Necessary to enable leak division/multiplication.
     """
 
@@ -309,7 +319,7 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
                  neuron_configs: Optional[List[hal.NeuronConfig]] = None):
         """
         :param neuron_configs: List of neuron configurations. If None, the
-            hagen-mode default neuron config is used.
+            hagen-mode default neuron config is used for all neurons.
         """
 
         super().__init__(
@@ -319,11 +329,11 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
 
         self.target = target
         if neuron_configs is None:
-            self.neuron_config_default = [
+            self.neuron_configs = [
                 neuron_helpers.neuron_config_default() for _ in
                 range(halco.NeuronConfigOnDLS.size)]
         else:
-            self.neuron_config_default = neuron_configs
+            self.neuron_configs = neuron_configs
 
         self.sampling_time = max(70 * pq.us, 8 * np.max(self.target))
         self.wait_between_neurons = 10 * self.sampling_time
@@ -333,8 +343,12 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
         """
         Prepares chip for calibration.
 
-        Sets reset potential low in order to observe a large decay
-        back to the leak potential.
+        Sets reset potential low and leak high in order to
+        observe a large decay back to the leak potential.
+
+        Also measures the membrane time constant at low and high
+        bias currents to decide whether leak multiplication or
+        division is required to reach the given targets.
 
         :param connection: Connection to the chip to calibrate.
         """
@@ -342,16 +356,68 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
         # prepare MADC
         super().prelude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
-
         # set reset potential low and leak potential high
+        builder = sta.PlaybackProgramBuilder()
         builder = helpers.capmem_set_neuron_cells(
             builder, {
                 halco.CapMemRowOnCapMemBlock.v_reset: 520,
                 halco.CapMemRowOnCapMemBlock.v_leak: 880})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
+        sta.run(connection, builder.done())
 
-        # run program
+        # decide whether leak division or multiplication is required:
+        # inspect the feasible range without division or multiplication.
+        for neuron_id in range(self.n_instances):
+            self.neuron_configs[neuron_id].enable_leak_division = False
+            self.neuron_configs[neuron_id].enable_leak_multiplication = False
+
+        # measure at low leak bias current: If time constant is still
+        # smaller than the target, then enable division.
+        builder = sta.PlaybackProgramBuilder()
+        builder = self.configure_parameters(
+            builder, parameters=np.ones(self.n_instances, dtype=int) * 63
+            + helpers.capmem_noise(size=self.n_instances))
+        maximum_timeconstant = self.measure_results(connection, builder)
+        enable_division = maximum_timeconstant < self.target
+
+        # measure at high leak bias current: If time constant is still
+        # larger than the target, then enable multiplication.
+        builder = sta.PlaybackProgramBuilder()
+        builder = self.configure_parameters(
+            builder, parameters=np.ones(self.n_instances, dtype=int)
+            * (hal.CapMemCell.Value.max - 63)
+            + helpers.capmem_noise(size=self.n_instances))
+        minimum_timeconstant = self.measure_results(connection, builder)
+        enable_multiplication = minimum_timeconstant > self.target
+
+        # check sanity of decisions
+        # The fit may fail for very short time constants, < 0.5 us.
+        # Thus, if both division and multiplication is selected,
+        # only division is applied.
+        enable_multiplication[enable_division] = False
+
+        # set up in neuron configs
+        for neuron_id in range(self.n_instances):
+            self.neuron_configs[neuron_id].enable_leak_division = \
+                enable_division[neuron_id]
+            self.neuron_configs[neuron_id].enable_leak_multiplication = \
+                enable_multiplication[neuron_id]
+
+    def postlude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Restore original readout configuration.
+
+        The base class postlude is overwritten to _not_ restore
+        the original neuron configuration, as leak division
+        and multiplication may be altered by this routine.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        # restore original readout config
+        builder = sta.PlaybackProgramBuilder()
+        builder.write(halco.ReadoutSourceSelectionOnDLS(),
+                      self.original_readout_config)
         sta.run(connection, builder.done())
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
@@ -383,7 +449,7 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
         :param neuron_coord: Coordinate of neuron which is currently recorded.
         :param stimulation_time: Timer value at beginning of stimulation.
 
-        :return: Builder with PADI events appended.
+        :return: Builder with neuron resets appended.
         """
 
         builder.write(neuron_coord.toNeuronResetOnDLS(), hal.NeuronReset())
@@ -400,7 +466,7 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
         """
 
         config = hal.NeuronConfig(
-            self.neuron_config_default[int(neuron_coord.toEnum())])
+            self.neuron_configs[int(neuron_coord.toEnum())])
         config.enable_threshold_comparator = False
         config.enable_readout = False
         return config
@@ -432,20 +498,347 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
 
         :return: Numpy array of fitted synaptic input time constants.
         """
-
         def fitfunc(time_t, scale, tau, offset):
             return scale * np.exp(-time_t / tau) + offset
 
-        fit_slice = slice(125, int(self.madc_config.number_of_samples) - 100)
+        def find_exponential_start(samples: np.ndarray) -> Optional[int]:
+            """
+            Find start of expoential rise.
+
+            Find index where the expoential rise begins.
+            :param samples: MADC trace to investigate.
+
+            :return: Index of detected start of the exponential rise.
+            """
+            leak_potential = np.mean(samples['value'][:-10])
+            reset_potential = np.min(samples['value'])
+            diff = leak_potential - reset_potential
+
+            # detect end of refractory period
+            refractory = leak_potential - samples['value'] > diff / 2
+            return np.arange(len(refractory))[refractory][-1]
+
         neuron_fits = list()
         for neuron_id, neuron_data in enumerate(samples):
-            neuron_samples = neuron_data[fit_slice]
+            # remove unreliable samples
+            start = int(self._wait_before_stimulation.rescale(pq.s)
+                        * self.madc_config.calculate_sample_rate(
+                            self.madc_input_frequency))
+            stop = int(int(self.madc_config.number_of_samples) * 0.95)
+            neuron_samples = neuron_data[start:stop]
+
+            # only fit to exponential rise
+            start = find_exponential_start(neuron_samples)
+            neuron_samples = neuron_samples[start:]
+
+            # estimate start values for fit
+            p_0 = dict()
+            p_0['offset'] = np.mean(neuron_samples["value"][-10:])
+            p_0['scale'] = np.min(neuron_samples["value"]) - p_0['offset']
+            index_tau = np.argmax(neuron_samples["value"]
+                                  > p_0['offset'] + p_0['scale'] / np.e)
+            p_0['tau'] = neuron_samples["chip_time"][index_tau] - \
+                neuron_samples["chip_time"][0]
+
+            # for small time constants the estimation of tau might fail ->
+            # cut at bounds
+            p_0['tau'] = min(max(0.1, p_0['tau']), 100)
+
             try:
                 popt, _ = curve_fit(
                     fitfunc,
                     neuron_samples["chip_time"]
                     - neuron_samples["chip_time"][0],
-                    neuron_samples["value"], p0=[-120, 10, 420])
+                    neuron_samples["value"],
+                    p0=[p_0['scale'], p_0['tau'], p_0['offset']],
+                    bounds=([-p_0['offset'], 0.1, p_0['offset'] - 10],
+                            [0, 100, p_0['offset'] + 10]))
+            except RuntimeError as error:
+                raise exceptions.CalibrationNotSuccessful(
+                    f"Fitting to MADC samples failed for neuron {neuron_id}. "
+                    + str(error))
+            neuron_fits.append(popt[1])  # store time constant of exponential
+
+        return np.array(neuron_fits) * pq.us
+
+
+class MembraneTimeConstCalibOffset(madc_base.Calibration):
+    """
+    Measure response to step current with MADC to calibrate the membrane time
+    constant.
+
+    Due to the MADC's high sample rate, an exponential fit on the decaying
+    potential after a step current stimulus is used to determine the
+    membrane time constant. Leak bias currents are tweaked to reach
+    the desired membrane time constant.
+
+    This calibration decides whether leak division is required during
+    prelude. The given neuron configs are therefore altered.
+    The original neuron config (configured on chip before running the
+    calibration) is not restored, instead we stay with the config
+    used (and altered) during calibration.
+
+    Requirements:
+    * Leak potential is calibrated to the desired value. This is useful
+      since the time constant is then calibrated at and above this
+      selected potential.
+    * The desired membrane time constant is larger than some 3 us, since
+      leak multiplication is not supported by this calibration.
+    * The synaptic input should be on; it should be calibrated or the
+      bias currents should be set to 0. The reason is an effect on the
+      membrane dynamics for some neurons, which looks similar to leakage.
+      We recommend the synaptic input to be enabled and calibrated.
+
+    :ivar neuron_configs: List of desired neuron configurations.
+        Necessary to enable leak division.
+    """
+
+    def __init__(self,
+                 target: pq.quantity.Quantity,
+                 neuron_configs: Optional[List[hal.NeuronConfig]] = None):
+        """
+        :param neuron_configs: List of neuron configurations. If None, the
+            hagen-mode default neuron config is used for all neurons.
+        """
+
+        super().__init__(
+            parameter_range=base.ParameterRange(
+                hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
+            inverted=True)
+
+        self.target = target
+        if neuron_configs is None:
+            self.neuron_configs = [
+                neuron_helpers.neuron_config_default() for _ in
+                range(halco.NeuronConfigOnDLS.size)]
+        else:
+            self.neuron_configs = neuron_configs
+        for config in self.neuron_configs:
+            # The threshold is disabled to avoid possible spiking
+            # if the threshold potential is already set lower than the
+            # leak that will be set in the prelude.
+            config.enable_threshold_comparator = False
+
+        self._wait_before_stimulation = 100 * pq.us  # step current duration
+        self.sampling_time = max(70 * pq.us, 8 * np.max(self.target)) \
+            + self._wait_before_stimulation
+        self.wait_between_neurons = 10 * self.sampling_time
+
+    def prelude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Prepares chip for calibration.
+
+        Sets a high offset current in all neurons.
+
+        Also measures the membrane time constant at low leak
+        bias currents to decide whether leak division is required
+        to reach the given targets.
+
+        Leak multiplication is not supported by this calibration:
+        The offset current is too weak to stimulate the membrane
+        significantly if multiplication gets enabled.
+        The calibration can therefore only be used if the target
+        membrane time constant is larger than some 3 us.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        # prepare MADC
+        super().prelude(connection)
+
+        # set offset current onto membrane (enabled later)
+        builder = sta.PlaybackProgramBuilder()
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.i_mem_offset: 1000})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+
+        # run program
+        sta.run(connection, builder.done())
+
+        # decide whether leak division is required:
+        # inspect the feasible range with division.
+        for neuron_id in range(self.n_instances):
+            self.neuron_configs[neuron_id].enable_leak_division = True
+            self.neuron_configs[neuron_id].enable_leak_multiplication = False
+
+        # measure at maximum leak bias current: If time constant is smaller
+        # smaller than the target, then keep division on.
+        builder = sta.PlaybackProgramBuilder()
+        builder = self.configure_parameters(
+            # subtract CapMem noise amplitude
+            builder, parameters=hal.CapMemCell.Value.max - 5)
+        min_tau_with_division = self.measure_results(connection, builder)
+        enable_division = min_tau_with_division < self.target
+
+        # enabling leak multiplication is not supported for this method:
+        # the offset current is too weak to stimulate the membrane
+        # significantly if multiplication gets enabled.
+        # The calibration can therefore only be used if the target
+        # membrane time constant is larger than some 3 us.
+
+        # set up in neuron configs
+        for neuron_id in range(self.n_instances):
+            self.neuron_configs[neuron_id].enable_leak_division = \
+                enable_division[neuron_id]
+
+    def postlude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Restore original readout configuration.
+        The base class postlude is overwritten to _not_ restore
+        the original neuron configuration, as leak division
+        may be altered by this routine.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        # The original neuron config is not restored due to possible
+        # issues with the spike threshold: If the previously configured
+        # threshold is lower than the leak potential used here, the
+        # neuron would now be spiking regularly.
+
+        # restore original readout config
+        builder = sta.PlaybackProgramBuilder()
+        builder.write(halco.ReadoutSourceSelectionOnDLS(),
+                      self.original_readout_config)
+        sta.run(connection, builder.done())
+
+    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
+                             parameters: np.ndarray
+                             ) -> sta.PlaybackProgramBuilder:
+        """
+        Configure the given array of leak bias currents.
+
+        :param builder: Builder to append configuration instructions to.
+        :param parameters: Array of bias currents to set up.
+
+        :return: Builder with configuration appended.
+        """
+
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: parameters})
+
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+        return builder
+
+    def neuron_config_disabled(self, neuron_coord: halco.NeuronConfigOnDLS
+                               ) -> hal.NeuronConfig:
+        """
+        Return a neuron config with readout disabled.
+
+        :param neuron_coord: Coordinate of neuron to get config for.
+
+        :return: Neuron config with readout disabled.
+        """
+
+        config = hal.NeuronConfig(
+            self.neuron_configs[int(neuron_coord.toEnum())])
+        config.enable_readout = False
+        return config
+
+    def neuron_config_readout(self, neuron_coord: halco.NeuronConfigOnDLS
+                              ) -> hal.NeuronConfig:
+        """
+        Return a neuron config with readout enabled.
+        The step current is alredy enabled here and will be disabled
+        as the stimulus.
+
+        :param neuron_coord: Coordinate of neuron to get config for.
+
+        :return: Neuron config with readout enabled.
+        """
+
+        config = self.neuron_config_disabled(neuron_coord)
+        config.readout_source = hal.NeuronConfig.ReadoutSource.membrane
+        config.enable_readout = True
+        config.enable_membrane_offset = True
+        return config
+
+    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+                  neuron_coord: halco.NeuronConfigOnDLS,
+                  stimulation_time: hal.Timer.Value
+                  ) -> sta.PlaybackProgramBuilder:
+        """
+        Disable the membrane offset current.
+
+        This results in a decaying potential back to the leak.
+
+        :param builder: Builder to append instructions to.
+        :param neuron_coord: Coordinate of neuron which is currently recorded.
+        :param stimulation_time: Timer value at beginning of stimulation.
+
+        :return: Builder with neuron resets appended.
+        """
+
+        config = self.neuron_config_readout(neuron_coord)
+        config.enable_membrane_offset = False
+        builder.write(neuron_coord, config)
+        return builder
+
+    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+        """
+        Evaluates the obtained MADC samples.
+
+        To each neuron's MADC samples, an exponential decay is fitted,
+        and the resulting time constant is returned.
+
+        :param samples: MADC samples obtained for each neuron.
+
+        :return: Numpy array of fitted synaptic input time constants.
+        """
+        def fitfunc(time, scale, tau, offset):
+            return scale * np.exp(-time / tau) + offset
+
+        def find_exponential_start(samples: np.ndarray) -> int:
+            """
+            Find start of expoential decay.
+
+            Find index where the expoential decays begins.
+            :param samples: MADC trace to investigate.
+
+            :return: Index of detected start of the exponential decay.
+            """
+            leak_potential = np.mean(samples['value'][:-10])
+            current_potential = np.max(samples['value'])
+            diff = current_potential - leak_potential
+
+            # detect end of current period
+            current = samples['value'] - leak_potential > diff / 2
+            return np.arange(len(current))[current][-1]
+
+        neuron_fits = list()
+        for neuron_id, neuron_data in enumerate(samples):
+            # remove unreliable samples
+            start = int(self._wait_before_stimulation.rescale(pq.s)
+                        * self.madc_config.calculate_sample_rate(
+                            self.madc_input_frequency))
+            stop = int(int(self.madc_config.number_of_samples) * 0.95)
+            neuron_samples = neuron_data[start:stop]
+
+            # only fit to exponential rise
+            start = find_exponential_start(neuron_samples)
+            neuron_samples = neuron_samples[start:]
+
+            # estimate start values for fit
+            p_0 = dict()
+            p_0['offset'] = np.mean(neuron_samples["value"][-10:])
+            p_0['scale'] = np.max(neuron_samples["value"]) - p_0['offset']
+            index_tau = np.argmin(neuron_samples["value"]
+                                  > p_0['offset'] + p_0['scale'] / np.e)
+            p_0['tau'] = neuron_samples["chip_time"][index_tau] - \
+                neuron_samples["chip_time"][0]
+
+            # for small time constants the estimation of tau might fail ->
+            # cut at bounds
+            p_0['tau'] = min(max(0.1, p_0['tau']), 100)
+            try:
+                popt, _ = curve_fit(
+                    fitfunc,
+                    neuron_samples["chip_time"]
+                    - neuron_samples["chip_time"][0],
+                    neuron_samples["value"],
+                    p0=[p_0['scale'], p_0['tau'], p_0['offset']],
+                    bounds=([0, 0.1, p_0['offset'] - 10],
+                            [p_0['scale'] + 10, 100, p_0['offset'] + 10]))
             except RuntimeError as error:
                 raise exceptions.CalibrationNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
