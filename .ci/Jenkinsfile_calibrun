@@ -24,7 +24,7 @@ enum HxVersion {
 
 Map<HxVersion, String> HxVersionGerritQuery = [
 		(HxVersion.HXv1): "11720",
-		(HxVersion.HXv2): "11447",
+		(HxVersion.HXv2): "12764",
 ]
 
 class HxCubeSetup implements Serializable {
