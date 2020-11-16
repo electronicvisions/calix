@@ -340,15 +340,10 @@ def calibrate(
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=0, inhibitory_biases=0)
 
-    # calibrate leak at threshold (in order to calibrate threshold at
-    # leak afterwards):
-    calibration = neuron_potentials.LeakPotentialCalibration(threshold)
-    calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
-
     # calibrate threshold
-    calibration = neuron_threshold.NeuronThresholdCalibration(safe_margin=0)
+    calibration = neuron_threshold.ThresholdCalibCADC()
     calib_result.v_threshold = calibration.run(
-        connection, algorithm=algorithms.NoisyBinarySearch()
+        connection, algorithm=algorithms.NoisyBinarySearch(), target=threshold
     ).calibrated_parameters
 
     # Configure chip for synin calibration:

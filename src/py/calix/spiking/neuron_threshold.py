@@ -1,8 +1,10 @@
+from typing import List, Union
 import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
-from calix.common import base, helpers
+from calix.common import base, helpers, madc_base
+from calix.hagen import neuron_helpers
 from calix import constants
 from calix.common.boundary_check import check_range_boundaries
 
@@ -218,3 +220,269 @@ class NeuronThresholdCalibration(base.Calibration):
                         str(hal.SpikeCounterRead.Count.max ** 2), " >255")
                     + "If too many neurons spike frequently, the safe margin "
                     + "can be increased, sacrificing ease of causal spiking.")
+
+
+class ThresholdCalibMADC(madc_base.Calibration):
+    """
+    Calibrate the neurons' spike threshold potential using the MADC.
+
+    A constant current is injected onto the membrane, with the leak
+    disabled and the reset potential set low. This means we observe
+    regular spikes. The maximum recorded voltage at the MADC is just
+    below the threshold potential, we use it as threshold measurement.
+
+    Requirements:
+    - None -
+
+    :ivar neuron_configs: List of neuron configs that will be used as
+        basis for the `neuron_config_disabled` and `neuron_config_readout`
+        functions.
+    """
+
+    def __init__(self, target: Union[int, np.ndarray] = 125):
+        super().__init__(
+            parameter_range=base.ParameterRange(
+                hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
+            inverted=False,
+            errors=["Spike threshold for neurons {0} has reached {1}."] * 2)
+
+        self.target = target
+
+        self.sampling_time = 200 * pq.us
+        self.wait_between_neurons = 10 * self.sampling_time
+        self._wait_before_stimulation = 0 * pq.us
+
+        config = neuron_helpers.neuron_config_default()
+        config.enable_synaptic_input_excitatory = False
+        config.enable_synaptic_input_inhibitory = False
+        self.neuron_configs = [
+            hal.NeuronConfig(config) for _ in
+            halco.iter_all(halco.NeuronConfigOnDLS)]
+
+    def prelude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Prepares chip for calibration.
+
+        Disable leak, set a low reset voltage and the offset current. Note
+        that only the amplitude of the current is set but it is not enabled.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        # prepare MADC
+        super().prelude(connection)
+
+        builder = sta.PlaybackProgramBuilder()
+
+        # set reset potential low, set constant current, disable leak
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {
+                halco.CapMemRowOnCapMemBlock.i_mem_offset: 250,
+                halco.CapMemRowOnCapMemBlock.i_bias_leak: 0,
+                halco.CapMemRowOnCapMemBlock.v_reset: 450})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+
+        # run program
+        sta.run(connection, builder.done())
+
+    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
+                             parameters: np.ndarray
+                             ) -> sta.PlaybackProgramBuilder:
+        """
+        Configure the given array of threshold voltages.
+
+        :param builder: Builder to append configuration instructions to.
+        :param parameters: Array of threshold voltages to set up.
+
+        :return: Builder with configuration appended.
+        """
+
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.v_threshold: parameters})
+
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+        return builder
+
+    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+                  neuron_coord: halco.NeuronConfigOnDLS,
+                  stimulation_time: hal.Timer.Value
+                  ) -> sta.PlaybackProgramBuilder:
+        """
+        Empty function. The offset current is enabled already in the
+        `neuron_config_readout`, therefore no stimuli are neccesary.
+
+        :param builder: Builder to append neuron resets to.
+        :param neuron_coord: Coordinate of neuron which is currently recorded.
+        :param stimulation_time: Timer value at beginning of stimulation.
+
+        :return: Builder with neuron resets appended.
+        """
+
+        config = self.neuron_config_readout(neuron_coord)
+        config.enable_threshold_comparator = True
+        config.enable_membrane_offset = True
+        builder.write(neuron_coord, config)
+
+        return builder
+
+    def neuron_config_disabled(self, neuron_coord: halco.NeuronConfigOnDLS
+                               ) -> hal.NeuronConfig:
+        """
+        Return a neuron config with readout disabled.
+
+        The synaptic input and the offset current are disabled as well.
+
+        :param neuron_coord: Coordinate of neuron to get config for.
+
+        :return: Neuron config with readout disabled.
+        """
+
+        config = self.neuron_configs[int(neuron_coord)]
+        config.enable_readout = False
+        config.enable_membrane_offset = False
+        return config
+
+    def neuron_config_readout(self, neuron_coord: halco.NeuronConfigOnDLS
+                              ) -> hal.NeuronConfig:
+        """
+        Return a neuron config with readout enabled.
+        Also, the offset current and threshold comparator are enabled
+        for regular spiking.
+
+        :param neuron_coord: Coordinate of neuron to get config for.
+
+        :return: Neuron config with readout enabled.
+        """
+
+        config = self.neuron_config_disabled(neuron_coord)
+        config.readout_source = hal.NeuronConfig.ReadoutSource.membrane
+        config.enable_readout = True
+        return config
+
+    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+        """
+        Evaluates the obtained MADC samples.
+
+        For each neuron's MADC samples the maximum is determined which is
+        assumed to be near the threshold voltage.
+
+        :param samples: MADC samples obtained for each neuron.
+
+        :return: Numpy array of measured threshold voltages.
+        """
+
+        max_reads = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
+        for neuron_id, neuron_samples in enumerate(samples):
+            max_reads[neuron_id] = np.max(neuron_samples["value"][50:-50])
+        # the first and last 50 samples are cut off since they may contain
+        # bad data (the first few MADC samples may not be plausible,
+        # the last few samples may already be acquired at the next neuron)
+
+        return max_reads
+
+
+class ThresholdCalibCADC(base.Calibration):
+    """
+    Calibrate the neurons' spike threshold potential using the CADC.
+
+    An offset current is injected onto the membranes, which results in
+    regular spiking. The CADC samples all neurons at its maximum
+    sample rate. The maximum read for each neuron is treated as the
+    threshold potential, as it should be just below the threshold.
+
+    We use a high number of CADC samples to ensure we catch the neurons
+    at a potential close to the threshold, even with the slow sampling
+    rate of the CADC. As long as the sample rate and inter-spike-interval
+    is not perfectly aligned, the low sample rate should not be an issue,
+    and ultimately electrical noise should ensure the two will never stay
+    perfectly synchronous.
+
+    Requirements:
+    * Neuron membrane readout is connected to the CADCs (causal and acausal).
+    """
+
+    def __init__(self, target: Union[int, np.ndarray] = 125):
+        super().__init__(
+            parameter_range=base.ParameterRange(
+                hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
+            n_instances=halco.NeuronConfigOnDLS.size,
+            inverted=False,
+            errors=["Spike threshold for neurons {0} has reached {1}."] * 2)
+
+        self.target = target
+
+    def prelude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Prepares chip for calibration.
+
+        Disable leak, set a low reset voltage and the offset current. Note
+        that only the amplitude of the current is set but it is not enabled.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        builder = sta.PlaybackProgramBuilder()
+
+        # set reset potential low, set constant current, disable leak
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {
+                halco.CapMemRowOnCapMemBlock.i_mem_offset: 70,
+                halco.CapMemRowOnCapMemBlock.i_bias_leak: 0,
+                halco.CapMemRowOnCapMemBlock.v_reset: 450})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+
+        # set neuron config suitably
+        config = neuron_helpers.neuron_config_default()
+        config.enable_synaptic_input_excitatory = False
+        config.enable_synaptic_input_inhibitory = False
+        config.enable_threshold_comparator = True
+        config.enable_membrane_offset = True
+
+        for coord in halco.iter_all(halco.NeuronConfigOnDLS):
+            builder.write(coord, config)
+
+        # run program
+        sta.run(connection, builder.done())
+
+    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
+                             parameters: np.ndarray
+                             ) -> sta.PlaybackProgramBuilder:
+        """
+        Configure the given array of threshold voltages.
+
+        :param builder: Builder to append configuration instructions to.
+        :param parameters: Array of threshold voltages to set up.
+
+        :return: Builder with configuration appended.
+        """
+
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.v_threshold: parameters})
+
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+        return builder
+
+    def measure_results(self, connection: hxcomm.ConnectionHandle,
+                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+        """
+        Samples the membrane repeatedly and returns the maximum obtained
+        value as the voltage measurement closest to the threshold.
+
+        :param connection: Connection to the chip.
+        :param builder: Builder to append measurement to.
+
+        :return: Array of near-threshold CADC reads.
+        """
+
+        n_samples = 2000
+        results = np.empty((n_samples, halco.NeuronConfigOnDLS.size))
+        results[:, :halco.SynapseOnSynapseRow.size] = \
+            neuron_helpers.cadc_read_neurons_repetitive(
+                connection, builder, synram=halco.SynramOnDLS.top,
+                n_reads=n_samples, wait_time=0 * pq.us)
+        results[:, halco.SynapseOnSynapseRow.size:] = \
+            neuron_helpers.cadc_read_neurons_repetitive(
+                connection, builder, synram=halco.SynramOnDLS.bottom,
+                n_reads=n_samples, wait_time=0 * pq.us)
+
+        return np.max(results, axis=0)

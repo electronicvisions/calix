@@ -43,22 +43,6 @@ class NeuronThresholdTest(ConnectionSetup):
             self.connection, i_synin_gm=140, target_noise=None,
             tau_syn=2 * pq.us)
 
-    def test_01_threshold_calibration(self):
-        """
-        Calibrates spike threshold.
-        """
-
-        # calibrate spike threshold to be shortly above leak
-        calibration = neuron_threshold.NeuronThresholdCalibration()
-        calibration.run(
-            self.connection, algorithm=algorithms.NoisyBinarySearch())
-
-        # Calibrate reset potential to be equal to leak
-        calibration = neuron_potentials.ResetPotentialCalibration(
-            highnoise=True)
-        calibration.run(
-            self.connection, algorithm=algorithms.NoisyBinarySearch())
-
     @staticmethod
     def preconfigure(connection: hxcomm.ConnectionHandle,
                      weight: hal.SynapseQuad.Weight):
@@ -103,6 +87,9 @@ class NeuronThresholdTest(ConnectionSetup):
         """
         Inspect the given spikes, as returned by a program,
         and assert they are as expected.
+
+        This function is used to test the NeuronThresholdCalibration,
+        which yields a threshold shortly above the leak potential.
 
         :param program_spikes: Spikes returned by playback program.
         """
@@ -149,12 +136,27 @@ class NeuronThresholdTest(ConnectionSetup):
             "Too many timeframes without spikes expected have spikes: "
             + f"{spikes_recorded[~spikes_expected]}")
 
-    def test_02_spikes(self):
+    def test_01_threshold_calibration(self):
         """
+        Calibrates spike threshold using the NeuronThresholdCalibration,
+        which sets the threshold shortly above the leak potential.
+
         Send some inputs at relatively low weight, assert neurons
         spike in response to inputs but not otherwise.
         """
 
+        # calibrate spike threshold to be shortly above leak
+        calibration = neuron_threshold.NeuronThresholdCalibration()
+        calibration.run(
+            self.connection, algorithm=algorithms.NoisyBinarySearch())
+
+        # Calibrate reset potential to be equal to leak
+        calibration = neuron_potentials.ResetPotentialCalibration(
+            highnoise=True)
+        calibration.run(
+            self.connection, algorithm=algorithms.NoisyBinarySearch())
+
+        # test for spike response
         self.preconfigure(self.connection, weight=32)
 
         builder = sta.PlaybackProgramBuilder()
@@ -196,6 +198,68 @@ class NeuronThresholdTest(ConnectionSetup):
         self.__class__.log.DEBUG("Got {0} spikes".format(len(program.spikes)))
 
         self.analyze_spikes(program.spikes)
+
+    def test_02_madc_based(self):
+        """
+        Calibrate the spike threshold via the MADC-based method,
+        ThresholdCalibMADC. Use the CADC-based method to measure the
+        results.
+        """
+
+        for target in range(400, 561, 80):  # threshold in MADC LSB
+            # calibrate using MADC
+            calibration = neuron_threshold.ThresholdCalibMADC(target=target)
+            calibration.run(
+                self.connection, algorithm=algorithms.NoisyBinarySearch())
+
+            # verify using CADC
+            check = neuron_threshold.ThresholdCalibCADC()
+            check.prelude(self.connection)
+            results = check.measure_results(
+                self.connection, builder=sta.PlaybackProgramBuilder())
+
+            # assert at most 5% of neurons deviate by more than 8 CADC LSB
+            # from median threshold of all neurons
+            median = np.median(results)
+            allowed_deviation = 8  # CADC LSB
+            outliers = np.sum([
+                results > median + allowed_deviation,
+                results < median - allowed_deviation])
+            self.assertLess(
+                outliers, halco.NeuronConfigOnDLS.size * 0.05,
+                "MADC-based threshold calib shows too many outliers "
+                + f"at target {target} when checked via the CADC.")
+
+    def test_03_madc_based(self):
+        """
+        Calibrate the spike threshold via the CADC-based method,
+        ThresholdCalibCADC. Use the MADC-based method to measure the
+        results.
+        """
+
+        for target in range(100, 161, 30):  # threshold in CADC LSB
+            # calibrate using CADC
+            calibration = neuron_threshold.ThresholdCalibCADC(target=target)
+            calibration.run(
+                self.connection, algorithm=algorithms.NoisyBinarySearch())
+
+            # verify using MADC
+            check = neuron_threshold.ThresholdCalibMADC()
+            check.prelude(self.connection)
+            results = check.measure_results(
+                self.connection, builder=sta.PlaybackProgramBuilder())
+
+            # assert at most 5% of neurons deviate by more than 20 MADC LSB
+            # from median threshold of all neurons
+            median = np.median(results)
+            allowed_deviation = 20  # MADC LSB
+            outliers = np.sum([
+                results > median + allowed_deviation,
+                results < median - allowed_deviation])
+            self.assertLess(
+                outliers, halco.NeuronConfigOnDLS.size * 0.05,
+                "CADC-based threshold calib shows too many outliers when "
+                + f"at target {target} when checked via the MADC.")
 
 
 if __name__ == "__main__":
