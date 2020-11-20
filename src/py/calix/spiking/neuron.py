@@ -9,7 +9,7 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v2 import sta, halco, hal, hxcomm, lola
 
-from calix.common import algorithms, base, helpers
+from calix.common import algorithms, base, synapse, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
     neuron_potentials
 import calix.hagen.neuron as hagen_neuron
@@ -27,6 +27,8 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
     v_threshold: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
+    syn_bias_dac: np.ndarray = np.empty(
+        halco.NeuronConfigBlockOnDLS.size, dtype=int)
     refractory_counters: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     refractory_clock: int = 0
@@ -158,6 +160,11 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
         for coord in halco.iter_all(halco.CommonCorrelationConfigOnDLS):
             dumper.write(coord, config)
 
+        # set synapse DAC bias current
+        dumper = helpers.capmem_set_quadrant_cells(
+            dumper,
+            {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: self.syn_bias_dac})
+
         cocolist = dumper.done().tolist()
         for coord, config in cocolist:
             if coord == halco.TimerOnDLS():
@@ -186,6 +193,7 @@ def calibrate(
         i_synin_gm: Union[int, np.ndarray] = 200,
         membrane_capacitance: Union[int, np.ndarray] = 63,
         refractory_time: pq.quantity.Quantity = 2. * pq.us,
+        synapse_dac_bias: int = 1022,
         readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
 ) -> NeuronCalibResult:
     """
@@ -225,6 +233,10 @@ def calibrate(
         as 0 to 63 LSB.
     :param refractory_time: Refractory time, given with a unit as
         `quantities.quantity.Quantity`.
+    :param synapse_dac_bias: Synapse DAC bias current that is desired.
+        Can be lowered in order to reduce the amplitude of a spike
+        at the input of the synaptic input OTA. This can be useful
+        to avoid saturation when using larger synaptic time constants.
     :param readout_neuron: Coordinate of the neuron to be connected to
         a readout pad, i.e. can be observed using an oscilloscope.
         The selected neuron is connected to the upper pad (channel 0),
@@ -339,6 +351,20 @@ def calibrate(
 
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=0, inhibitory_biases=0)
+
+    # set synapse DAC bias current
+    builder = sta.PlaybackProgramBuilder()
+    builder = helpers.capmem_set_quadrant_cells(
+        builder,
+        {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: synapse_dac_bias})
+    builder = helpers.wait(builder, constants.capmem_level_off_time)
+    sta.run(connection, builder.done())
+
+    # Calibrate synapse DAC bias current
+    # The CADC-based calibration is faster and provides sufficient accuracy.
+    calibration = synapse.DACBiasCalibCADC()
+    calib_result.syn_bias_dac = calibration.run(
+        connection, algorithm=algorithms.BinarySearch()).calibrated_parameters
 
     # calibrate threshold
     calibration = neuron_threshold.ThresholdCalibCADC()

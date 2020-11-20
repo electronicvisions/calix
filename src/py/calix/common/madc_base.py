@@ -52,11 +52,11 @@ class Calibration(base.Calibration):
     """
 
     def __init__(self, parameter_range: base.ParameterRange, inverted: bool,
-                 errors: Optional[List[str]] = None):
+                 errors: Optional[List[str]] = None,
+                 n_instances: int = halco.NeuronConfigOnDLS.size):
         super().__init__(
             parameter_range=parameter_range,
-            n_instances=halco.NeuronConfigOnDLS.size, inverted=inverted,
-            errors=errors)
+            n_instances=n_instances, inverted=inverted, errors=errors)
         self.original_readout_config: Optional[
             hal.ReadoutSourceSelection] = None
         self.original_neuron_configs: Optional[List[hal.NeuronConfig]] = None
