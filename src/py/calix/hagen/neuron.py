@@ -343,23 +343,27 @@ def calibrate(
         pass
     elif np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.ExcSynTimeConstantCalibration()
+        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+            target=tau_syn[0])
         calib_result.i_syn_exc_tau = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
-            target=tau_syn[0]).calibrated_parameters
-        calibration = neuron_synin.InhSynTimeConstantCalibration()
+            connection, algorithm=algorithms.NoisyBinarySearch()
+        ).calibrated_parameters
+        calibration = neuron_synin.InhSynTimeConstantCalibration(
+            target=tau_syn[1])
         calib_result.i_syn_inh_tau = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
-            target=tau_syn[1]).calibrated_parameters
+            connection, algorithm=algorithms.NoisyBinarySearch()
+        ).calibrated_parameters
     else:
-        calibration = neuron_synin.ExcSynTimeConstantCalibration()
+        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+            target=tau_syn)
         calib_result.i_syn_exc_tau = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
-            target=tau_syn).calibrated_parameters
-        calibration = neuron_synin.InhSynTimeConstantCalibration()
+            connection, algorithm=algorithms.NoisyBinarySearch()
+        ).calibrated_parameters
+        calibration = neuron_synin.InhSynTimeConstantCalibration(
+            target=tau_syn)
         calib_result.i_syn_inh_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
-            target=tau_syn).calibrated_parameters
+        ).calibrated_parameters
 
     # Calibrate leak potential at target leak read
     calibration = neuron_potentials.LeakPotentialCalibration(

@@ -571,6 +571,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         """
         :param neuron_configs: List of neuron configurations. If None, the
             hagen-mode default neuron config is used.
+        :param target: Target synaptic input time constant.
         """
 
         super().__init__(
@@ -586,6 +587,10 @@ class SynTimeConstantCalibration(madc_base.Calibration):
             ] * halco.NeuronConfigOnDLS.size
         else:
             self.neuron_config_default = neuron_configs
+
+        self.sampling_time = max(50 * pq.us, 8 * np.max(self.target))
+        self.wait_between_neurons = 10 * self.sampling_time
+        self._wait_before_stimulation = 5 * pq.us
 
     @property
     @abstractmethod
@@ -744,17 +749,36 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         def fitfunc(time_t, scale, tau, offset):
             return scale * np.exp(-time_t / tau) + offset
 
-        # fit synaptic input time constant
-        fit_slice = slice(145, 1150)
         neuron_fits = list()
         for neuron_id, neuron_data in enumerate(samples):
-            neuron_data = neuron_data[fit_slice]
+            # remove unreliable samples at beginning/end of trace
+            start_index = np.argmax(neuron_data["chip_time"] * pq.us
+                                    > self._wait_before_stimulation / 2
+                                    + neuron_data["chip_time"][0] * pq.us)
+            stop_index = int(self.madc_config.number_of_samples - 100)
+            neuron_data = neuron_data[start_index:stop_index]
+
+            # only fit to exponential decay
+            neuron_data = neuron_data[np.argmin(neuron_data["value"]):]
+
+            # estimate start values for fit
+            offset = np.mean(neuron_data["value"][-10:])
+            scale = np.min(neuron_data["value"]) - offset
+            index_tau = np.argmax(neuron_data["value"] > offset + scale / np.e)
+            tau = neuron_data["chip_time"][index_tau] - \
+                neuron_data["chip_time"][0]
+            # for small time constants the estimation of tau might fail ->
+            # cut at bounds
+            tau = min(max(0.1, tau), 100)
+
             try:
-                neuron_fits.append(curve_fit(
+                fit_result = curve_fit(
                     fitfunc,
                     neuron_data["chip_time"] - neuron_data["chip_time"][0],
-                    neuron_data["value"], p0=[-100, 5, 500],
-                    bounds=([-300, 0.1, 200], [-5, 100, 600]))[0])
+                    neuron_data["value"], p0=[scale, tau, offset],
+                    bounds=([-offset, 0.1, offset - 10],
+                            [0, 100, offset + 10]))
+                neuron_fits.append(fit_result[0])
             except RuntimeError as error:
                 raise exceptions.CalibrationNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "

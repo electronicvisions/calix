@@ -297,32 +297,32 @@ def calibrate(
     sta.run(connection, builder.done())
 
     # calibrate synaptic input time constant to given target
-    calibration = neuron_synin.ExcSynTimeConstantCalibration(
-        neuron_configs=calib_result.neuron_configs)
     if np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
+        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+            neuron_configs=calib_result.neuron_configs,
             target=tau_syn[0])
     else:
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
+        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+            neuron_configs=calib_result.neuron_configs,
             target=tau_syn)
+    result = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_exc_tau = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
-    calibration = neuron_synin.InhSynTimeConstantCalibration(
-        neuron_configs=calib_result.neuron_configs)
     if np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
+        calibration = neuron_synin.InhSynTimeConstantCalibration(
+            neuron_configs=calib_result.neuron_configs,
             target=tau_syn[1])
     else:
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
+        calibration = neuron_synin.InhSynTimeConstantCalibration(
+            neuron_configs=calib_result.neuron_configs,
             target=tau_syn)
+    result = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_inh_tau = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
