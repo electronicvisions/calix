@@ -55,6 +55,10 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     The individual calibrations' default parameters can be overwritten
     by providing cadc_ or neuron_kwargs, respectively.
 
+    After the "usual" neuron calibration has finished, the CADC calibration
+    is repeated in order to mitigate CapMem crosstalk effects.
+    Afterwards, the neuron potentials are calibrated once again.
+
     :param connection: Connection to the chip to calibrate.
     :param cadc_kwargs: Optional parameters for CADC calibration.
     :param neuron_kwargs: Optional parameters for neuron calibration.
@@ -71,5 +75,20 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     if neuron_kwargs is None:
         neuron_kwargs = dict()
     neuron_result = neuron.calibrate(connection, **neuron_kwargs)
+
+    # re-calibrate CADCs
+    # The newly set CapMem cells during the neuron calibration introduce
+    # crosstalk on the CapMem, which means the previous CADC calibration
+    # is no longer precise. We repeat the calib after the neurons are
+    # configured to mitigate this crosstalk.
+    cadc_result = cadc.calibrate(connection, **cadc_kwargs)
+
+    # re-calibrate neuron potentials
+    # filter neuron_kwargs for potentials
+    potentials = ["leak", "reset", "threshold"]
+    neuron_potentials = {key: neuron_kwargs[key] for key in potentials
+                         if key in neuron_kwargs}
+    neuron.refine_potentials(
+        connection, neuron_result, **neuron_potentials)
 
     return SpikingCalibrationResult(cadc_result, neuron_result)

@@ -4,9 +4,8 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, halco, sta, hxcomm, logger, lola
 
-from calix.common import helpers
+from calix.common import cadc, helpers
 from calix.hagen import neuron_helpers
-from calix.spiking import neuron
 import calix.spiking
 
 from connection_setup import ConnectionSetup
@@ -111,11 +110,22 @@ class TestNeuronCalib(ConnectionSetup):
 
     def test_00_calibration(self):
         """
-        Calibrates neurons to the given parameters.
-        Test spike response afterwards.
+        Calibrates neurons to the given parameters and tests spike response.
+        Afterwards, refine calibration and test spike response again.
         """
 
-        self.__class__.calib_result = calix.spiking.calibrate(self.connection)
+        cadc_result = cadc.calibrate(self.connection)
+        neuron_result = calix.spiking.neuron.calibrate(self.connection)
+        self.__class__.calib_result = calix.spiking.SpikingCalibrationResult(
+            cadc_result, neuron_result)
+
+        self.helper_test_spikes()
+
+        cadc.calibrate(self.connection)
+        calix.spiking.neuron.refine_potentials(
+            self.connection, self.__class__.calib_result.neuron_result,
+            leak=100, reset=90, threshold=140)
+
         self.helper_test_spikes()
 
     def test_01_reapply(self):
@@ -145,7 +155,7 @@ class TestNeuronCalib(ConnectionSetup):
                 halco.NeuronConfigOnDLS.size, dtype=int) * 600,
         }
 
-        neuron.calibrate(self.connection, **neuron_kwargs)
+        calix.spiking.calibrate(self.connection, neuron_kwargs=neuron_kwargs)
 
         self.helper_test_spikes()
 

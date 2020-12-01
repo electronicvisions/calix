@@ -590,3 +590,75 @@ def calibrate(
     sta.run(connection, builder.done())
 
     return result
+
+
+def refine_potentials(connection: hxcomm.ConnectionHandle,
+                      result: NeuronCalibResult,
+                      leak: Union[int, np.ndarray] = 80,
+                      reset: Union[int, np.ndarray] = 70,
+                      threshold: Union[int, np.ndarray] = 125
+                      ) -> None:
+    """
+    Re-calibrate the leak, reset and threshold potentials.
+
+    This can be useful to minimize the effects of CapMem crosstalk
+    on the end calibration. For best results, first run/apply a neuron
+    calibration and then re-run the CADC calibration, as it is also
+    affected by the neuron calibration. Call this function last.
+
+    :param connection: Connection to the chip to re-calibrate.
+    :param result: Result of the previous neuron calibration.
+        The potentials will be overwritten by the refinement.
+    :param leak: Target CADC read at leak (resting) potential.
+    :param reset: Target CADC read at reset potential.
+    :param threshold: Target CADC read near spike threshold.
+
+    """
+
+    # apply given calibration result
+    builder = sta.PlaybackProgramBuilder()
+    result.apply(builder)
+    sta.run(connection, builder.done())
+
+    # calibrate threshold
+    calibration = neuron_threshold.ThresholdCalibCADC()
+    v_threshold = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch(), target=threshold
+    ).calibrated_parameters
+
+    # disable threshold (necessary before calibrating leak and reset)
+    builder = sta.PlaybackProgramBuilder()
+    for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+        config = result.neurons[coord]
+        config.threshold.enable = False
+        builder.write(coord, config)
+    sta.run(connection, builder.done())
+
+    # calibrate reset
+    calibration = neuron_potentials.ResetPotentialCalibration(reset)
+    v_reset = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch()
+    ).calibrated_parameters
+
+    # calibrate leak
+    calibration = neuron_potentials.LeakPotentialCalibration(leak)
+    v_leak = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch()
+    ).calibrated_parameters
+
+    # set new parameters in calib result
+    for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+        result.neurons[coord].leak.v_leak = \
+            hal.CapMemCell.Value(v_leak[int(coord.toEnum())])
+        result.neurons[coord].reset.v_reset = \
+            hal.CapMemCell.Value(v_reset[int(coord.toEnum())])
+        result.neurons[coord].threshold.v_threshold = \
+            hal.CapMemCell.Value(v_threshold[int(coord.toEnum())])
+
+    # re-enable threshold
+    builder = sta.PlaybackProgramBuilder()
+    for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+        config = result.neurons[coord]
+        config.threshold.enable = True
+        builder.write(coord, config)
+    sta.run(connection, builder.done())
