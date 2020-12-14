@@ -104,12 +104,6 @@ class _SynapseDriverResultInternal:
         return result
 
 
-# default address to use for events:
-# This results in medium amplitudes as the activations range
-# from 0 to 31 and are encoded via the addresses.
-_DEFAULT_STIMULATION_ADDRESS = hal.SynapseQuad.Label(15)
-
-
 def preconfigure_capmem(builder: sta.PlaybackProgramBuilder
                         ) -> sta.PlaybackProgramBuilder:
     """
@@ -182,8 +176,7 @@ def get_synapse_mapping(driver: halco.SynapseDriverOnSynapseDriverBlock
 
 
 def set_synapse_pattern(builder: sta.PlaybackProgramBuilder,
-                        address: hal.SynapseQuad.Label =
-                        _DEFAULT_STIMULATION_ADDRESS,
+                        address: hal.SynapseQuad.Label,
                         weight: hal.SynapseQuad.Weight =
                         hal.SynapseQuad.Weight.max
                         ) -> sta.PlaybackProgramBuilder:
@@ -265,8 +258,7 @@ def syndrv_config_enabled() -> hal.SynapseDriverConfig:
 def measure_syndrv_amplitudes(
         connection: hxcomm.ConnectionHandle,
         builder: sta.PlaybackProgramBuilder = None, *,
-        address: hal.SynapseQuad.Label =
-        _DEFAULT_STIMULATION_ADDRESS,
+        address: hal.SynapseQuad.Label,
         n_runs: int = 20, n_events: int = 8,
         wait_time: pq.quantity.Quantity = 1.5 * pq.us) -> np.ndarray:
     """
@@ -831,7 +823,9 @@ class HagenDACOffsetCalibration(base.Calibration):
         result in a medium STP state. Set to 15 by default.
     """
 
-    def __init__(self):
+    def __init__(self,
+                 test_address: hal.SynapseQuad.Label
+                 = hal.SynapseQuad.Label(15)):
         super().__init__(
             parameter_range=base.ParameterRange(
                 hal.SynapseDriverConfig.HagenDACOffset.min,
@@ -839,7 +833,7 @@ class HagenDACOffsetCalibration(base.Calibration):
             n_instances=halco.SynapseDriverOnDLS.size,
             inverted=True)
         self.default_syndrv_config = syndrv_config_enabled()
-        self.test_address = hal.SynapseQuad.Label(15)
+        self.test_address = test_address
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -917,7 +911,9 @@ class HagenDACOffsetCalibration(base.Calibration):
             + f"{np.std(results):4.2f}")
 
 
-def calibrate(connection: hxcomm.ConnectionHandle
+def calibrate(connection: hxcomm.ConnectionHandle,
+              offset_test_address: hal.SynapseQuad.Label
+              = hal.SynapseQuad.Label(15)
               ) -> SynapseDriverCalibResult:
     """
     Calibrate the synapse drivers' STP offsets such that the amplitudes
@@ -939,6 +935,9 @@ def calibrate(connection: hxcomm.ConnectionHandle
       `calix.hagen.neuron.calibrate()` to achieve that.
 
     :param connection: Connection to the chip to run on.
+    :param offset_test_address: Address to align the hagen-mode DAC
+        offsets on. Note that the address is the inverted activation,
+        i.e. 0 yields a large value and 31 a small value.
 
     :return: SynapseDriverCalibResult containing STP ramp currents for
         the CapMem blocks, offsets for the drivers, and a success mask.
@@ -963,7 +962,7 @@ def calibrate(connection: hxcomm.ConnectionHandle
             result.success[int(coord.toCapMemBlockOnDLS().toEnum())]
 
     # Calibrate hagen-mode DAC offsets
-    calibration = HagenDACOffsetCalibration()
+    calibration = HagenDACOffsetCalibration(test_address=offset_test_address)
     calib_result.hagen_dac_offset = calibration.run(
         connection, algorithm=algorithms.BinarySearch()).calibrated_parameters
     # success not checked since hitting range boundaries is expected

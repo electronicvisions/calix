@@ -51,7 +51,8 @@ class HagenCalibrationResult:
 
 def calibrate(connection: hxcomm.ConnectionHandle,
               cadc_kwargs: dict = None,
-              neuron_kwargs: dict = None
+              neuron_kwargs: dict = None,
+              synapse_driver_kwargs: dict = None
               ) -> HagenCalibrationResult:
     """
     Execute a full calibration for hagen mode:
@@ -72,6 +73,8 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         neuron_kwargs["tau_mem"] = 60) to avoid this. Note that even
         if the leak bias is set to zero, some pseudo-leakage may occur
         through the synaptic input OTAs.
+    :param synapse_driver_kwargs: Optional parameters for synapse
+        driver calibration.
 
     :return: HagenCalibrationResult, containing cadc, neuron and
         synapse driver results.
@@ -95,7 +98,10 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     neuron_result = neuron.calibrate(connection, **neuron_kwargs)
 
     # calibrate synapse drivers
-    synapse_driver_result = synapse_driver.calibrate(connection)
+    if synapse_driver_kwargs is None:
+        synapse_driver_kwargs = dict()
+    synapse_driver_result = synapse_driver.calibrate(
+        connection, **synapse_driver_kwargs)
 
     # set leak biases to zero
     # We want to have only integration on the neurons, no leakage.
