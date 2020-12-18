@@ -174,7 +174,7 @@ class BinarySearch(base.Algorithm):
         builder = sta.PlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(
             builder, best_parameters)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         return best_parameters
 
@@ -379,7 +379,7 @@ class LinearSearch(base.Algorithm):
         # Set up best parameters again
         builder = sta.PlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(builder, parameters)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         return parameters
 
@@ -459,7 +459,7 @@ class PredictiveModel(base.Algorithm):
         builder = sta.PlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(
             builder, optimal_parameters)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         return optimal_parameters
 

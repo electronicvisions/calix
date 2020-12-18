@@ -203,7 +203,7 @@ class ResetPotentialCalibration(base.Calibration):
 
         # Obtain target for calibration
         if self.target is not None:
-            sta.run(connection, builder.done())
+            base.run(connection, builder)
         elif not self.highnoise:
             self.target = neuron_helpers.cadc_read_neuron_potentials(
                 connection, builder)
@@ -268,8 +268,7 @@ class ResetPotentialCalibration(base.Calibration):
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
             tickets.append(ticket)
 
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # Inspect read tickets
         results = neuron_helpers.inspect_read_tickets(tickets).flatten()
@@ -302,7 +301,7 @@ class ResetPotentialCalibration(base.Calibration):
         for coord, config in zip(halco.iter_all(
                 halco.NeuronBackendConfigOnDLS), self.backend_configs):
             builder.write(coord, config)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
 
 class BaselineCalibration(cadc.ChannelOffsetCalibration):

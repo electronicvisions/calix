@@ -329,7 +329,7 @@ class SynBiasCalibration(base.Calibration):
             builder=sta.PlaybackProgramBuilder(),
             row_mode=self._row_mode)
         builder = neuron_helpers.configure_synapses(builder)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         if self.target is None:
             # Recalibrate synaptic input reference potential (once)
@@ -459,9 +459,7 @@ class SynBiasCalibration(base.Calibration):
                 # next measurement.
                 builder = helpers.wait(builder, 1000 * pq.us)
 
-            # Wait for transfers, run builder
-            builder = helpers.wait(builder, 100 * pq.us)
-            sta.run(connection, builder.done())
+            base.run(connection, builder)
 
             builder = sta.PlaybackProgramBuilder()
 
@@ -657,7 +655,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         builder = neuron_helpers.configure_synapses(builder)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -895,7 +893,7 @@ class SynReferenceCalibMADC(madc_base.Calibration):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -1001,7 +999,7 @@ class SynReferenceCalibMADC(madc_base.Calibration):
         :return: Numpy array of mean results.
         """
 
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         results = np.empty((self.n_runs, halco.NeuronConfigOnDLS.size))
         for run_id in range(self.n_runs):

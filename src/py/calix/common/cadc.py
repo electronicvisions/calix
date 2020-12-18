@@ -141,7 +141,7 @@ class RampOffsetCalibration(base.Calibration):
              halco.CapMemCellOnCapMemBlock.stp_v_charge_0:
              self.dynamic_range_min})
 
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -237,7 +237,7 @@ class RampSlopeCalibration(base.Calibration):
             sta.PlaybackProgramBuilder(),
             {halco.CapMemCellOnCapMemBlock.stp_v_charge_0:
              self.dynamic_range_max})
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -481,7 +481,7 @@ def calibrate(
     builder = cadc_helpers.configure_readout_cadc_debug(builder)
 
     # run program for configuration
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # Initialize results to be returned as list
     calib_result = CADCCalibResult()

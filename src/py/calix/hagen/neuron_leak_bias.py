@@ -213,16 +213,15 @@ class MembraneTimeConstCalibCADC(base.Calibration):
 
             # Run program if builder is filled
             if runs_in_builder == runs_per_builder:
-                builder = helpers.wait(builder, 100 * pq.us)
-                sta.run(connection, builder.done())
+                base.run(connection, builder)
+
                 builder = sta.PlaybackProgramBuilder()
                 runs_in_builder = 0
             else:
                 runs_in_builder += 1
 
         if not builder.empty():
-            builder = helpers.wait(builder, 100 * pq.us)
-            sta.run(connection, builder.done())
+            base.run(connection, builder)
 
         # Process tickets, write into array
         results = np.empty(
@@ -256,7 +255,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
         """
 
         # Run configuration builder
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # Calibrate leak potentials to target
         leak_calib_success_mask = self.leak_calibration.run(
@@ -363,7 +362,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
                 halco.CapMemRowOnCapMemBlock.v_reset: 520,
                 halco.CapMemRowOnCapMemBlock.v_leak: 880})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # decide whether leak division or multiplication is required:
         # inspect the feasible range without division or multiplication.
@@ -418,7 +417,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         builder.write(halco.ReadoutSourceSelectionOnDLS(),
                       self.original_readout_config)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -653,7 +652,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # decide whether leak division is required:
         # inspect the feasible range with division.
@@ -700,7 +699,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         builder.write(halco.ReadoutSourceSelectionOnDLS(),
                       self.original_readout_config)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray

@@ -10,7 +10,7 @@ import unittest
 import numpy as np
 from dlens_vx_v2 import sta, halco, hal
 
-from calix.common import cadc, helpers
+from calix.common import base, cadc, helpers
 from calix.hagen import neuron_helpers
 from calix import constants
 
@@ -153,7 +153,7 @@ class TestCADCAssignment(ConnectionSetup):
         # Preconfigure chip for reading synapse assignment
         builder = sta.PlaybackProgramBuilder()
         builder = self.preconfigure_chip(builder)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         success = np.zeros(halco.NeuronConfigOnDLS.size, dtype=np.bool)
 
@@ -209,7 +209,7 @@ class TestCADCAssignment(ConnectionSetup):
         for quad_coord in halco.iter_all(halco.ColumnCorrelationQuadOnDLS):
             builder.write(quad_coord, quad_config)
 
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         success = np.zeros(halco.NeuronConfigOnDLS.size, dtype=np.bool)
 

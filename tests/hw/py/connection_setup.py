@@ -1,6 +1,8 @@
 import unittest
 from dlens_vx_v2 import sta, hxcomm
 
+from calix.common import base
+
 
 class ConnectionSetup(unittest.TestCase):
     """
@@ -21,7 +23,7 @@ class ConnectionSetup(unittest.TestCase):
 
         # Initialize the chip
         builder, _ = sta.ExperimentInit().generate()
-        sta.run(cls.connection, builder.done())
+        base.run(cls.connection, builder)
 
     @classmethod
     def tearDownClass(cls) -> None:

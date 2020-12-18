@@ -9,7 +9,7 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, sta, halco, lola, hxcomm
 
-from calix.common import cadc_helpers, helpers
+from calix.common import base, cadc_helpers, helpers
 from calix import constants
 
 
@@ -133,14 +133,13 @@ def cadc_read_neuron_potentials(connection: hxcomm.ConnectionHandle,
 
     # Create read ticket
     read_builder, ticket = CADCReadNeurons().generate()
-    read_builder = helpers.wait(read_builder, 100 * pq.us)
 
     # Merge with builder, if given
     if builder is not None:
         builder.merge_back(read_builder)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
     else:
-        sta.run(connection, read_builder.done())
+        base.run(connection, read_builder)
 
     # Evaluate result
     return ticket.to_numpy()
@@ -250,8 +249,7 @@ def cadc_read_neurons_repetitive(
         # Wait before next measurement
         builder = helpers.wait(builder, wait_time)
 
-    builder = helpers.wait(builder, 100 * pq.us)  # wait for transfers
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # Inspect ticket results
     return inspect_read_tickets(read_tickets)
@@ -698,8 +696,7 @@ def reconfigure_synaptic_input(
 
     for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
         read_tickets.append(builder.read(neuron_coord))
-    builder = helpers.wait(builder, 50 * pq.us)  # wait for transfers
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # Reconfigure CapMem bias currents
     builder = sta.PlaybackProgramBuilder()
@@ -740,4 +737,4 @@ def reconfigure_synaptic_input(
             halco.iter_all(halco.NeuronConfigOnDLS), neuron_configs):
         builder.write(neuron_coord, neuron_config)
 
-    sta.run(connection, builder.done())
+    base.run(connection, builder)

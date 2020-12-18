@@ -106,9 +106,7 @@ class TestNeuronCalib(ConnectionSetup):
                 builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
                 results.append(ticket)
 
-        # Wait for transfers, execute
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         baselines = neuron_helpers.inspect_read_tickets(
             baselines).flatten()
@@ -338,7 +336,7 @@ class TestNeuronCalib(ConnectionSetup):
              halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm: 0,
              halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Measure results, assert calibration is gone
         self.assertRaises(AssertionError,
@@ -358,7 +356,7 @@ class TestNeuronCalib(ConnectionSetup):
         self.__class__.cadc_result.apply(builder)
         self.__class__.calibration_result.apply(builder)
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Measure results, assert calibration is applied properly
         self.evaluate_calibration(self.connection)

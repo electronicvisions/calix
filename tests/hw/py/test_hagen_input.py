@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
-from calix.common import helpers
+from calix.common import base, helpers
 from calix.hagen import synapse_driver
 import calix.hagen
 
@@ -149,7 +149,7 @@ class HagenInputTest(ConnectionSetup):
             config.hagen_dac_offset = \
                 hal.SynapseDriverConfig.HagenDACOffset.max // 2
             builder.write(coord, config)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Measure results, assert calibration is gone
         amplitudes = self.measure_amplitudes(self.connection)
@@ -167,7 +167,7 @@ class HagenInputTest(ConnectionSetup):
         # Apply calibration again
         builder = self.__class__.calib_result.synapse_driver_result.apply(
             builder=sta.PlaybackProgramBuilder())
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Assert calibration works again
         amplitudes = self.measure_amplitudes(self.connection)
@@ -182,7 +182,7 @@ class HagenInputTest(ConnectionSetup):
         """
 
         builder, _ = sta.ExperimentInit().generate()
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Measure results, assert calibration is gone
         amplitudes = self.measure_amplitudes(self.connection)
@@ -201,7 +201,7 @@ class HagenInputTest(ConnectionSetup):
         # Apply whole calibration again
         builder = sta.PlaybackProgramBuilder()
         self.__class__.calib_result.apply(builder)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Assert calibration works again
         amplitudes = self.measure_amplitudes(self.connection)

@@ -81,7 +81,7 @@ class DACBiasCalibMADC(madc_base.Calibration):
         builder = neuron_helpers.configure_synapses(builder)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # set target
         self.target = np.min(self.measure_results(
@@ -265,7 +265,7 @@ class DACBiasCalibCADC(base.Calibration):
             builder.write(coord, config)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # inspect reads
         self.original_neuron_config = list()
@@ -363,8 +363,7 @@ class DACBiasCalibCADC(base.Calibration):
                 builder, synram)
             result_reads.append(ticket)
 
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # evaluate tickets
         baselines = neuron_helpers.inspect_read_tickets(baseline_reads)
@@ -395,4 +394,4 @@ class DACBiasCalibCADC(base.Calibration):
                 self.original_neuron_config):
             builder.write(neuron_coord, neuron_config)
 
-        sta.run(connection, builder.done())
+        base.run(connection, builder)

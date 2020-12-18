@@ -294,7 +294,7 @@ def calibrate(
     builder = sta.PlaybackProgramBuilder()
     builder, _ = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # calibrate synaptic input time constant to given target
     if np.ndim(tau_syn) > 0 \
@@ -335,7 +335,7 @@ def calibrate(
         neuron_config = hal.NeuronConfig(neuron_config)  # copy
         neuron_config.enable_threshold_comparator = False
         builder.write(neuron_coord, neuron_config)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=0, inhibitory_biases=0)
@@ -346,7 +346,7 @@ def calibrate(
         builder,
         {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: synapse_dac_bias})
     builder = helpers.wait(builder, constants.capmem_level_off_time)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # Calibrate synapse DAC bias current
     # The CADC-based calibration is faster and provides sufficient accuracy.
@@ -388,7 +388,7 @@ def calibrate(
         builder, {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac:
                   calib_result.syn_bias_dac})
     builder = helpers.wait(builder, constants.capmem_level_off_time)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # disable synaptic inputs initially
     neuron_helpers.reconfigure_synaptic_input(
@@ -427,7 +427,7 @@ def calibrate(
             neuron_config.enable_synaptic_input_inhibitory = False
             builder.write(neuron_coord, neuron_config)
             neuron_configs_synin_calib.append(neuron_config)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # calibrate synaptic input time constant to a low value as a
         # single event could charge the membrane too much at high synaptic time
@@ -502,7 +502,7 @@ def calibrate(
                       halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
                       calib_result.i_syn_inh_tau})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
     else:
         calib_result.i_syn_exc_gm = i_synin_gm if equalize_synin \
             else i_synin_gm[0]
@@ -517,7 +517,7 @@ def calibrate(
         neuron_config = hal.NeuronConfig(neuron_config)  # copy
         neuron_config.enable_threshold_comparator = False
         builder.write(neuron_coord, neuron_config)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=0, inhibitory_biases=0)
@@ -592,7 +592,7 @@ def calibrate(
     result = calib_result.to_neuron_calib_result()
     builder = sta.PlaybackProgramBuilder()
     result.apply(builder)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     return result
 
@@ -623,7 +623,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     # apply given calibration result
     builder = sta.PlaybackProgramBuilder()
     result.apply(builder)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # calibrate threshold
     calibration = neuron_threshold.ThresholdCalibCADC()
@@ -637,7 +637,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
         config = result.neurons[coord]
         config.threshold.enable = False
         builder.write(coord, config)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # calibrate reset
     calibration = neuron_potentials.ResetPotentialCalibration(reset)
@@ -666,4 +666,4 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
         config = result.neurons[coord]
         config.threshold.enable = True
         builder.write(coord, config)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)

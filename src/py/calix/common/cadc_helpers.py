@@ -5,10 +5,9 @@ calibration purposes.
 
 from typing import Tuple
 import numpy as np
-import quantities as pq
 from dlens_vx_v2 import halco, hal, sta, hxcomm
 
-from calix.common import helpers
+from calix.common import base, helpers
 
 
 def configure_readout_cadc_debug(builder: sta.PlaybackProgramBuilder
@@ -147,14 +146,13 @@ def read_cadcs(connection: hxcomm.ConnectionHandle,
     for synram in halco.iter_all(halco.SynramOnDLS):
         read_builder, ticket = cadc_read_row(read_builder, synram)
         read_tickets.append(ticket)
-    read_builder = helpers.wait(read_builder, 100 * pq.us)
 
     # Run builder
     if builder is not None:
         builder.merge_back(read_builder)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
     else:
-        sta.run(connection, read_builder.done())
+        base.run(connection, read_builder)
 
     # Extract results
     results = np.empty(halco.CADCChannelConfigOnDLS.size, dtype=int)

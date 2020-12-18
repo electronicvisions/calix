@@ -9,9 +9,30 @@ from typing import List, Union, Optional
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
-from dlens_vx_v2 import sta, logger, hxcomm
+from dlens_vx_v2 import halco, hal, sta, logger, hxcomm
 
 from calix.common.boundary_check import check_range_boundaries
+
+
+def run(connection: hxcomm.ConnectionHandle,
+        builder: sta.PlaybackProgramBuilder) -> sta.PlaybackProgram:
+    """
+    Wraps the stadls run function.
+
+    Includes a barrier, blocking for the omnibus being idle, before
+    the end of the program. The finished program is returned,
+    such that, e.g., spikes are accessible.
+
+    :param connection: Connection to the chip to execute on.
+    :param builder: Builder to execute.
+
+    :return: Program compiled by builder.done() that is executed.
+    """
+
+    builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
+    program = builder.done()
+    sta.run(connection, program)
+    return program
 
 
 ParameterRange = namedtuple("ParameterRange", ["lower", "upper"])

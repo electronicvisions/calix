@@ -315,7 +315,7 @@ def calibrate(
     builder = sta.PlaybackProgramBuilder()
     builder, initial_config = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # disable synaptic inputs initially
     neuron_helpers.reconfigure_synaptic_input(

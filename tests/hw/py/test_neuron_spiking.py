@@ -4,7 +4,7 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, halco, sta, hxcomm, logger, lola
 
-from calix.common import cadc, helpers
+from calix.common import base, cadc
 from calix.hagen import neuron_helpers
 import calix.spiking
 
@@ -78,9 +78,7 @@ class TestNeuronCalib(ConnectionSetup):
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord.toSpikeCounterReadOnDLS()))
 
-        # Wait for transfers, execute
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         results = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
         for neuron_id, ticket in enumerate(tickets):
@@ -136,11 +134,11 @@ class TestNeuronCalib(ConnectionSetup):
         builder = sta.PlaybackProgramBuilder()
         for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
             builder.write(neuron_coord, lola.AtomicNeuron())
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         builder = sta.PlaybackProgramBuilder()
         self.__class__.calib_result.apply(builder)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         self.helper_test_spikes()
 

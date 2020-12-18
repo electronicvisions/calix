@@ -117,7 +117,7 @@ class Calibration(base.Calibration):
         builder.write(halco.MADCConfigOnDLS(), self.madc_config)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # inspect reads
         self.original_readout_config = readout_ticket.get()
@@ -341,8 +341,7 @@ class Calibration(base.Calibration):
         builder, switching_times = self.build_measurement_program(builder)
 
         # run program
-        program = builder.done()
-        sta.run(connection, program)
+        program = base.run(connection, builder)
 
         # convert switching times to us
         for neuron_id in range(halco.NeuronConfigOnDLS.size):
@@ -405,4 +404,4 @@ class Calibration(base.Calibration):
                 self.original_neuron_configs):
             builder.write(neuron_coord, neuron_config)
 
-        sta.run(connection, builder.done())
+        base.run(connection, builder)

@@ -323,9 +323,7 @@ def measure_syndrv_amplitudes(
                     builder, synram)
                 results.append(ticket)
 
-    # Wait for transfers, execute
-    builder = helpers.wait(builder, 100 * pq.us)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # Inspect tickets
     baselines = np.mean(
@@ -659,9 +657,7 @@ class STPRampCalibration(base.Calibration):
         builder, baselines, results = self.measure_amplitudes(
             builder, address)
 
-        # Wait for transfers, execute
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # Interpret results
         amplitudes = self.evaluate_amplitudes(baselines, results)
@@ -946,7 +942,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     # preconfigure chip
     builder = sta.PlaybackProgramBuilder()
     builder = preconfigure_capmem(builder)
-    sta.run(connection, builder.done())
+    base.run(connection, builder)
 
     # prepare result object
     calib_result = _SynapseDriverResultInternal()

@@ -71,8 +71,7 @@ class NeuronThresholdCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # Enable spiking in neurons
         builder = sta.PlaybackProgramBuilder()
@@ -91,7 +90,7 @@ class NeuronThresholdCalibration(base.Calibration):
                 hal.CapMemCell.Value.min})
 
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -127,7 +126,7 @@ class NeuronThresholdCalibration(base.Calibration):
         """
 
         # run previous program (may be large)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
         builder = sta.PlaybackProgramBuilder()
 
         # Start timing-critical program: reset timer, wait a bit
@@ -159,9 +158,7 @@ class NeuronThresholdCalibration(base.Calibration):
             tickets.append(builder.read(coord.toSpikeCounterReadOnDLS()))
             builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
-        # End of timing-critical program: Wait for transfers, run program
-        builder = helpers.wait(builder, 100 * pq.us)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         # Analyze results
         results = np.zeros(self.n_instances, dtype=int)
@@ -283,7 +280,7 @@ class ThresholdCalibMADC(madc_base.Calibration):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -442,7 +439,7 @@ class ThresholdCalibCADC(base.Calibration):
             builder.write(coord, config)
 
         # run program
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray

@@ -110,7 +110,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(connection, builder.done())
+        base.run(connection, builder)
 
         for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
             neuron_result.neurons[neuron_coord].leak.i_bias = \

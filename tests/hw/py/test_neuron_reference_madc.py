@@ -8,7 +8,7 @@ import unittest
 import numpy as np
 from dlens_vx_v2 import halco, sta, logger
 
-from calix.common import algorithms, helpers
+from calix.common import algorithms, base, helpers
 import calix.hagen
 from calix.hagen import neuron_synin
 from calix import constants
@@ -59,7 +59,7 @@ class TestReferenceCalib(ConnectionSetup):
             sta.PlaybackProgramBuilder(),
             {halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift: 310})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-        sta.run(self.connection, builder.done())
+        base.run(self.connection, builder)
 
         # Measure results, drift assertion should fail
         self.assertRaises(AssertionError, self.measure_drift)
