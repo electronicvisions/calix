@@ -14,7 +14,7 @@ from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
     neuron_potentials
 import calix.hagen.neuron as hagen_neuron
 from calix.hagen.neuron import NeuronCalibResult
-from calix.spiking import neuron_threshold
+from calix.spiking import neuron_threshold, refractory_period
 from calix import constants
 
 
@@ -29,12 +29,7 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
         halco.NeuronConfigOnDLS.size, dtype=int)
     syn_bias_dac: np.ndarray = np.empty(
         halco.NeuronConfigBlockOnDLS.size, dtype=int)
-    refractory_counters: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    input_clock: np.ndarray = np.ones(
-        halco.NeuronConfigOnDLS.size, dtype=int)  # fast clock as default
-    fast_clock: int = 0
-    slow_clock: int = 0
+    clock_settings: Optional[refractory_period.Settings] = None
     neuron_configs: Optional[List[hal.NeuronConfig]] = None
 
     def set_neuron_configs_default(
@@ -127,9 +122,11 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
         anref = atomic_neuron.refractory_period
         anref.refractory_time = hal.NeuronBackendConfig.RefractoryTime(
-            self.refractory_counters[neuron_id])
+            self.clock_settings.refractory_counters[neuron_id])
+        anref.reset_holdoff = hal.NeuronBackendConfig.ResetHoldoff(
+            self.clock_settings.reset_holdoff[neuron_id])
         anref.input_clock = hal.NeuronBackendConfig.InputClock(
-            self.input_clock[neuron_id])
+            self.clock_settings.input_clock[neuron_id])
 
         return atomic_neuron
 
@@ -165,8 +162,10 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
         # set common neuron backend config
         config = hal.CommonNeuronBackendConfig()
-        config.clock_scale_slow = config.ClockScale(self.slow_clock)
-        config.clock_scale_fast = config.ClockScale(self.fast_clock)
+        config.clock_scale_slow = \
+            config.ClockScale(self.clock_settings.slow_clock)
+        config.clock_scale_fast = \
+            config.ClockScale(self.clock_settings.fast_clock)
 
         for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
             result.cocos[coord] = config
@@ -186,7 +185,8 @@ def calibrate(
         membrane_capacitance: Union[int, np.ndarray] = 63,
         refractory_time: pq.quantity.Quantity = 2. * pq.us,
         synapse_dac_bias: int = 400,
-        readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
+        readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
+        holdoff_time: pq.Quantity = 0 * pq.us
 ) -> NeuronCalibResult:
     """
     Calibrate neurons for spiking operation in the LIF model.
@@ -237,6 +237,10 @@ def calibrate(
         halco.SourceMultiplexerOnReadoutSourceSelection(0) for the neuron
         and mux 1 for the CADC ramps.
         If None is given, the readout is not configured.
+    :param holdoff_time: Target length of the holdoff period. The holdoff
+        period is the time at the end of the refractory period in which the
+        clamping to the reset voltage is already released but new spikes can
+        still not be generated.
 
     :raises TypeError: If time constants are not given with a unit
         from the `quantities` package.
@@ -256,6 +260,9 @@ def calibrate(
         raise TypeError(
             "Refractory time is not given as a "
             "`quantities.quantity.Quantity`.")
+    if not isinstance(holdoff_time, pq.quantity.Quantity):
+        raise TypeError(
+            "Holdoff time is not given as a `quantities.quantity.Quantity`.")
 
     if np.any([tau_mem < 0.1 * pq.us, tau_mem > 200. * pq.us]):
         raise ValueError(
@@ -271,26 +278,15 @@ def calibrate(
     calib_result.set_neuron_configs_default(
         membrane_capacitance, tau_syn, readout_neuron)
 
-    # calculate refractory time
-    # clock scaler 0 means 125 MHz refractory clock, i.e. 8 ns per cycle
-    fastest_clock = 125 * pq.MHz
-    if np.ndim(refractory_time) == 0:
-        refractory_time = refractory_time.repeat(halco.NeuronConfigOnDLS.size)
-    elif refractory_time.shape != (halco.NeuronConfigOnDLS.size,):
-        raise ValueError("Refractory times need to match the neurons.")
-
-    # calculate refractory clock scaler to use
-    calib_result.fast_clock = max(int(np.ceil(np.log2(
-        ((np.max(refractory_time) * fastest_clock).simplified
-         / hal.NeuronBackendConfig.RefractoryTime.max)))), 0)
-    if calib_result.fast_clock \
-            > hal.CommonNeuronBackendConfig.ClockScale.max:
-        raise ValueError("Refractory times are larger than feasible.")
-    # Calculate the refractory counter settings per neuron.
-    # The counter setting is rounded down to the next-lower one.
-    calib_result.refractory_counters = (
-        (refractory_time * fastest_clock).simplified.magnitude
-        / (2 ** calib_result.fast_clock)).astype(int)
+    # calculate refractory time. Resize holdoff_time to number of neurons
+    # to get separate results for each neuron circuit
+    if holdoff_time.size == 1:
+        holdoff_time = np.ones(halco.NeuronConfigOnDLS.size) * holdoff_time
+    elif holdoff_time.size != halco.NeuronConfigOnDLS.size:
+        raise ValueError("Holdoff time needs to have size 1 or "
+                         f"{halco.NeuronConfigOnDLS.size}.")
+    calib_result.clock_settings = refractory_period.calculate_settings(
+        tau_ref=refractory_time, holdoff_time=holdoff_time)
 
     # Configure chip for calibration
     # We start using a hagen-mode-like setup until the synaptic input is
