@@ -31,7 +31,10 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
         halco.NeuronConfigBlockOnDLS.size, dtype=int)
     refractory_counters: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    refractory_clock: int = 0
+    input_clock: np.ndarray = np.ones(
+        halco.NeuronConfigOnDLS.size, dtype=int)  # fast clock as default
+    fast_clock: int = 0
+    slow_clock: int = 0
     neuron_configs: Optional[List[hal.NeuronConfig]] = None
 
     def set_neuron_configs_default(
@@ -125,7 +128,8 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
         anref = atomic_neuron.refractory_period
         anref.refractory_time = hal.NeuronBackendConfig.RefractoryTime(
             self.refractory_counters[neuron_id])
-        anref.input_clock = 1
+        anref.input_clock = hal.NeuronBackendConfig.InputClock(
+            self.input_clock[neuron_id])
 
         return atomic_neuron
 
@@ -161,8 +165,8 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
         # set common neuron backend config
         config = hal.CommonNeuronBackendConfig()
-        config.clock_scale_slow = 9
-        config.clock_scale_fast = self.refractory_clock
+        config.clock_scale_slow = config.ClockScale(self.slow_clock)
+        config.clock_scale_fast = config.ClockScale(self.fast_clock)
 
         for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
             result.cocos[coord] = config
@@ -276,17 +280,17 @@ def calibrate(
         raise ValueError("Refractory times need to match the neurons.")
 
     # calculate refractory clock scaler to use
-    calib_result.refractory_clock = max(int(np.ceil(np.log2(
+    calib_result.fast_clock = max(int(np.ceil(np.log2(
         ((np.max(refractory_time) * fastest_clock).simplified
          / hal.NeuronBackendConfig.RefractoryTime.max)))), 0)
-    if calib_result.refractory_clock \
+    if calib_result.fast_clock \
             > hal.CommonNeuronBackendConfig.ClockScale.max:
         raise ValueError("Refractory times are larger than feasible.")
     # Calculate the refractory counter settings per neuron.
     # The counter setting is rounded down to the next-lower one.
     calib_result.refractory_counters = (
         (refractory_time * fastest_clock).simplified.magnitude
-        / (2 ** calib_result.refractory_clock)).astype(int)
+        / (2 ** calib_result.fast_clock)).astype(int)
 
     # Configure chip for calibration
     # We start using a hagen-mode-like setup until the synaptic input is
