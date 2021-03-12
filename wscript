@@ -34,7 +34,8 @@ def build(bld):
         install_from='src/py',
         relative_trick=True,
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
-        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle")
+        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
+        test_timeout=120,
         )
 
     bld(name='calix_pyswtests',
@@ -43,7 +44,8 @@ def build(bld):
         use='calix_pylib',
         install_path='${PREFIX}/bin/tests',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
-        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle")
+        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
+        test_timeout=120,
         )
 
     bld(name='calix_pyhwtests',
