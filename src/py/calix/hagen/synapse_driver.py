@@ -125,30 +125,76 @@ def preconfigure_capmem(builder: sta.PlaybackProgramBuilder
     builder = helpers.capmem_set_quadrant_cells(builder, parameters)
 
     builder.write(halco.CapMemCellOnDLS.hagen_ibias_dac_top,
-                  hal.CapMemCell(990))
+                  hal.CapMemCell(890))
     builder.write(halco.CapMemCellOnDLS.hagen_ibias_dac_bottom,
-                  hal.CapMemCell(990))
+                  hal.CapMemCell(890))
 
     return builder
 
 
-def set_synapses_diagonal(builder: sta.PlaybackProgramBuilder,
-                          address: hal.SynapseQuad.Label =
-                          _DEFAULT_STIMULATION_ADDRESS,
-                          weight: hal.SynapseQuad.Weight =
-                          hal.SynapseQuad.Weight.max
-                          ) -> sta.PlaybackProgramBuilder:
+def get_synapse_mapping(driver: halco.SynapseDriverOnSynapseDriverBlock
+                        ) -> np.ndarray:
     """
-    Configure a diagonal matrix with the given address.
+    Return mask of synapse which to enable in a row.
 
-    The activation is encoded in the lower 5 address bits, which will
-    not be forwarded to the synapses by the synapse drivers.
+    This function can be called for all synapse drivers and will return
+    a non-overlapping synapse matrix that allows measuring amplitudes
+    from all the synapse drivers connected to a PADI bus at the same time.
 
-    Blocks of synapses with a size of 8x8 are placed diagonally in each
-    synapse array. As a result, each synapse driver drives 8 neighboring
-    neurons and each neuron can receive input from 4 synapse drivers,
-    connected to different PADI buses. By iterating over the 4 different
-    PADI buses, the amplitude of each single driver can be determined.
+    :param driver: Coordinate of the synapse driver which shall be
+        connected to neurons.
+
+    :return: Boolean mask of enabled synapses within the synapse driver's
+        row.
+    """
+
+    if not isinstance(driver, halco.SynapseDriverOnSynapseDriverBlock):
+        raise ValueError(
+            "'driver' has to be a `halco.SynapseDriverOnSynapseDriverBlock` "
+            + "coordinate. Note: synapse mapping is identical on both "
+            + "hemispheres.")
+
+    # The synapses are chosen such that
+    #  - 8 synapses are enabled per row
+    #  - these synapses do not overlap for synapse drivers on the same PADI bus
+    #  - the synapses for each row are distributed over the entire row to avoid
+    #    asymmetry in synapse amplitude due to location
+
+    neurons_per_driver = halco.NeuronColumnOnDLS.size \
+        // halco.SynapseDriverOnPADIBus.size
+    neuron_offset = int(halco.NeuronColumnOnDLS.size / neurons_per_driver)
+    driver_on_bus = int(driver.toSynapseDriverOnPADIBus().toEnum())
+
+    # Split the synapse array into two halves. Start from neuron 0 in the
+    # left quadrant, start from neuron 255 in the right quadrant.
+    # This means that the average position of neurons in in the array,
+    # meaning proximity to the inside or outside edges, does not change
+    # over drivers. Also, even and odd neurons are mixed equally.
+    # We do this scrambling since we observe higher amplitudes for
+    # synapses close to the inside edge of the array.
+    enabled_synapses_half = np.arange(
+        driver_on_bus, halco.SynapseOnSynapseRow.size // 2, neuron_offset)
+    mask_half = np.zeros(halco.SynapseOnSynapseRow.size // 2, dtype=bool)
+    mask_half[enabled_synapses_half] = True
+    mask = np.concatenate([mask_half, mask_half[::-1]])
+
+    return mask
+
+
+def set_synapse_pattern(builder: sta.PlaybackProgramBuilder,
+                        address: hal.SynapseQuad.Label =
+                        _DEFAULT_STIMULATION_ADDRESS,
+                        weight: hal.SynapseQuad.Weight =
+                        hal.SynapseQuad.Weight.max
+                        ) -> sta.PlaybackProgramBuilder:
+    """
+    Configure a mapping matrix at the given address.
+
+    For the mapping, we use the function `get_synapse_mapping`,
+    which yields a connection matrix between the drivers and neurons.
+    This mapping is designed to create a non-overlapping synapse matrix
+    that allows measuring amplitudes from all the synapse drivers connected
+    to a PADI bus at the same time.
 
     Caution: The given address is truncated to the most significant bit
     before being written to the synapses!
@@ -156,33 +202,30 @@ def set_synapses_diagonal(builder: sta.PlaybackProgramBuilder,
     :param builder: Builder to append configuration instructions to.
     :param address: Address range to configure the enabled synapses to.
         If the given address is in the range 0...31, the enabled synapses
-        are set to address 0 and the disabled synapses to address 32.
+        are set to address 0.
         If the given address is in the range 32...63, the synapses are
-        configured vice versa.
+        configured to address 32.
+        All disabled synapses are set to address 1.
     :param weight: Weight to configure the enabled synapses to.
-
-    :raises ValueError: If synapse address is invalid.
 
     :return: Builder with configuration appended.
     """
 
-    neurons_per_driver = 8
-    n_blocks = int(halco.SynapseOnSynapseRow.size / neurons_per_driver)
+    disabled_address = 1
+    enabled_address = 0 if address in range(
+        0, hal.SynapseQuad.Label.size // 2) else \
+        hal.SynapseQuad.Label.size // 2
 
-    weights = np.identity(n_blocks, dtype=int) * int(weight)
-    if address in range(0, 32):
-        addresses = np.ones((n_blocks, n_blocks), dtype=int) * 32
-        addresses[np.identity(n_blocks, dtype=np.bool)] = 0
-    elif address in range(32, 64):
-        addresses = np.zeros((n_blocks, n_blocks), dtype=int)
-        addresses[np.identity(n_blocks, dtype=np.bool)] = 32
-    else:
-        raise ValueError(f"Given address is not in range 0...63: {address}")
+    addresses = np.ones((halco.SynapseRowOnSynram.size,
+                         halco.SynapseOnSynapseRow.size),
+                        dtype=int) * disabled_address
+    weights = np.zeros_like(addresses)
 
-    weights = np.repeat(weights, neurons_per_driver, axis=1)
-    weights = np.repeat(weights, neurons_per_driver, axis=0)
-    addresses = np.repeat(addresses, neurons_per_driver, axis=1)
-    addresses = np.repeat(addresses, neurons_per_driver, axis=0)
+    for driver in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
+        target_mask = get_synapse_mapping(driver)
+        for synapse_row in driver.toSynapseRowOnSynram():
+            addresses[int(synapse_row), target_mask] = enabled_address
+            weights[int(synapse_row), target_mask] = weight
 
     synapse_matrix = lola.SynapseMatrix()
     synapse_matrix.weights.from_numpy(weights)
@@ -231,7 +274,7 @@ def measure_syndrv_amplitudes(
     injected in one PADI bus after another.
 
     Send events on one PADI bus after another. When the synapse array
-    is configured with the function `set_synapses_diagonal()` this allows
+    is configured with the function `set_synapse_pattern()` this allows
     to read the activation of one synapse driver after another as each
     driver on the same PADI bus is connected to eight different neurons.
 
@@ -303,16 +346,20 @@ def measure_syndrv_amplitudes(
 
     # take mean of n_runs, subtract baseline reads
     results = np.mean(results, axis=1) - baselines
+    results = results.reshape(
+        halco.PADIBusOnPADIBusBlock.size, halco.SynramOnDLS.size,
+        halco.SynapseOnSynapseRow.size)
 
-    # take median of 8 neurons per driver
-    results = np.median(results.reshape(
-        (len(results), int(
-            halco.NeuronConfigOnDLS.size / 8), 8)), axis=2)
+    # take median of the respective readout neurons per driver
+    driver_results = list()
+    for driver_coord in halco.iter_all(halco.SynapseDriverOnDLS):
+        driver_results.append(
+            results[driver_coord.toPADIBusOnPADIBusBlock(),
+                    driver_coord.toSynapseDriverBlockOnDLS().toSynramOnDLS(),
+                    get_synapse_mapping(
+                        driver_coord.toSynapseDriverOnSynapseDriverBlock())])
 
-    # arrange in order of drivers: iterate drivers per group first
-    results = results.flatten(order='F')
-    assert len(results) == halco.SynapseDriverOnDLS.size
-    return results
+    return np.median(driver_results, axis=1)
 
 
 class STPRampCalibration(base.Calibration):
@@ -351,7 +398,7 @@ class STPRampCalibration(base.Calibration):
     def __init__(self, test_address: hal.SynapseQuad.Label =
                  hal.SynapseQuad.Label(15)):
         super().__init__(
-            parameter_range=base.ParameterRange(300, 811),
+            parameter_range=base.ParameterRange(200, 900),
             n_instances=halco.CapMemBlockOnDLS.size,
             inverted=False,
             errors=["STP ramp current for quadrants {0} has reached {1}"] * 2)
@@ -683,7 +730,7 @@ class STPRampCalibration(base.Calibration):
         builder = self.preconfigure_syndrvs(builder)
         builder = self.configure_parameters(
             builder, 500 * np.ones(halco.CapMemBlockOnDLS.size, dtype=int))
-        builder = set_synapses_diagonal(builder, address=10)
+        builder = set_synapse_pattern(builder, address=10)
         results = measure_syndrv_amplitudes(
             connection, builder, address=10, n_runs=100)
 
@@ -841,7 +888,7 @@ class HagenDACOffsetCalibration(base.Calibration):
         """
 
         builder = sta.PlaybackProgramBuilder()
-        builder = set_synapses_diagonal(builder, address=self.test_address)
+        builder = set_synapse_pattern(builder, address=self.test_address)
         builder = self.configure_parameters(
             builder, np.ones(halco.SynapseDriverOnDLS.size, dtype=int)
             * (hal.SynapseDriverConfig.HagenDACOffset.max // 2))

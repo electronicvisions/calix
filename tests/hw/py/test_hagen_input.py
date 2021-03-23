@@ -55,7 +55,7 @@ class HagenInputTest(ConnectionSetup):
 
         for address_id, address in enumerate(self.vector_addresses):
             builder = sta.PlaybackProgramBuilder()
-            builder = synapse_driver.set_synapses_diagonal(
+            builder = synapse_driver.set_synapse_pattern(
                 builder, address=address, weight=32)
             amplitudes[address_id] = synapse_driver.measure_syndrv_amplitudes(
                 connection, builder, address=address, n_events=20)
@@ -92,23 +92,28 @@ class HagenInputTest(ConnectionSetup):
                            "Amplitudes do not increase in last 5 LSB "
                            + "of adresses (activations).")
 
-        # assert baseline is higher than -5
+        # assert baseline is higher than -1
         baseline = np.min(mean_amplitudes)
-        self.assertGreater(baseline, -5, "Amplitudes read lower than -5.")
+        self.assertGreater(baseline, -1, "Amplitudes read lower than -1.")
 
-        # assert high amplitudes are higher than 20 LSB (some 30 expected)
+        # assert high amplitudes are higher than 50 LSB
+        # (some 60 to 80 LSB are expected)
         maximum = np.max(mean_amplitudes)
-        self.assertGreater(maximum, 20, "High amplitudes are low.")
+        self.assertGreater(maximum, 50, "High amplitudes are low.")
 
-        # assert dynamic range is 5 times higher than baseline
+        # assert dynamic range is 8 times higher than baseline
         dynamic_range = maximum - baseline
-        self.assertGreater(dynamic_range / np.abs(baseline), 5,
+        self.assertGreater(dynamic_range / np.abs(baseline), 8,
                            "Dynamic range is small.")
 
-        # assert std. dev. between drivers is at most 1/3 of dynamic range
+        # assert std. dev. between drivers is at most 1/20 of dynamic range
         mismatch = np.mean(np.std(amplitudes, axis=1))
-        self.assertLess(mismatch, dynamic_range / 3,
+        self.assertLess(mismatch, dynamic_range / 20,
                         "Mismatch between drivers is high.")
+
+        # assert mismatch is less than 5 LSB (some 2.5 LSB expected)
+        self.assertLess(
+            mismatch, 5, "Mismatch between drivers is more than 5 LSB.")
 
     def test_00_calibrate(self):
         """
@@ -129,20 +134,35 @@ class HagenInputTest(ConnectionSetup):
         for amplitude_half in (amplitudes[:32], amplitudes[32:]):
             self.evaluate_amplitudes(amplitude_half)
 
-    def test_02_overwrite_apply(self):
+    def test_02_overwrite(self):
         """
-        Overwrite synapse driver calibration,
-        apply it again, assert test still works.
+        Overwrite synapse driver calibration, assert it is gone.
         """
 
         # Overwrite synapse driver calibration
         builder = sta.PlaybackProgramBuilder()
         builder = helpers.capmem_set_quadrant_cells(
             builder,
-            {halco.CapMemCellOnCapMemBlock.stp_i_ramp: 350})
+            {halco.CapMemCellOnCapMemBlock.stp_i_ramp: 400})
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
-            builder.write(coord, synapse_driver.syndrv_config_enabled())
+            config = synapse_driver.syndrv_config_enabled()
+            config.hagen_dac_offset = \
+                hal.SynapseDriverConfig.HagenDACOffset.max // 2
+            builder.write(coord, config)
         sta.run(self.connection, builder.done())
+
+        # Measure results, assert calibration is gone
+        amplitudes = self.measure_amplitudes(self.connection)
+
+        for amplitude_half in (amplitudes[:32], amplitudes[32:]):
+            self.assertRaises(
+                AssertionError,
+                self.evaluate_amplitudes, amplitude_half)
+
+    def test_03_reapply(self):
+        """
+        Apply synapse driver calibration again, assert test works.
+        """
 
         # Apply calibration again
         builder = self.__class__.calib_result.synapse_driver_result.apply(
@@ -155,7 +175,7 @@ class HagenInputTest(ConnectionSetup):
         for amplitude_half in (amplitudes[:32], amplitudes[32:]):
             self.evaluate_amplitudes(amplitude_half)
 
-    def test_03_overwrite_all(self):
+    def test_04_overwrite_all(self):
         """
         Overwrite all calibration, i.e. CADC, neurons and synapse driver.
         Assert the tests fail.
@@ -172,7 +192,7 @@ class HagenInputTest(ConnectionSetup):
                 AssertionError,
                 self.evaluate_amplitudes, amplitude_half)
 
-    def test_04_reapply_all(self):
+    def test_05_reapply_all(self):
         """
         Re-apply CADC, neuron and synapse driver calibration.
         Assert the tests work again.

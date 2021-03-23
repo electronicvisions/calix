@@ -119,7 +119,7 @@ class STPOffsetCalibration(base.Calibration):
         })
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
-        builder = hagen_driver.set_synapses_diagonal(
+        builder = hagen_driver.set_synapse_pattern(
             builder, address=self.address)
         builder = self.configure_parameters(
             builder, np.ones(halco.SynapseDriverOnDLS.size, dtype=int)

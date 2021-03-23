@@ -33,7 +33,7 @@ class STPCalibrationTest(ConnectionSetup):
         address = 32
 
         builder = sta.PlaybackProgramBuilder()
-        builder = hagen_driver.set_synapses_diagonal(
+        builder = hagen_driver.set_synapse_pattern(
             builder, address=address)
         amplitudes = hagen_driver.measure_syndrv_amplitudes(
             connection, builder, address=address, n_events=12)
