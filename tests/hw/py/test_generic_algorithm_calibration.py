@@ -4,6 +4,7 @@ import unittest
 from typing import Callable, Set, Type
 
 import calix
+from calix.common import exceptions
 from calix.common.base import Algorithm, Calibration
 from dlens_vx_v1.sta import ExperimentInit, generate, run
 from dlens_vx_v1.hxcomm import ManagedConnection, ConnectionHandle
@@ -68,6 +69,8 @@ class GenericCalibrationTest(unittest.TestCase):
             except TypeError as error:
                 self.skipTest(f"{calibration_type.__name__} cannot be "
                               f"default-constructed: {error}")
+                raise
+
             try:
                 algorithm = algorithm_type()
             except TypeError as error:
@@ -75,9 +78,18 @@ class GenericCalibrationTest(unittest.TestCase):
                               f"default-constructed: {error}")
                 raise
 
-            calib_result = calibration.run(self.CONNECTION,
-                                           algorithm,
-                                           target=self.CALIBRATION_TARGET)
+            try:
+                calib_result = calibration.run(self.CONNECTION,
+                                               algorithm,
+                                               target=self.CALIBRATION_TARGET)
+            except exceptions.ExcessiveNoiseError as error:
+                self.skipTest(f"{algorithm_type.__name__} cannot be "
+                              + f"used with {calibration_type.__name__}: "
+                              + f"{error}")
+            except exceptions.CalibrationNotSuccessful as error:
+                self.skipTest("Calibration was not successful, which is "
+                              + "to be expected in this test.")
+
             self.assertIsNotNone(calib_result)
 
         return test_func

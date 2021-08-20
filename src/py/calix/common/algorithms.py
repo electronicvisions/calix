@@ -11,7 +11,7 @@ from abc import abstractmethod
 import numpy as np
 from dlens_vx_v1 import sta, hxcomm
 
-from calix.common import base, boundary_check, helpers
+from calix.common import base, boundary_check, exceptions, helpers
 
 
 class BinarySearch(base.Algorithm):
@@ -220,16 +220,16 @@ class NoisyBinarySearch(BinarySearch):
         :param calibration: Instance of calibration class that will
             be run with this algorithm.
 
-        :raises ValueError: If the applied noise amplitude is more
-            than a quarter of the calibration range, since that noise
-            would lead to hitting the range boundaries instantly.
+        :raises ExcessiveNoiseError: If the applied noise amplitude is
+            more than a quarter of the calibration range, since that
+            noise would lead to hitting the range boundaries instantly.
         """
 
         super().hook_to_calibration(calibration)
 
         # update calib with an additional step to adjust for noise
         if self.noise_amplitude > self.step_increments[0]:
-            raise ValueError(
+            raise exceptions.ExcessiveNoiseError(
                 "Excessive amounts of noise applied to the binary search "
                 + "algorithm. The noise would partly be canceled within "
                 + "the first step due to reaching the range boundaries.")
