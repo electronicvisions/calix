@@ -118,7 +118,7 @@ Closure calibrationPipeline = { HxVersion version ->
 
 	stage("Build for ${version}") {
 		onSlurmResource(partition: "jenkins", "cpus-per-task": "8") {
-			jesh("waf configure install --test-execnone --with-pybind")
+			jesh("waf configure install --build-profile=ci --test-execnone --with-pybind")
 		}
 	}
 
