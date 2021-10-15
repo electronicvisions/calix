@@ -18,7 +18,7 @@ class TestGenerateDefaultCalibration(unittest.TestCase):
     def test_run_and_save_all(self):
         calix_generate_default_calibration.run_and_save_all(Path("."))
 
-        expected_prefixes = ["hagen", "spiking"]
+        expected_prefixes = ["hagen", "hagen_synin", "spiking"]
         expected_suffixes = ["calix-native.pkl", "cocolist.pbin",
                              "cocolist.json.gz"]
 

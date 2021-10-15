@@ -134,6 +134,20 @@ class HagenCalibRecorder(CalibrationRecorder):
         return calix.hagen.calibrate(connection)
 
 
+class HagenSyninCalibRecorder(CalibrationRecorder):
+    """
+    Recorder for a Hagen-Mode calibration with integration on the
+    synaptic input lines, as opposed to neuron membranes.
+    """
+    calibration_type = "hagen_synin"
+
+    def generate_calib(self,
+                       connection: ConnectionHandle) -> CalibrationResult:
+        builder, _ = ExperimentInit().generate()
+        run(connection, builder.done())
+        return calix.hagen.calibrate_for_synin_integration(connection)
+
+
 class SpikingCalibRecorder(CalibrationRecorder):
     """
     Recorder for a default Spiking-Mode calibration.
@@ -200,6 +214,13 @@ class HagenCalibration(RecorderAndDumper):
                CocoListJsonFormatDumper()]
 
 
+class HagenSyninCalibration(RecorderAndDumper):
+    recorder = HagenSyninCalibRecorder()
+    dumpers = [CalixFormatDumper(),
+               CocoListPortableBinaryFormatDumper(),
+               CocoListJsonFormatDumper()]
+
+
 class SpikingCalibration(RecorderAndDumper):
     recorder = SpikingCalibRecorder()
     dumpers = [CalixFormatDumper(),
@@ -215,7 +236,8 @@ def run_and_save_all(deployment_folder: Path):
     :param deployment_folder: Path calibration results are deployed to.
     """
     with ManagedConnection() as connection:
-        for calib in [HagenCalibration(), SpikingCalibration()]:
+        for calib in [HagenCalibration(), HagenSyninCalibration(),
+                      SpikingCalibration()]:
             calib.record_and_dump(connection, deployment_folder)
 
 

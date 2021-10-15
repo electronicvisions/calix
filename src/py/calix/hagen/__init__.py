@@ -3,13 +3,13 @@ Module for calibrating the HICANN-X chips for usage in hagen mode,
 i.e. for multiply-accumulate operation.
 """
 
-from typing import Tuple
+from typing import Tuple, Union, Optional
 from dataclasses import dataclass
 import numpy as np
-from dlens_vx_v2 import sta, hxcomm, halco, hal
+from dlens_vx_v2 import sta, hxcomm, halco, hal, lola
 
-from calix.common import base, cadc, helpers
-from calix.hagen import neuron, synapse_driver
+from calix.common import algorithms, base, cadc, synapse, helpers
+from calix.hagen import neuron, synapse_driver, neuron_helpers
 from calix import constants
 
 
@@ -29,24 +29,65 @@ class HagenCalibrationResult:
     neuron_result: neuron.NeuronCalibResult
     synapse_driver_result: synapse_driver.SynapseDriverCalibResult
 
-    def apply(self, builder: sta.PlaybackProgramBuilder
-              ) -> sta.PlaybackProgramBuilder:
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
         """
         Apply the calib to the chip.
 
         Assumes the chip to be initialized already, which can be done using
         the stadls ExperimentInit().
 
-        :param builder: Builder to append instructions to.
-
-        :return: Builder with configuration appended.
+        :param builder: Builder or dumper to append instructions to.
         """
 
         self.cadc_result.apply(builder)
         self.neuron_result.apply(builder)
         self.synapse_driver_result.apply(builder)
 
-        return builder
+
+@dataclass
+class HagenSyninCalibrationResult(HagenCalibrationResult):
+    """
+    Extension of the usual (neuron-membrane-integrating) hagen calibration
+    result, modified for integration on the synaptic input lines.
+    The necessary changes are stored in a program dumper.
+
+    Note that the integration on synaptic input lines does not require
+    a neuron calibration at all. Since we currently need calibrated
+    neurons for the synapse driver calibration, we implemented this
+    result as an extension to the the usual calibration and save
+    the already generated neuron calib result there. If we'll develop
+    a stanalone synapse driver calibration in the future, we may
+    drop the neuron calib from this result dataclass.
+    """
+
+    dumper: sta.PlaybackProgramBuilderDumper = \
+        sta.PlaybackProgramBuilderDumper()
+
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
+        """
+        Apply the calib to the chip.
+
+        Assumes the chip to be initialized already, which can be done using
+        the stadls ExperimentInit().
+
+        :param builder: Builder or dumper to append instructions to.
+
+        :raises TypeError: If the given builder has a wrong type.
+        """
+
+        super().apply(builder)
+        if isinstance(builder, sta.PlaybackProgramBuilder):
+            builder.copy_back(sta.convert_to_builder(self.dumper))
+        elif isinstance(builder, sta.PlaybackProgramBuilderDumper):
+            builder.copy_back(self.dumper)
+        else:
+            raise TypeError(
+                f"Type of given `builder` not supported: {type(builder)}")
+
+        # wait for CapMem (longer wait due to large configuration changes)
+        helpers.wait(builder, constants.capmem_level_off_time * 5)
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
@@ -118,3 +159,107 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     return HagenCalibrationResult(
         cadc_result, neuron_result, synapse_driver_result)
+
+
+def calibrate_for_synin_integration(
+        connection: hxcomm.ConnectionHandle,
+        synapse_dac_bias: int = 800,
+        cadc_range: base.ParameterRange = base.ParameterRange(150, 340),
+        hagen_kwargs: Optional[dict] = None
+) -> HagenSyninCalibrationResult:
+    """
+    Calibrate the chip for integration on synaptic input lines.
+
+    After the usual hagen-mode calibration, change the configuration
+    such that activations can be integrated on the
+    synaptic input lines instead of the neurons' membranes.
+
+    Possible limitations:
+    * The synapse driver calibration still happens via standard hagen
+      mode, i.e. by integrating amplitudes on the neurons' membranes.
+      If we develop a future synapse driver calibration which also
+      works only on the synaptic input lines, we can drop the neuron
+      calibration entirely from this function.
+
+    :param connection: Connection to the chip to calibrate.
+    :param synapse_dac_bias: Synapse DAC bias current that is desired.
+        Controls the charge emitted to the synaptic input line by a
+        multiplication.
+    :param cadc_range: Dynamic range of the CADC, given in CapMem LSB.
+        Should roughly contain the range of 0.3 to 0.6 V expected at
+        the synaptic input readout (via source follower).
+    :param hagen_kwargs: Arguments for the usual hagen-mode calibration.
+        Refer to `calix.hagen.calibrate` for details.
+
+    :return: Calibration result with configuration for integration on
+        the synaptic input lines.
+    """
+
+    if hagen_kwargs is None:
+        hagen_kwargs = dict()
+    result = calibrate(connection, **hagen_kwargs)
+
+    dumper = sta.PlaybackProgramBuilderDumper()
+
+    # set target synapse DAC bias current
+    builder = sta.PlaybackProgramBuilder()
+    builder = helpers.capmem_set_quadrant_cells(
+        builder,
+        {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: synapse_dac_bias})
+    builder = helpers.wait(builder, constants.capmem_level_off_time)
+    base.run(connection, builder)
+
+    # Calibrate synapse DAC bias current
+    calibration = synapse.DACBiasCalibCADC()
+    calibrated_dac_bias = calibration.run(
+        connection, algorithm=algorithms.BinarySearch()).calibrated_parameters
+    dumper = helpers.capmem_set_quadrant_cells(
+        dumper,
+        {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: calibrated_dac_bias})
+
+    # Calibrate CADCs to new range
+    result.cadc_result = cadc.calibrate(
+        connection, dynamic_range=cadc_range)
+
+    # connect neuron readout to exc. syn. input, disable pullup of
+    # synaptic input lines (tau_syn -> inf)
+    for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+        config = result.neuron_result.neurons[coord]
+        config.excitatory_input.enable_high_resistance = True
+        config.excitatory_input.i_bias_tau = 0
+        config.inhibitory_input.enable_high_resistance = True
+        config.inhibitory_input.i_bias_tau = 0
+        config.readout.source = lola.AtomicNeuron.Readout.Source.exc_synin
+
+    # Connect 1.2 V to synapse debug line:
+    # This is necessary to reset the synaptic input potentials back to a
+    # resting potential after accumulation has happened there.
+    # First, connect synapse line to mux:
+    config = hal.PadMultiplexerConfig()
+    config.synin_debug_excitatory_to_synapse_intermediate_mux = True
+    config.synin_debug_inhibitory_to_synapse_intermediate_mux = True
+    config.synapse_intermediate_mux_to_pad = True
+    dumper.write(halco.PadMultiplexerConfigOnDLS(), config)
+
+    # connect DAC from correlation v_reset to upper pad
+    config = hal.ShiftRegister()
+    config.select_analog_readout_mux_1_input = \
+        config.AnalogReadoutMux1Input.readout_chain_0
+    config.select_analog_readout_mux_2_input = \
+        config.AnalogReadoutMux2Input.v_reset
+    dumper.write(halco.ShiftRegisterOnBoard(), config)
+
+    # select v_reset = 1.2 V
+    config = lola.DACChannelBlock().default_ldo_2
+    config.set_voltage(halco.DACChannelOnBoard.mux_dac_25, 1.2)
+    dumper.write(halco.DACChannelBlockOnBoard(), config)
+
+    # pack into result class, apply it
+    to_be_returned = HagenSyninCalibrationResult(
+        result.cadc_result, result.neuron_result,
+        result.synapse_driver_result, dumper)
+    builder = sta.PlaybackProgramBuilder()
+    to_be_returned.apply(builder)
+    base.run(connection, builder)
+
+    return to_be_returned
