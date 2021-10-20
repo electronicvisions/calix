@@ -135,7 +135,7 @@ Closure calibrationPipeline = { HxVersion version ->
 	}
 
 	Map<String, Closure> calibrationRuns = calibratedSetups.collectEntries { setup ->
-		[((String) "Setup: ${setup.hxCubeId}"): {
+		[((String) "Setup: ${setup.uniqueIdentifier}"): {
 			conditionalTimeout(enable: !isTriggeredByGerrit(), time: 4, unit: "HOURS") {
 				onSlurmResource(partition: "cube",
 				                wafer: setup.waferId,
