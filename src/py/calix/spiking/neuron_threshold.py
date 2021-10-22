@@ -1,4 +1,5 @@
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, halco, sta, logger, hxcomm
 
 from calix.common import base, helpers
@@ -34,7 +35,7 @@ class NeuronThresholdCalibration(base.Calibration):
         the calibration. Given in CapMem LSB. For the default value
         of 18, a spike is usually triggered for a single input of
         weight 32, for a hagen-mode-like calibration on HICANN-X v1.
-    :ivar accumulation_time: Time in us to record spikes for
+    :ivar accumulation_time: Time to record spikes for
         during calibration.
     :ivar target: Target number of spikes during accumulation time.
         Has to be non-zero as the spike threshold would otherwise
@@ -49,7 +50,7 @@ class NeuronThresholdCalibration(base.Calibration):
             inverted=True,
             errors=["Spike threshold for neurons {0} has reached {1}."] * 2)
         self.safe_margin = safe_margin
-        self.accumulation_time: int = 2000  # us
+        self.accumulation_time: pq.quantity.Quantity = 2000 * pq.us
         self.target: int = 30  # number of spikes in accumulation time
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
@@ -69,7 +70,7 @@ class NeuronThresholdCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
-        builder = helpers.wait_for_us(builder, 100)
+        builder = helpers.wait(builder, 100 * pq.us)
         sta.run(connection, builder.done())
 
         # Enable spiking in neurons
@@ -94,7 +95,7 @@ class NeuronThresholdCalibration(base.Calibration):
                 halco.CapMemCellOnCapMemBlock.
                 neuron_i_bias_threshold_comparator: 200})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         sta.run(connection, builder.done())
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
@@ -112,7 +113,7 @@ class NeuronThresholdCalibration(base.Calibration):
 
         builder = helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.v_threshold: parameters})
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         return builder
 
@@ -135,8 +136,8 @@ class NeuronThresholdCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
 
         # Start timing-critical program: reset timer, wait a bit
-        initial_wait = 100  # us
-        builder = helpers.wait_for_us(builder, initial_wait)
+        initial_wait = 100 * pq.us
+        builder = helpers.wait(builder, initial_wait)
         builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
         # Reset spike counters
@@ -154,7 +155,7 @@ class NeuronThresholdCalibration(base.Calibration):
         # Wait for accumulation time
         builder.wait_until(halco.TimerOnDLS(), hal.Timer.Value(
             int(int(hal.Timer.Value.fpga_clock_cycles_per_us)
-                * (self.accumulation_time + initial_wait))))
+                * (self.accumulation_time + initial_wait).rescale(pq.us))))
 
         # Read spike counters
         tickets = list()
@@ -164,7 +165,7 @@ class NeuronThresholdCalibration(base.Calibration):
             builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
         # End of timing-critical program: Wait for transfers, run program
-        builder = helpers.wait_for_us(builder, 100)
+        builder = helpers.wait(builder, 100 * pq.us)
         sta.run(connection, builder.done())
 
         # Analyze results
@@ -209,7 +210,7 @@ class NeuronThresholdCalibration(base.Calibration):
         log.INFO("Calibrated neuron threshold potentials.")
 
         if self.safe_margin >= 10:
-            self.accumulation_time = 1000000  # measure for 1 s
+            self.accumulation_time = 1 * pq.s
             results = self.measure_results(connection, builder)
 
             warn_threshold = 50  # spikes during 1 second

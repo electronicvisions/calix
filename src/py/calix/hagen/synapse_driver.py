@@ -10,6 +10,7 @@ from typing import Tuple, List, Optional, Dict
 from dataclasses import dataclass
 import copy
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, sta, halco, logger, lola, hxcomm
 
 from calix.common import algorithms, base, cadc_helpers, helpers
@@ -215,7 +216,7 @@ def measure_syndrv_amplitudes(
         address: hal.SynapseQuad.Label =
         _DEFAULT_STIMULATION_ADDRESS,
         n_runs: int = 20, n_events: int = 10,
-        wait_time: float = 2.) -> np.ndarray:
+        wait_time: pq.quantity.Quantity = 2 * pq.us) -> np.ndarray:
     """
     Measure membrane potentials before and after PADI events are
     injected in one PADI bus after another.
@@ -233,7 +234,7 @@ def measure_syndrv_amplitudes(
     :param address: Address to send events on.
     :param n_runs: Number of experiments to take mean from.
     :param n_events: Number of events to send before each measurement.
-    :param wait_time: Wait time between two events in us.
+    :param wait_time: Wait time between two events.
 
     :return: Array of amplitudes observed at neurons after integration
         of events, mean of n_runs.
@@ -246,7 +247,7 @@ def measure_syndrv_amplitudes(
     for _ in range(n_runs):
         for synram in halco.iter_all(halco.SynramOnDLS):
             builder = neuron_helpers.reset_neurons(builder, synram)
-            builder = helpers.wait_for_us(builder, 30)
+            builder = helpers.wait(builder, 30 * pq.us)
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
             baselines.append(ticket)
 
@@ -260,15 +261,16 @@ def measure_syndrv_amplitudes(
         for _ in range(n_runs):
             for synram in halco.iter_all(halco.SynramOnDLS):
                 # Reset neurons and timer
-                time_offset = 5  # us
+                time_offset = 5 * pq.us
                 builder = neuron_helpers.reset_neurons(builder, synram)
-                builder = helpers.wait_for_us(builder, time_offset)
+                builder = helpers.wait(builder, time_offset)
 
                 # Send events
                 for event in range(n_events):
+                    event_time = wait_time * event + time_offset
                     builder.wait_until(
                         halco.TimerOnDLS(),
-                        int(((wait_time * event) + time_offset)
+                        int(event_time.rescale(pq.us)
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
                     builder.write(synram.toPADIEventOnDLS(), padi_event)
 
@@ -278,7 +280,7 @@ def measure_syndrv_amplitudes(
                 results.append(ticket)
 
     # Wait for transfers, execute
-    builder = helpers.wait_for_us(builder, 100)
+    builder = helpers.wait(builder, 100 * pq.us)
     sta.run(connection, builder.done())
 
     # Inspect tickets
@@ -449,7 +451,7 @@ class STPRampCalibration(base.Calibration):
     def measure_amplitudes(
             builder: sta.PlaybackProgramBuilder,
             address: hal.SynapseQuad.Label, n_runs: int = 20,
-            n_events: int = 10, wait_time: float = 2.0
+            n_events: int = 10, wait_time: pq.quantity.Quantity = 2 * pq.us
     ) -> Tuple[sta.PlaybackProgramBuilder,
                List[sta.ContainerTicket_CADCSampleRow],
                List[sta.ContainerTicket_CADCSampleRow]]:
@@ -462,7 +464,7 @@ class STPRampCalibration(base.Calibration):
         :param n_runs: Number of times to measure baseline and
             event amplitudes.
         :param n_events: Number of events to send for integration.
-        :param wait_time: Time in us to wait between two successive events.
+        :param wait_time: Time to wait between two successive events.
 
         :return: Tuple containing:
             * Playback program builder with instructions appended.
@@ -484,20 +486,21 @@ class STPRampCalibration(base.Calibration):
             # Read baseline potentials:
             for synram in halco.iter_all(halco.SynramOnDLS):
                 builder = neuron_helpers.reset_neurons(builder, synram)
-                builder = helpers.wait_for_us(builder, 30)
+                builder = helpers.wait(builder, 30 * pq.us)
                 builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
                 baseline_tickets.append(ticket)
 
                 # Reset neurons and timer
-                time_offset = 5  # us
+                time_offset = 5 * pq.us
                 builder = neuron_helpers.reset_neurons(builder, synram)
-                builder = helpers.wait_for_us(builder, time_offset)
+                builder = helpers.wait(builder, time_offset)
 
                 # Send events
                 for event in range(n_events):
+                    event_time = wait_time * event + time_offset
                     builder.wait_until(
                         halco.TimerOnDLS(),
-                        int(((wait_time * event) + time_offset)
+                        int(event_time.rescale(pq.us)
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
                     builder.write(synram.toPADIEventOnDLS(), padi_event)
 
@@ -591,7 +594,7 @@ class STPRampCalibration(base.Calibration):
             builder, address)
 
         # Wait for transfers, execute
-        builder = helpers.wait_for_us(builder, 100)
+        builder = helpers.wait(builder, 100 * pq.us)
         sta.run(connection, builder.done())
 
         # Interpret results
@@ -621,7 +624,7 @@ class STPRampCalibration(base.Calibration):
             {halco.CapMemCellOnCapMemBlock.stp_i_ramp: parameters,
              halco.CapMemCellOnCapMemBlock.stp_i_calib: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:

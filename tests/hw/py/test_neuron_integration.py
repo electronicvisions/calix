@@ -7,6 +7,7 @@ from typing import Tuple, List, Optional
 import unittest
 import os
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, sta, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
@@ -32,10 +33,12 @@ class TestNeuronCalib(ConnectionSetup):
 
     # pylint: disable=too-many-locals
     @classmethod
-    def measure_amplitudes(cls, connection: hxcomm.ConnectionHandle, *,
-                           excitatory: bool = True, n_events: int = 15,
-                           wait_between_events: float = 1.5, n_runs: int = 30
-                           ) -> Tuple[np.ndarray, np.ndarray]:
+    def measure_amplitudes(
+            cls,
+            connection: hxcomm.ConnectionHandle, *,
+            excitatory: bool = True, n_events: int = 15,
+            wait_between_events: pq.quantity.Quantity = 1.5 * pq.us,
+            n_runs: int = 30) -> Tuple[np.ndarray, np.ndarray]:
         """
         Inject synaptic events and measure membrane potential of all neurons.
 
@@ -71,7 +74,7 @@ class TestNeuronCalib(ConnectionSetup):
             builder = neuron_helpers.reset_neurons(builder)
 
             # wait for a typical integration time, without any inputs arriving
-            builder = helpers.wait_for_us(builder, 30)
+            builder = helpers.wait(builder, 30 * pq.us)
 
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
             baselines.append(ticket)
@@ -89,22 +92,22 @@ class TestNeuronCalib(ConnectionSetup):
                 for event_id in range(n_events):  # send some spikes
                     builder.wait_until(
                         halco.TimerOnDLS(),
-                        int((event_id * wait_between_events) * int(
-                            hal.Timer.Value.fpga_clock_cycles_per_us)))
+                        int((event_id * wait_between_events.rescale(pq.us))
+                            * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
                     builder.write(synram.toPADIEventOnDLS(), padi_event)
 
                 # wait for synaptic input time constant
                 builder.wait_until(
                     halco.TimerOnDLS(),
-                    int(((n_events + 1) * wait_between_events) * int(
-                        hal.Timer.Value.fpga_clock_cycles_per_us)))
+                    int((n_events + 1) * wait_between_events.rescale(pq.us)
+                        * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
                 # Read CADCs after integration in the same builder
                 builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
                 results.append(ticket)
 
         # Wait for transfers, execute
-        builder = helpers.wait_for_us(builder, 100)
+        builder = helpers.wait(builder, 100 * pq.us)
         sta.run(connection, builder.done())
 
         baselines = neuron_helpers.inspect_read_tickets(
@@ -334,8 +337,7 @@ class TestNeuronCalib(ConnectionSetup):
              halco.CapMemRowOnCapMemBlock.i_bias_leak: 250,
              halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: 0,
              halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: 0})
-        builder = helpers.wait_for_us(
-            builder, constants.capmem_level_off_time)  # wait for CapMem
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         sta.run(self.connection, builder.done())
 
         # Measure results, assert calibration is gone
@@ -355,8 +357,7 @@ class TestNeuronCalib(ConnectionSetup):
         builder = sta.PlaybackProgramBuilder()
         self.__class__.cadc_result.apply(builder)
         self.__class__.calibration_result.apply(builder)
-        builder = helpers.wait_for_us(
-            builder, constants.capmem_level_off_time)  # wait for CapMem
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         sta.run(self.connection, builder.done())
 
         # Measure results, assert calibration is applied properly

@@ -8,6 +8,7 @@ from abc import abstractmethod
 from typing import Union, Optional, Type, List
 import os
 import numpy as np
+import quantities as pq
 from scipy.optimize import curve_fit
 from dlens_vx_v1 import hal, sta, halco, logger, hxcomm
 
@@ -135,7 +136,7 @@ class SynReferenceCalibration(base.Calibration):
         builder = helpers.capmem_set_neuron_cells(
             builder, {self._capmem_parameter_coord: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
@@ -252,8 +253,7 @@ class SynBiasCalibration(base.Calibration):
 
         self.n_events: int = 15  # number of events to send during measuring
         self.n_runs: int = 5     # number of runs to average during measuring
-        # wait time between two inputs, in us:
-        self.wait_between_events: float = 1.
+        self.wait_between_events: pq.quantity.Quantity = 1 * pq.us
 
     @property
     @abstractmethod
@@ -378,7 +378,7 @@ class SynBiasCalibration(base.Calibration):
             builder,
             {self._bias_current_coord: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_amplitudes(self, connection: hxcomm.ConnectionHandle,
@@ -430,7 +430,7 @@ class SynBiasCalibration(base.Calibration):
                 for i in range(self.n_events):
                     builder.wait_until(
                         halco.TimerOnDLS(),
-                        int(i * self.wait_between_events * int(
+                        int(i * self.wait_between_events.rescale(pq.us) * int(
                             hal.Timer.Value.fpga_clock_cycles_per_us)))
                     builder.write(synram.toPADIEventOnDLS(), padi_event)
 
@@ -440,7 +440,8 @@ class SynBiasCalibration(base.Calibration):
                 # to leakage.
                 builder.wait_until(
                     halco.TimerOnDLS(),
-                    int(((self.n_events + 1) * self.wait_between_events)
+                    int((self.n_events + 1)
+                        * self.wait_between_events.rescale(pq.us)
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
                 # final measurement in the same builder
@@ -453,10 +454,10 @@ class SynBiasCalibration(base.Calibration):
                 # such as noise induced by the measurement before, can decay
                 # back to a resting potential before we continue with the
                 # next measurement.
-                builder = helpers.wait_for_us(builder, 1000)
+                builder = helpers.wait(builder, 1000 * pq.us)
 
             # Wait for transfers, run builder
-            builder = helpers.wait_for_us(builder, 100)
+            builder = helpers.wait(builder, 100 * pq.us)
             sta.run(connection, builder.done())
 
             builder = sta.PlaybackProgramBuilder()
@@ -561,15 +562,12 @@ class SynTimeConstantCalibration(madc_base.Calibration):
       the synapses through.
     """
 
-    def __init__(self, target: Union[float, np.array] = 1.2):
-        """
-        :param target: Synaptic time constant in us.
-        """
+    def __init__(self, target: pq.quantity.Quantity = 1.2 * pq.us):
         super().__init__(
             parameter_range=base.ParameterRange(
                 hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
             inverted=True)
-        self._wait_before_stimulation = 5  # us
+        self._wait_before_stimulation = 5 * pq.us
         self.target = target
 
     @property
@@ -625,7 +623,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         builder = helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_bias_syn_exc_gm: 0,
                       halco.CapMemRowOnCapMemBlock.i_bias_syn_inh_gm: 0})
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # Enable all synapse drivers and set them to the desired row mode.
         # The actual number of enabled synapse rows is later configured with
@@ -653,7 +651,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
             builder,
             {self._bias_current_coord: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def stimulate(self, builder: sta.PlaybackProgramBuilder,
@@ -743,7 +741,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
                     + str(error))
 
-        return np.array(neuron_fits)[:, 1]
+        return np.array(neuron_fits)[:, 1] * pq.us
 
 
 class ExcSynTimeConstantCalibration(SynTimeConstantCalibration):

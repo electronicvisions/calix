@@ -100,8 +100,7 @@ class TestCADCCalib(ConnectionSetup):
             halco.CapMemCellOnCapMemBlock.cadc_i_ramp_slope: 250
         }
         builder = helpers.capmem_set_quadrant_cells(builder, capmem_config)
-        builder = helpers.wait_for_us(
-            builder, constants.capmem_level_off_time)  # wait for CapMem
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         for coord in halco.iter_all(halco.CADCChannelConfigOnDLS):
             builder.write(coord, hal.CADCChannelConfig())
 
@@ -120,8 +119,7 @@ class TestCADCCalib(ConnectionSetup):
         # Apply result of previous calibration
         builder = sta.PlaybackProgramBuilder()
         self.__class__.calibration_result.apply(builder)
-        builder = helpers.wait_for_us(
-            builder, constants.capmem_level_off_time)  # wait for CapMem
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # Measure results again, assert calibration is applied properly
         calibrated_data = cadc_helpers.read_cadcs(

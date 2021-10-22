@@ -4,6 +4,7 @@ Provides functions to calibrate leak and reset potential.
 
 from typing import Union, List, Optional
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, sta, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
@@ -76,7 +77,7 @@ class LeakPotentialCalibration(base.Calibration):
             builder,
             {halco.CapMemRowOnCapMemBlock.v_leak: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
@@ -212,7 +213,7 @@ class ResetPotentialCalibration(base.Calibration):
                 neuron_reads = \
                     neuron_helpers.cadc_read_neurons_repetitive(
                         connection, builder, synram=synram,
-                        n_reads=200, wait_time=5000., reset=False)
+                        n_reads=200, wait_time=5000 * pq.us, reset=False)
                 self.target[
                     halco.SynapseOnSynapseRow.size
                     * int(synram.toEnum()):halco.SynapseOnSynapseRow.size
@@ -241,7 +242,7 @@ class ResetPotentialCalibration(base.Calibration):
             builder,
             {halco.CapMemRowOnCapMemBlock.v_reset: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
@@ -261,13 +262,13 @@ class ResetPotentialCalibration(base.Calibration):
         for synram in halco.iter_all(halco.SynramOnDLS):
             # trigger neuron resets
             builder = neuron_helpers.reset_neurons(builder, synram)
-            builder = helpers.wait_for_us(builder, 10)  # wait 10 us
+            builder = helpers.wait(builder, 10 * pq.us)
 
             # read membrane potentials
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
             tickets.append(ticket)
 
-        builder = helpers.wait_for_us(builder, 100)
+        builder = helpers.wait(builder, 100 * pq.us)
         sta.run(connection, builder.done())
 
         # Inspect read tickets
@@ -352,7 +353,7 @@ class BaselineCalibration(cadc.ChannelOffsetCalibration):
 
         for run in range(n_reads):
             builder = neuron_helpers.reset_neurons(builder)
-            builder = helpers.wait_for_us(builder, 30)
+            builder = helpers.wait(builder, 30 * pq.us)
             results[run] = cadc_helpers.read_cadcs(connection, builder)
             builder = sta.PlaybackProgramBuilder()
 

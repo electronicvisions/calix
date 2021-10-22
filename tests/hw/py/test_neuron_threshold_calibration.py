@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, halco, sta, logger, hxcomm
 
 from calix.common import algorithms, cadc, helpers
@@ -17,13 +18,13 @@ class NeuronThresholdTest(ConnectionSetup):
 
     :cvar log: Logger used for outputs.
     :cvar n_events: Number of events to send during final testing.
-    :cvar wait_time: Wait time in us between two events during
+    :cvar wait_time: Wait time between two events during
         final testing.
     """
 
     log = logger.get("calix.tests.hw.test_neuron_threshold_calibration")
     n_events = 10
-    wait_time = 10  # us between two events
+    wait_time = 10 * pq.us
 
     def test_00_neuron_calibration(self):
         """
@@ -39,7 +40,8 @@ class NeuronThresholdTest(ConnectionSetup):
         # Set tau_syn in order to have it calibrated and not just configured
         # to the minimum possible setting.
         neuron.calibrate(
-            self.connection, i_synin_gm=140, target_noise=None, tau_syn=2.)
+            self.connection, i_synin_gm=140, target_noise=None,
+            tau_syn=2 * pq.us)
 
     def test_01_threshold_calibration(self):
         """
@@ -75,7 +77,7 @@ class NeuronThresholdTest(ConnectionSetup):
         tickets = list()
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
             tickets.append(builder.read(coord))
-        builder = helpers.wait_for_us(builder, 100)
+        builder = helpers.wait(builder, 100 * pq.us)
         sta.run(connection, builder.done())
 
         # Write modified neuron backend configs
@@ -111,12 +113,16 @@ class NeuronThresholdTest(ConnectionSetup):
         # have bins to cover twice the event-timeframe (to assert no spikes
         # are recorded afterwards), and two bins per event (to assert one
         # bin with spikes, one without). The unit of time is us.
-        time_bins = np.arange(
-            0, self.n_events * self.wait_time * 2 + 0.1, self.wait_time / 2)
+        bin_stop = float((self.n_events * self.wait_time * 2
+                          + 0.1 * pq.us).rescale(pq.us))
+        bin_size = float((self.wait_time / 2).rescale(pq.us))
+        time_bins = np.arange(0, bin_stop, bin_size)
 
         # calculate the bins with expected spikes
         spike_times = np.arange(
-            0, self.n_events * self.wait_time, self.wait_time)
+            0,
+            float(self.n_events * self.wait_time.rescale(pq.us)),
+            float(self.wait_time.rescale(pq.us)))
         spikes_expected = np.histogram(spike_times, bins=time_bins)[0].astype(
             np.bool)
 
@@ -154,8 +160,7 @@ class NeuronThresholdTest(ConnectionSetup):
         builder = sta.PlaybackProgramBuilder()
 
         # buffer program for a bit
-        initial_wait = 1000  # us
-        builder = helpers.wait_for_us(builder, initial_wait)
+        builder = helpers.wait(builder, 1000 * pq.us)
 
         # reset all timers
         builder.write(halco.TimerOnDLS(), hal.Timer())
@@ -174,14 +179,13 @@ class NeuronThresholdTest(ConnectionSetup):
         for i in range(self.n_events):
             builder.wait_until(
                 halco.TimerOnDLS(),
-                int((i * self.wait_time) * int(
+                int(i * self.wait_time.rescale(pq.us) * int(
                     hal.Timer.Value.fpga_clock_cycles_per_us)))
             for synram in halco.iter_all(halco.SynramOnDLS):
                 builder.write(synram.toPADIEventOnDLS(), padi_event)
 
         # disable recording of spikes after some time
-        builder = helpers.wait_for_us(
-            builder, self.n_events * self.wait_time * 2)
+        builder = helpers.wait(builder, self.n_events * self.wait_time * 2)
         config = hal.EventRecordingConfig()
         config.enable_event_recording = False
         builder.write(halco.EventRecordingConfigOnFPGA(), config)

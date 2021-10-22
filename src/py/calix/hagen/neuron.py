@@ -7,6 +7,7 @@ to run the calibration.
 from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import sta, halco, hal, hxcomm
 
 from calix.common import algorithms, base, helpers
@@ -144,8 +145,9 @@ class _CalibrationResultInternal:
 # pylint: disable=too-many-statements
 def calibrate(
         connection: hxcomm.ConnectionHandle, *,
-        target_leak_read: Union[int, np.ndarray] = 120, tau_mem: float = 60.,
-        tau_syn: Union[str, float, np.ndarray] = "min",
+        target_leak_read: Union[int, np.ndarray] = 120,
+        tau_mem: pq.quantity.Quantity = 60 * pq.us,
+        tau_syn: pq.quantity.Quantity = 0 * pq.us,
         i_synin_gm: int = 100, target_noise: Optional[float] = 1.2,
         readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
         initial_configuration: Optional[
@@ -203,20 +205,19 @@ def calibrate(
     :param target_leak_read: Target CADC read at resting potential
         of the membrane. Due to the low leak bias currents, the spread
         of resting potentials may be high even after calibration.
-    :param tau_mem: Targeted membrane time constant in us while calibrating
-        the synaptic inputs.
+    :param tau_mem: Targeted membrane time constant while calibrating the
+        synaptic inputs.
         Too short values can not be achieved with this calibration routine.
         The default value of 60 us should work.
         If a target_noise is given (default), this setting does not affect
         the final leak bias currents, as those are determined by
         reaching the target noise.
-    :param tau_syn: Controls the synaptic input time constant in us.
-        If set to "min", the minimum synaptic input time constant will be
+    :param tau_syn: Controls the synaptic input time constant.
+        If set to 0 us, the minimum synaptic input time constant will be
         used, which means different synaptic input time constants per
-        neuron. As integration in hagen mode should be fast, this is the
-        default. If a single float value is given, it is used for all synaptic
-        inputs of all neurons, excitatory and inhibitory.
-        If a numpy array of floats is given, it can be shaped
+        neuron. If a single different Quantity is given, it is used for
+        all synaptic inputs of all neurons, excitatory and inhibitory.
+        If an array of Quantities is given, it can be shaped
         (2, 512) for the excitatory and inhibitory synaptic input
         of each neuron. It can also be shaped (2,) for the excitatory
         and inhibitory synaptic input of all neurons, or shaped (512,)
@@ -253,8 +254,27 @@ def calibrate(
 
     :return: NeuronCalibResult, containing all calibrated parameters.
 
+    :raises ValueError: If target parameters are not in a feasible range.
     :raises ValueError: If target parameters are not shaped as specified.
+    :raises TypeError: If time constants are not given with a unit
+        from the `quantities` package.
     """
+
+    if not isinstance(tau_mem, pq.quantity.Quantity):
+        raise TypeError(
+            "Membrane time constant is not given as a "
+            "`quantities.quantity.Quantity`.")
+    if not isinstance(tau_syn, pq.quantity.Quantity):
+        raise TypeError(
+            "Synaptic time constant is not given as a "
+            "`quantities.quantity.Quantity`.")
+
+    if np.any([tau_mem < 0.1 * pq.us, tau_mem > 200. * pq.us]):
+        raise ValueError(
+            "Target membrane time constant is out of feasible range.")
+    if np.any([tau_syn < 0 * pq.us, tau_syn > 50. * pq.us]):
+        raise ValueError(
+            "Target synaptic time constant is out of feasible range.")
 
     # Configure chip for calibration
     builder = sta.PlaybackProgramBuilder()
@@ -274,7 +294,7 @@ def calibrate(
     calib_result = _CalibrationResultInternal()
 
     # Calibrate synaptic input time constant using MADC
-    if isinstance(tau_syn, str) and tau_syn == "min":
+    if np.all(tau_syn == 0 * pq.us):
         noise = 5  # applied to similarly configured CapMem cells
         calib_result.i_syn_exc_res = \
             hal.CapMemCell.Value.max - noise + helpers.capmem_noise(
@@ -290,12 +310,8 @@ def calibrate(
         builder = calibration.configure_parameters(
             builder, calib_result.i_syn_inh_res)
         sta.run(connection, builder.done())
-    elif isinstance(tau_syn, str):
-        raise ValueError(
-            "The synaptic time constant calibration does not support a target "
-            + f"'{tau_syn}'. Please choose numerical values or 'min'")
-    elif isinstance(tau_syn, np.ndarray) \
-            and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
+    elif np.ndim(tau_syn) > 0 and \
+            tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
         calibration = neuron_synin.ExcSynTimeConstantCalibration()
         calib_result.i_syn_exc_res = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),

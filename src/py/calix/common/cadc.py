@@ -159,7 +159,7 @@ class RampOffsetCalibration(base.Calibration):
             builder,
             {halco.CapMemCellOnCapMemBlock.cadc_v_ramp_offset: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
@@ -255,7 +255,7 @@ class RampSlopeCalibration(base.Calibration):
             builder,
             {halco.CapMemCellOnCapMemBlock.cadc_i_ramp_slope: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
@@ -360,8 +360,7 @@ class ChannelOffsetCalibration(base.Calibration):
              self.dynamic_range_mid})
 
         # longer wait here to ensure stable voltages (c.f. issue 3512)
-        builder = helpers.wait_for_us(
-            builder, 5 * constants.capmem_level_off_time)
+        builder = helpers.wait(builder, 5 * constants.capmem_level_off_time)
 
         results = self.measure_results(connection, builder)
         self.initial_results = results

@@ -6,6 +6,7 @@ them for integration.
 from __future__ import annotations
 from typing import Tuple, Union, List, Optional
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, sta, halco, lola, hxcomm
 
 from calix.common import cadc_helpers, helpers
@@ -132,7 +133,7 @@ def cadc_read_neuron_potentials(connection: hxcomm.ConnectionHandle,
 
     # Create read ticket
     read_builder, ticket = CADCReadNeurons().generate()
-    read_builder = helpers.wait_for_us(read_builder, 100)
+    read_builder = helpers.wait(read_builder, 100 * pq.us)
 
     # Merge with builder, if given
     if builder is not None:
@@ -210,7 +211,7 @@ def cadc_read_neurons_repetitive(
         builder: sta.PlaybackProgramBuilder, *,
         synram: halco.SynramOnDLS,
         n_reads: int = 50,
-        wait_time: float = 1000.,
+        wait_time: pq.quantity.Quantity = 1000 * pq.us,
         reset: bool = False) -> np.ndarray:
     """
     Read the potential from all neurons multiple times.
@@ -224,7 +225,7 @@ def cadc_read_neurons_repetitive(
     :param builder: Builder to use for reads. Gets executed along the way.
     :param synram: Synram coordinate to read neuron potentials from.
     :param n_reads: Number of reads to execute for all channels.
-    :param wait_time: Time in us to wait between two successive reads.
+    :param wait_time: Time to wait between two successive reads.
     :param reset: Select whether the neurons' membranes are connected
         to the reset potential some 30 us before measuring.
 
@@ -240,16 +241,16 @@ def cadc_read_neurons_repetitive(
             builder = reset_neurons(builder, synram=synram)
 
             # wait the time a vector needs to be input
-            builder = helpers.wait_for_us(builder, 30)
+            builder = helpers.wait(builder, 30 * pq.us)
 
         # Read CADCs
         builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
         read_tickets.append(ticket)
 
         # Wait before next measurement
-        builder = helpers.wait_for_us(builder, wait_time)
+        builder = helpers.wait(builder, wait_time)
 
-    builder = helpers.wait_for_us(builder, 100)  # wait for transfers
+    builder = helpers.wait(builder, 100 * pq.us)  # wait for transfers
     sta.run(connection, builder.done())
 
     # Inspect ticket results
@@ -507,7 +508,7 @@ def set_analog_neuron_config(builder: sta.PlaybackProgramBuilder,
     builder.write(halco.CapMemCellOnDLS.readout_out_amp_i_bias_1,
                   hal.CapMemCell(1022))
 
-    builder = helpers.wait_for_us(builder, 5 * constants.capmem_level_off_time)
+    builder = helpers.wait(builder, 5 * constants.capmem_level_off_time)
 
     return builder
 
@@ -652,7 +653,7 @@ def reconfigure_synaptic_input(
 
     for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
         read_tickets.append(builder.read(neuron_coord))
-    builder = helpers.wait_for_us(builder, 50)  # wait for transfers
+    builder = helpers.wait(builder, 50 * pq.us)  # wait for transfers
     sta.run(connection, builder.done())
 
     # Reconfigure CapMem bias currents

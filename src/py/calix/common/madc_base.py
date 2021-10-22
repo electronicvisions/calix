@@ -6,6 +6,7 @@ from abc import abstractmethod
 from typing import Optional, List, Tuple
 import os
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import hal, sta, halco, hxcomm
 
 from calix.common import base, helpers
@@ -20,26 +21,26 @@ class Calibration(base.Calibration):
     continuously to measure one neuron's properties after another.
     The stimuli during measurement have to be implemented
     as well as the evaluation of samples.
-    Also, the recording timing per neuron can be set (in us).
+    Also, the recording timing per neuron can be set.
 
     :ivar original_readout_config: Source selection mux config
         before start of calibration. Used to restore state after
         calibration has finished.
     :ivar original_neuron_configs: Neuron configs before start of
         calibration. Used to restore state after calibration.
-    :ivar sampling_time: Time in us to record MADC samples for each
+    :ivar sampling_time: Time to record MADC samples for each
         neuron. The requested sampling time must be achievable with
         the maximum number of samples in the MADCConfig - without
         using continuous sampling. With default settings, this equals
         roughly 2.18 ms of recording time per neuron.
-    :ivar _wait_before_stimulation: Time in us to wait after triggering
+    :ivar _wait_before_stimulation: Time to wait after triggering
         MADC sampling before stimulation. Marked private since analyzing
         the trace is typically not robust against changing this number.
-    :ivar _dead_time: Time in us to wait before triggering the MADC
+    :ivar _dead_time: Time to wait before triggering the MADC
         sampling after the previous sampling period ended. Within
         this time, the neuron connections are changed. A minimum of 1 us
         is recommended.
-    :ivar wait_between_neurons: Total time in us to wait for samples
+    :ivar wait_between_neurons: Total time to wait for samples
         for each neuron. Has to be larger than the sum of sampling_time,
         wait_before_stimulation and dead_time.
     :ivar madc_input_frequency: Expected input clock frequency for the
@@ -59,10 +60,10 @@ class Calibration(base.Calibration):
         self.original_readout_config: Optional[
             hal.ReadoutSourceSelection] = None
         self.original_neuron_configs: Optional[List[hal.NeuronConfig]] = None
-        self.sampling_time = 40  # us
+        self.sampling_time = 40 * pq.us
         self.wait_between_neurons = 10 * self.sampling_time
-        self._wait_before_stimulation = 2  # us
-        self._dead_time = 1  # us
+        self._wait_before_stimulation = 2 * pq.us
+        self._dead_time = 1 * pq.us
 
         # Assume MADC input frequency to be unchanged after sta.ExperimentInit:
         # This should be replaced by looking it up from a chip object,
@@ -112,7 +113,7 @@ class Calibration(base.Calibration):
         # static MADC config
         self.madc_config.number_of_samples = int(
             self.madc_config.calculate_sample_rate(self.madc_input_frequency)
-            * self.sampling_time / 1e6)  # sampling_time given in us
+            * self.sampling_time.rescale(pq.s))
         builder.write(halco.MADCConfigOnDLS(), self.madc_config)
 
         # run program
@@ -225,9 +226,9 @@ class Calibration(base.Calibration):
         builder.write(halco.EventRecordingConfigOnFPGA(), config)
 
         # initial wait, systime sync
-        initial_wait = 1000  # us
+        initial_wait = 1000 * pq.us
         builder.write(halco.SystimeSyncOnFPGA(), hal.SystimeSync())
-        builder = helpers.wait_for_us(builder, initial_wait)
+        builder = helpers.wait(builder, initial_wait)
 
         switching_time_tickets = list()
         for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
@@ -253,11 +254,12 @@ class Calibration(base.Calibration):
             builder.write(halco.ReadoutSourceSelectionOnDLS(), config)
 
             # trigger MADC sampling
+            current_time = initial_wait + self._dead_time \
+                + self.wait_between_neurons * int(neuron_coord.toEnum())
             builder.wait_until(
                 halco.TimerOnDLS(),
-                int((initial_wait + self._dead_time + self.wait_between_neurons
-                     * int(neuron_coord.toEnum())) * int(
-                         hal.Timer.Value.fpga_clock_cycles_per_us)))
+                int(current_time.rescale(pq.us)
+                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
             madc_control.wake_up = False
             madc_control.start_recording = True
             builder.write(halco.MADCControlOnDLS(), madc_control)
@@ -267,9 +269,11 @@ class Calibration(base.Calibration):
                 halco.EventRecordingConfigOnFPGA()))
 
             # wait before stimulation
+            stimulation_time = initial_wait + self._dead_time \
+                + self._wait_before_stimulation + self.wait_between_neurons \
+                * int(neuron_coord.toEnum())
             stimulation_time = hal.Timer.Value(int(
-                (initial_wait + self._dead_time + self._wait_before_stimulation
-                 + self.wait_between_neurons * int(neuron_coord.toEnum()))
+                stimulation_time.rescale(pq.us)
                 * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
             builder.wait_until(halco.TimerOnDLS(), stimulation_time)
 
@@ -284,11 +288,12 @@ class Calibration(base.Calibration):
             builder.write(halco.MADCControlOnDLS(), madc_control)
 
             # wait for sampling to finish
+            final_time = initial_wait + self.wait_between_neurons \
+                * (int(neuron_coord.toEnum()) + 1)
             builder.wait_until(
                 halco.TimerOnDLS(),
-                int((initial_wait + self.wait_between_neurons
-                     * (int(neuron_coord.toEnum()) + 1)) * int(
-                         hal.Timer.Value.fpga_clock_cycles_per_us)))
+                int(final_time.rescale(pq.us)
+                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
             # disconnect neuron
             builder.write(

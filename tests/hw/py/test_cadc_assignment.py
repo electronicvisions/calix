@@ -122,7 +122,7 @@ class TestCADCAssignment(ConnectionSetup):
         builder = helpers.capmem_set_neuron_cells(
             builder, config={
                 halco.CapMemRowOnCapMemBlock.v_leak: leak_potentials})
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         return builder
 

@@ -5,6 +5,7 @@ calibration purposes.
 
 from typing import Tuple
 import numpy as np
+import quantities as pq
 from dlens_vx_v1 import halco, hal, sta, hxcomm
 
 from calix.common import helpers
@@ -146,7 +147,7 @@ def read_cadcs(connection: hxcomm.ConnectionHandle,
     for synram in halco.iter_all(halco.SynramOnDLS):
         read_builder, ticket = cadc_read_row(read_builder, synram)
         read_tickets.append(ticket)
-    read_builder = helpers.wait_for_us(read_builder, 100)
+    read_builder = helpers.wait(read_builder, 100 * pq.us)
 
     # Run builder
     if builder is not None:

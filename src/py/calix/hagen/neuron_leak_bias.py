@@ -15,6 +15,7 @@ from typing import Optional, Tuple, Union, List
 import numbers
 import os
 import numpy as np
+import quantities as pq
 from scipy.optimize import curve_fit
 from dlens_vx_v1 import hal, sta, halco, logger, hxcomm
 
@@ -55,22 +56,30 @@ class MembraneTimeConstCalibCADC(base.Calibration):
 
     :ivar target_amplitude: Target amplitude for (v_leak - v_reset), given
         in CADC reads.
-    :ivar target_time_const: Target membrane time constant in us.
+    :ivar target_time_const: Target membrane time constant.
     :ivar target_leak_read: Target CADC read at leak potential.
     :ivar leak_calibration: LeakPotentialCalibration class instance used for
         recalibration of leak potential after changing the bias current.
+
+    :raises ValueError: if target_time_constant is not a single value.
     """
 
-    def __init__(self, target_time_const: float = 60.,
+    def __init__(self, target_time_const: pq.quantity.Quantity = 60 * pq.us,
                  target_amplitude: Union[int, np.ndarray] = 50):
         super().__init__(
             parameter_range=base.ParameterRange(0, 1022),
             n_instances=halco.NeuronConfigOnDLS.size, inverted=False)
         self.target_amplitude = target_amplitude
-        self.target_time_const = target_time_const
         self.leak_calibration: Optional[
             neuron_potentials.LeakPotentialCalibration] = None
         self.target_leak_read: Optional[int] = None
+
+        if target_time_const.size != 1:
+            raise ValueError("This calibration routine only supports a single "
+                             "'target_time_const' for all enurons . Please "
+                             "choose a value of size one.")
+
+        self.target_time_const = target_time_const
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
@@ -139,7 +148,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
             builder,
             {halco.CapMemRowOnCapMemBlock.i_bias_leak: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def _reset_wait_read(self, connection: hxcomm.ConnectionHandle,
@@ -171,7 +180,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
                           hal.NeuronReset())
 
             # Wait for time constant
-            builder = helpers.wait_for_us(builder, self.target_time_const)
+            builder = helpers.wait(builder, self.target_time_const)
 
             # Read CADC results, save ticket
             # Trigger measurement, causal read
@@ -202,7 +211,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
 
             # Run program if builder is filled
             if runs_in_builder == runs_per_builder:
-                builder = helpers.wait_for_us(builder, 100)
+                builder = helpers.wait(builder, 100 * pq.us)
                 sta.run(connection, builder.done())
                 builder = sta.PlaybackProgramBuilder()
                 runs_in_builder = 0
@@ -210,7 +219,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
                 runs_in_builder += 1
 
         if not builder.empty():
-            builder = helpers.wait_for_us(builder, 100)
+            builder = helpers.wait(builder, 100 * pq.us)
             sta.run(connection, builder.done())
 
         # Process tickets, write into array
@@ -293,11 +302,10 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
 
     :ivar neuron_config_default: List of desired neuron configurations.
         Necessary to enable leak division/multiplication.
-    :ivar target: Target membrane time constant in us.
     """
 
     def __init__(self,
-                 target: Union[int, float, np.ndarray] = 60,
+                 target: pq.quantity.Quantity = 60 * pq.us,
                  neuron_configs: Optional[List[hal.NeuronConfig]] = None):
         """
         :param neuron_configs: List of neuron configurations. If None, the
@@ -317,9 +325,9 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
         else:
             self.neuron_config_default = neuron_configs
 
-        self.sampling_time = max(70, 8 * np.max(self.target))  # us
+        self.sampling_time = max(70 * pq.us, 8 * np.max(self.target))
         self.wait_between_neurons = 10 * self.sampling_time
-        self._wait_before_stimulation = 0  # us
+        self._wait_before_stimulation = 0 * pq.us
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
@@ -341,7 +349,7 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
             builder, {
                 halco.CapMemRowOnCapMemBlock.v_reset: 520,
                 halco.CapMemRowOnCapMemBlock.v_leak: 880})
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # run program
         sta.run(connection, builder.done())
@@ -361,7 +369,7 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
         builder = helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def stimulate(self, builder: sta.PlaybackProgramBuilder,
@@ -444,7 +452,7 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
                     + str(error))
             neuron_fits.append(popt[1])  # store time constant of exponential
 
-        return np.array(neuron_fits)
+        return np.array(neuron_fits) * pq.us
 
 
 class LeakBiasCalibration(base.Calibration):
@@ -541,7 +549,7 @@ class LeakBiasCalibration(base.Calibration):
             builder,
             {halco.CapMemRowOnCapMemBlock.i_bias_leak: parameters})
 
-        builder = helpers.wait_for_us(builder, constants.capmem_level_off_time)
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
@@ -577,7 +585,7 @@ class LeakBiasCalibration(base.Calibration):
             synram_results.append(
                 neuron_helpers.cadc_read_neurons_repetitive(
                     connection, builder=sta.PlaybackProgramBuilder(),
-                    synram=synram, n_reads=n_reads, wait_time=5000.,
+                    synram=synram, n_reads=n_reads, wait_time=5000 * pq.us,
                     reset=True))
 
         neuron_results = np.hstack(synram_results)
