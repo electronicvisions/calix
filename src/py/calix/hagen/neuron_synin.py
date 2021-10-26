@@ -44,7 +44,7 @@ class SynReferenceCalibration(base.Calibration):
 
     def __init__(
             self, bias_currents: Optional[Union[int, np.ndarray]] = None,
-            target: Optional[np.ndarray] = None):
+            target: Union[int, np.ndarray] = 120):
         """
         :param bias_currents: Synaptic input bias currents to configure
             for the synaptic input to be calibrated. If None, the
@@ -561,12 +561,16 @@ class SynTimeConstantCalibration(madc_base.Calibration):
       the synapses through.
     """
 
-    def __init__(self):
+    def __init__(self, target: Union[float, np.array] = 1.2):
+        """
+        :param target: Synaptic time constant in us.
+        """
         super().__init__(
             parameter_range=base.ParameterRange(
                 hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
             inverted=True)
         self._wait_before_stimulation = 5  # us
+        self.target = target
 
     @property
     @abstractmethod

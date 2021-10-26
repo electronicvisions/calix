@@ -407,7 +407,7 @@ def calibrate(
     if target_noise:
         # Set Leak bias as low as possible with target readout noise
         calibration = neuron_leak_bias.LeakBiasCalibration(
-            target_noise=target_noise, target_leak_read=target_cadc_reads)
+            target=target_noise, target_leak_read=target_cadc_reads)
         result = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch())
         calib_result.i_bias_leak = result.calibrated_parameters

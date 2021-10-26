@@ -14,11 +14,6 @@ class GenericCalibrationTest(unittest.TestCase):
     CONNECTION_MANAGER = ManagedConnection()
     CONNECTION: ConnectionHandle
 
-    # Calibration target for all calibrated properties. A value of '1' works
-    # for all current and planned algorithms and is approved by JW. It might
-    # require more complex selection logic in the future.
-    CALIBRATION_TARGET = 1.
-
     @classmethod
     def setUpClass(cls) -> None:
         # Connect (sim or hardware)
@@ -79,9 +74,7 @@ class GenericCalibrationTest(unittest.TestCase):
                 raise
 
             try:
-                calib_result = calibration.run(self.CONNECTION,
-                                               algorithm,
-                                               target=self.CALIBRATION_TARGET)
+                calib_result = calibration.run(self.CONNECTION, algorithm)
             except exceptions.ExcessiveNoiseError as error:
                 self.skipTest(f"{algorithm_type.__name__} cannot be "
                               + f"used with {calibration_type.__name__}: "

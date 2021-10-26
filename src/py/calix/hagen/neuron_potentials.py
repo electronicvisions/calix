@@ -321,6 +321,9 @@ class BaselineCalibration(cadc.ChannelOffsetCalibration):
         # `dynamic_range_mid` irrelevant for further calibration.
         super().__init__(dynamic_range_mid=0)
 
+        # use center of CADC range as default target
+        self.target = hal.CADCSampleQuad.Value.size // 2
+
     def prelude(self, connection: hxcomm.ConnectionHandle):
         pass
 

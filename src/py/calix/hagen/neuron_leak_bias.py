@@ -293,10 +293,11 @@ class MembraneTimeConstCalibMADC(madc_base.Calibration):
 
     :ivar neuron_config_default: List of desired neuron configurations.
         Necessary to enable leak division/multiplication.
+    :ivar target: Target membrane time constant in us.
     """
 
     def __init__(self,
-                 target: Union[int, float, np.ndarray],
+                 target: Union[int, float, np.ndarray] = 60,
                  neuron_configs: Optional[List[hal.NeuronConfig]] = None):
         """
         :param neuron_configs: List of neuron configurations. If None, the
@@ -480,8 +481,8 @@ class LeakBiasCalibration(base.Calibration):
       not affected by constant currents.
 
     :ivar masking_threshold: Threshold for noise to set calibration
-        success to False. Should be higher than the target_noise.
-        By default, target_noise + 0.8 is used, as the default
+        success to False. Should be higher than the target noise.
+        By default, target + 0.8 is used, as the default
         noise target is only 1.2 LSB.
         Note that besides the pure statistical noise, a penalty is
         added to the "noise" result in case the mean resting potential
@@ -493,13 +494,13 @@ class LeakBiasCalibration(base.Calibration):
         Used to decide whether the membrane potential is floating.
     """
 
-    def __init__(self, target_noise: Union[numbers.Number, np.ndarray] = 1.2,
+    def __init__(self, target: Union[numbers.Number, np.ndarray] = 1.2,
                  target_leak_read: Optional[Union[
                      numbers.Number, np.ndarray]] = None,
                  masking_threshold: Optional[Union[
                      numbers.Number, np.ndarray]] = None):
         """
-        :param target_noise: Noise on each neuron's CADC reads (standard
+        :param target: Noise on each neuron's CADC reads (standard
             deviation of successive CADC reads).
         """
 
@@ -508,9 +509,9 @@ class LeakBiasCalibration(base.Calibration):
                 hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
             n_instances=halco.NeuronConfigOnDLS.size,
             inverted=True)
-        self.target = target_noise
+        self.target = target
         self.target_leak_read = target_leak_read
-        self.masking_threshold = masking_threshold or target_noise + 0.8
+        self.masking_threshold = masking_threshold or target + 0.8
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
