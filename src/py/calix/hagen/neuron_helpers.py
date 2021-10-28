@@ -490,19 +490,23 @@ def set_analog_neuron_config(
     """
 
     # set individual neuron parameters to sensible defaults
+    noise_amplitude = 5  # applied to similar CapMem values
     neuron_parameters = {
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm: 0,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm: 0,
         halco.CapMemRowOnCapMemBlock.i_bias_leak: i_leak,
         halco.CapMemRowOnCapMemBlock.v_leak: v_leak,
-        halco.CapMemRowOnCapMemBlock.i_bias_reset: 1015,
+        halco.CapMemRowOnCapMemBlock.i_bias_reset:
+        hal.CapMemCell.Value.max - 2 * noise_amplitude,
         halco.CapMemRowOnCapMemBlock.v_reset: v_leak,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop: 300,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop: 300,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift: 310,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift: 310,
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau: 1017,
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau: 1017
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
+        hal.CapMemCell.Value.max - noise_amplitude,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
+        hal.CapMemCell.Value.max - noise_amplitude
     }
     builder = helpers.capmem_set_neuron_cells(builder, neuron_parameters)
 
