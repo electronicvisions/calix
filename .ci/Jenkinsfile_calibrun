@@ -143,6 +143,10 @@ Closure calibrationPipeline = { HxVersion version ->
 				                wafer: setup.waferId,
 				                "fpga-without-aout": setup.fpgaId,
 				                time: "10:00") {
+					if (setup.hxCubeId == setup.GERRIT_HXCUBE_ID) {
+						configureHxCubeBitfile()
+					}
+
 					String deploymentFolder = createDeploymentDirectory("${deploymentRoot}/${setup.uniqueIdentifier}")
 					boolean calibrationSuccessful = jesh(script: "calix_generate_default_calibration.py ${deploymentFolder}",
 					                                     returnStatus: true) == 0
