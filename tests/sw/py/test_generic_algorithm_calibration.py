@@ -6,28 +6,11 @@ from typing import Callable, Set, Type
 import calix
 from calix.common import exceptions
 from calix.common.base import Algorithm, Calibration
-from dlens_vx_v2.sta import ExperimentInit, generate, run
-from dlens_vx_v2.hxcomm import ManagedConnection, ConnectionHandle
+
+from mock_connection_setup import ConnectionSetup
 
 
-class GenericCalibrationTest(unittest.TestCase):
-    CONNECTION_MANAGER = ManagedConnection()
-    CONNECTION: ConnectionHandle
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        # Connect (sim or hardware)
-        cls.CONNECTION = cls.CONNECTION_MANAGER.__enter__()
-
-        # Initialize the chip
-        init_builder, _ = generate(ExperimentInit())
-        run(cls.CONNECTION, init_builder.done())
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        # Disconnect
-        cls.CONNECTION_MANAGER.__exit__()
-
+class GenericCalibrationTest(ConnectionSetup):
     @classmethod
     def generate_cases(cls):
         """
@@ -74,7 +57,7 @@ class GenericCalibrationTest(unittest.TestCase):
                 raise
 
             try:
-                calib_result = calibration.run(self.CONNECTION, algorithm)
+                calib_result = calibration.run(self.connection, algorithm)
             except exceptions.ExcessiveNoiseError as error:
                 self.skipTest(f"{algorithm_type.__name__} cannot be "
                               + f"used with {calibration_type.__name__}: "
@@ -82,6 +65,11 @@ class GenericCalibrationTest(unittest.TestCase):
             except exceptions.CalibrationNotSuccessful as error:
                 self.skipTest("Calibration was not successful, which is "
                               + "to be expected in this test.")
+            except exceptions.TooFewSamplesError as error:
+                self.skipTest(
+                    "Too few MADC samples were received, which is "
+                    + "to be expected here since the ZeroMockConnection "
+                    + "does not provide MADC samples.")
 
             self.assertIsNotNone(calib_result)
 

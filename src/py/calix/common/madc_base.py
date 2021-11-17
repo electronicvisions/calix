@@ -9,7 +9,7 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, sta, halco, hxcomm
 
-from calix.common import base, helpers
+from calix.common import base, exceptions, helpers
 
 
 class Calibration(base.Calibration):
@@ -332,7 +332,7 @@ class Calibration(base.Calibration):
 
         :return: Numpy array of results.
 
-        :raises ValueError: If the number of received MADC samples
+        :raises TooFewSamplesError: If the number of received MADC samples
             is significantly smaller than expected for at least one neuron.
             The evaluate function may fail in this case, thus the error
             is caught here.
@@ -374,7 +374,7 @@ class Calibration(base.Calibration):
             self.madc_config.number_of_samples) * 0.95)
         n_samples_received = np.array([len(res) for res in neuron_samples])
         if np.any(n_samples_received < n_samples_required):
-            raise ValueError(
+            raise exceptions.TooFewSamplesError(
                 "Too few MADC samples were received. "
                 + f"Expected more than {n_samples_required} samples. "
                 + os.linesep
