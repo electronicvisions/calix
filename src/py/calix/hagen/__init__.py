@@ -221,12 +221,18 @@ def calibrate_for_synin_integration(
     result.cadc_result = cadc.calibrate(
         connection, dynamic_range=cadc_range)
 
-    # connect neuron readout to exc. syn. input, disable pullup of
-    # synaptic input lines (tau_syn -> inf)
+    # choose excitatory synaptic input line as readout
+    # disable pullup of synaptic input lines (tau_syn -> inf)
+    # enable small capacitor to increase capacitance and reduce
+    # the effect of parasitic capacitance of each synapse.
+    # Note: The latter setting is named incorrectly - it refers to
+    # a small capacitance mode, which is set to False (= cap connected).
     for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
         config = result.neuron_result.neurons[coord]
+        config.excitatory_input.enable_small_capacitor = False
         config.excitatory_input.enable_high_resistance = True
         config.excitatory_input.i_bias_tau = 0
+        config.inhibitory_input.enable_small_capacitor = False
         config.inhibitory_input.enable_high_resistance = True
         config.inhibitory_input.i_bias_tau = 0
         config.readout.source = lola.AtomicNeuron.Readout.Source.exc_synin

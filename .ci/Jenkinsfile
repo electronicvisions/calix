@@ -25,3 +25,9 @@ if (executeHwTests) {
 withCcache() {
 	wafDefaultPipeline(pipelineOptions)
 }
+
+stage("finalization") {
+	runOnSlave(label: "frontend") {
+		archiveArtifacts 'calix/multiplication_synin.png'
+	}
+}

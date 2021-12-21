@@ -199,6 +199,13 @@ class DACBiasCalibCADC(base.Calibration):
     strength are not restored. The digital configuration of the neuron is
     restored at the end of the calibration.
 
+    Requirements:
+    * CADCs are connected to the neuron readout.
+    * Bias currents are set such that synaptic input lines can be
+      observed on the neuron readout: The neurons' readout amplifiers
+      and the source followers in the neurons' synaptic inputs need
+      to be biased.
+
     :ivar original_neuron_config: Neuron configs before calibration,
         read during prelude, restored in postlude.
     """
