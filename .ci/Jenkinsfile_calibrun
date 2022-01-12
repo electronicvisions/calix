@@ -110,12 +110,7 @@ Closure calibrationPipeline = { HxVersion version ->
 	}
 	else if (version == HxVersion.HXv2)
 	{
-		// Drop the triggering changeset until we can make this job changeset-free.
-		withEnv(["GERRIT_CHANGE_NUMBER=13234",
-			 "GERRIT_HOST=gerrit.bioai.eu",
-			 "GERRIT_PORT=29418"]) {
-			wafSetup(projects: ["calix", "hwdb"])
-		}
+		wafSetup(projects: ["calix", "hwdb"])
 	}
 
 	stage("Build for ${version}") {
