@@ -268,6 +268,16 @@ class Calibration(base.Calibration):
             switching_time_tickets.append(builder.read(
                 halco.EventRecordingConfigOnFPGA()))
 
+            # let MADC return to READY once given number of samples is acquired
+            # We need to disable the `start_recording` setting quickly, since
+            # the MADC will trigger multiple times if any of the following
+            # waits would be larger than the sampling time.
+            madc_control.start_recording = False
+            if int(neuron_coord.toEnum()) == halco.NeuronConfigOnDLS.max:
+                # turn off MADC after last neuron is measured
+                madc_control.enable_power_down_after_sampling = True
+            builder.write(halco.MADCControlOnDLS(), madc_control)
+
             # wait before stimulation
             stimulation_time = initial_wait + self._dead_time \
                 + self._wait_before_stimulation + self.wait_between_neurons \
@@ -279,13 +289,6 @@ class Calibration(base.Calibration):
 
             # stimulate
             builder = self.stimulate(builder, neuron_coord, stimulation_time)
-
-            # let MADC return to READY once given number of samples is acquired
-            madc_control.start_recording = False
-            if int(neuron_coord.toEnum()) == halco.NeuronConfigOnDLS.max:
-                # turn off MADC after last neuron is measured
-                madc_control.enable_power_down_after_sampling = True
-            builder.write(halco.MADCControlOnDLS(), madc_control)
 
             # wait for sampling to finish
             final_time = initial_wait + self.wait_between_neurons \
