@@ -3,10 +3,12 @@ Provides an abstract base class for calibrations utilizing the MADC.
 """
 
 from abc import abstractmethod
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
+import numbers
 import os
 import numpy as np
 import quantities as pq
+import matplotlib.pyplot as plt
 from dlens_vx_v2 import hal, sta, halco, hxcomm
 
 from calix.common import base, exceptions, helpers
@@ -93,11 +95,6 @@ class Calibration(base.Calibration):
         for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
             neuron_tickets.append(builder.read(neuron_coord))
 
-        # disable readout for all neurons
-        for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
-            builder.write(
-                neuron_coord, self.neuron_config_disabled(neuron_coord))
-
         # enable MADC biases
         builder.write(halco.CapMemCellOnDLS.readout_ac_mux_i_bias,
                       hal.CapMemCell(500))
@@ -124,6 +121,15 @@ class Calibration(base.Calibration):
         self.original_neuron_configs = list()
         for ticket in neuron_tickets:
             self.original_neuron_configs.append(ticket.get())
+
+        # disable readout for all neurons
+        # runs in a separate program so that self.original_neuron_configs
+        # is available when calling self.neuron_config_disabled()
+        builder = sta.PlaybackProgramBuilder()
+        for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
+            builder.write(
+                neuron_coord, self.neuron_config_disabled(neuron_coord))
+        base.run(connection, builder)
 
     @abstractmethod
     def neuron_config_readout(self, neuron_coord: halco.NeuronConfigOnDLS
@@ -325,15 +331,16 @@ class Calibration(base.Calibration):
 
         raise NotImplementedError
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def record_traces(self, connection: hxcomm.ConnectionHandle,
+                      builder: sta.PlaybackProgramBuilder
+                      ) -> List[np.ndarray]:
         """
-        Executes measurement on chip, evaluates the results.
+        Executes measurement on chip, returns samples per neuron.
 
         :param connection: Connection to the chip to calibrate.
         :param builder: Builder to append measurement program to.
 
-        :return: Numpy array of results.
+        :return: List of numpy arrays, containing samples for each neuron.
 
         :raises TooFewSamplesError: If the number of received MADC samples
             is significantly smaller than expected for at least one neuron.
@@ -386,7 +393,24 @@ class Calibration(base.Calibration):
                 + "Sample count per neuron:" + os.linesep
                 + f"{n_samples_received}")
 
-        return self.evaluate(neuron_samples)
+        return neuron_samples
+
+    def measure_results(self, connection: hxcomm.ConnectionHandle,
+                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+        """
+        Measure and evaluate the results.
+
+        Calls record_traces() to acquire an MADC trace per neuron,
+        and calls evaluate() to get an array of results from, e.g., fits.
+
+        :param connection: Connection to the chip to calibrate.
+        :param builder: Builder to append measurement program to.
+
+        :return: Numpy array, containing evaluated results.
+        """
+
+        samples = self.record_traces(connection, builder)
+        return self.evaluate(samples)
 
     def postlude(self, connection: hxcomm.ConnectionHandle):
         """
@@ -408,3 +432,121 @@ class Calibration(base.Calibration):
             builder.write(neuron_coord, neuron_config)
 
         base.run(connection, builder)
+
+
+class _Recorder(Calibration):
+    """
+    Record, plot and save a trace of each neuron via the MADC.
+
+    This class is reserved for debugging purposes, therefore marked private.
+
+    Note that here, the neuron is recorded without any stimuli. You may
+    want to derive a class for your experiment setup and configure a
+    suitable stimulate() function.
+
+    Example usage:
+    >>> from calix.common import madc_base
+    >>> recorder = madc_base._Recorder()
+    >>> recorder.prelude(connection)
+    >>> samples = recorder.record_traces(
+    ...     connection, builder=sta.PlaybackProgramBuilder())
+    >>> recorder.plot_traces(samples)
+    """
+
+    def __init__(self):
+        super().__init__(
+            parameter_range=base.ParameterRange(0, 1), inverted=False)
+
+    def neuron_config_disabled(self, neuron_coord: halco.NeuronConfigOnDLS
+                               ) -> hal.NeuronConfig:
+        config = hal.NeuronConfig(
+            self.original_neuron_configs[int(neuron_coord.toEnum())])
+        config.enable_readout = False
+        return config
+
+    def neuron_config_readout(self, neuron_coord: halco.NeuronConfigOnDLS
+                              ) -> hal.NeuronConfig:
+        config = self.neuron_config_disabled(neuron_coord)
+        config.enable_readout = True
+        return config
+
+    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+                  neuron_coord: halco.NeuronConfigOnDLS,
+                  stimulation_time: hal.Timer.Value
+                  ) -> sta.PlaybackProgramBuilder:
+        """
+        Send no stimuli to the observed neuron.
+
+        .. note:: Overwrite this function in order to send arbitrary
+            stimuli during the MADC recording.
+
+        :param builder: Builder to append stimulation instructions to.
+        :param neuron_coord: Coordinate of neuron which is currently recorded.
+        :param stimulation_time: Timer value at beginning of stimulation.
+
+        :return: Builder with stimulation instructions appended.
+        """
+
+        return builder
+
+    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
+                             parameters: np.ndarray
+                             ) -> sta.PlaybackProgramBuilder:
+        """
+        Raises an exception since this recorder does not support
+        calibration, i.e. cannot be used to configure parameters.
+        """
+
+        raise exceptions.CalibrationNotSupported(
+            "Recorder is used for debugging, it does not set parameters.")
+
+    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+        """
+        Raises an exception since this recorder does not support
+        calibration, i.e. does not perform any evaluation of results.
+        """
+
+        raise exceptions.CalibrationNotSupported(
+            "Recorder is used for debugging and does not return results.")
+
+    @staticmethod
+    def plot_traces(samples: List[np.ndarray]):
+        """
+        Plot recorded traces, and save them as png figures.
+
+        Each neurons' trace is plotted in its own figure, saved postfixed
+        with the neuron id from enumerating the list. You may slice the
+        original samples in order to save runtime while plotting.
+
+        :param samples: List of recorded MADC samples, as returned by the
+            record_traces() function.
+        """
+
+        # restrict plotting range:
+        # The first samples may be invalid, and the last samples
+        # may already contain samples of the next observed neuron,
+        # since the switching times between neurons are not recorded
+        # accurately within Calibration.record_traces().
+        plot_slice = slice(10, -100)
+
+        for neuron_id, neuron_samples in enumerate(samples):
+            plt.figure()
+            plt.plot(neuron_samples[plot_slice]["chip_time"]
+                     - neuron_samples[plot_slice]["chip_time"][0],
+                     neuron_samples[plot_slice]["value"])
+            plt.savefig(f"trace_neuron{neuron_id}.png", dpi=300)
+            plt.close()
+
+    def run(self, connection: hxcomm.ConnectionHandle,
+            algorithm: base.Algorithm,
+            target: Union[numbers.Integral, np.ndarray, None] = None
+            ) -> base.CalibrationResult:
+        """
+        Raises an exception since this recorder does not support
+        calibration, i.e. being called with an algorithm.
+
+        :raises CalibrationNotSupported: if called.
+        """
+
+        raise exceptions.CalibrationNotSupported(
+            "Recorder is used for debugging and does not support calibration.")

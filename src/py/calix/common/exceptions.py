@@ -13,6 +13,13 @@ class CalibrationNotSuccessful(CalibrationError):
     """
 
 
+class CalibrationNotSupported(CalibrationError):
+    """
+    Raised if a calibration is not possible with the given algorithm
+    or calibration routine.
+    """
+
+
 class TooFewSamplesError(CalibrationError):
     """
     The number of received MADC samples is significantly lower than

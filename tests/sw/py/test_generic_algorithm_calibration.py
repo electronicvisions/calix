@@ -70,6 +70,9 @@ class GenericCalibrationTest(ConnectionSetup):
             except exceptions.CalibrationNotSuccessful as error:
                 self.skipTest("Calibration was not successful, which is "
                               + "to be expected in this test.")
+            except exceptions.CalibrationNotSupported as error:
+                self.skipTest(
+                    f"Calibration is deliberately not supported: {error}")
             except exceptions.TooFewSamplesError as error:
                 self.skipTest(
                     "Too few MADC samples were received, which is "
