@@ -147,7 +147,7 @@ class NeuronThresholdCalibration(base.Calibration):
             builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
         # Wait for accumulation time
-        builder.wait_until(halco.TimerOnDLS(), hal.Timer.Value(
+        builder.block_until(halco.TimerOnDLS(), hal.Timer.Value(
             int(int(hal.Timer.Value.fpga_clock_cycles_per_us)
                 * (self.accumulation_time + initial_wait).rescale(pq.us))))
 

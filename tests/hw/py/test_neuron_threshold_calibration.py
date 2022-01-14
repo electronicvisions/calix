@@ -178,7 +178,7 @@ class NeuronThresholdTest(ConnectionSetup):
             padi_event.fire_bus[bus] = True  # pylint: disable=unsupported-assignment-operation
 
         for i in range(self.n_events):
-            builder.wait_until(
+            builder.block_until(
                 halco.TimerOnDLS(),
                 int(i * self.wait_time.rescale(pq.us) * int(
                     hal.Timer.Value.fpga_clock_cycles_per_us)))

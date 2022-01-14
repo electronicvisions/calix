@@ -312,7 +312,7 @@ def measure_syndrv_amplitudes(
                 # Send events
                 for event in range(n_events):
                     event_time = wait_time * event + time_offset
-                    builder.wait_until(
+                    builder.block_until(
                         halco.TimerOnDLS(),
                         int(event_time.rescale(pq.us)
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
@@ -563,7 +563,7 @@ class STPRampCalibration(base.Calibration):
                 # Send events
                 for event in range(n_events):
                     event_time = wait_time * event + time_offset
-                    builder.wait_until(
+                    builder.block_until(
                         halco.TimerOnDLS(),
                         int(event_time.rescale(pq.us)
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us)))

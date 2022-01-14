@@ -256,7 +256,7 @@ class Calibration(base.Calibration):
             # trigger MADC sampling
             current_time = initial_wait + self._dead_time \
                 + self.wait_between_neurons * int(neuron_coord.toEnum())
-            builder.wait_until(
+            builder.block_until(
                 halco.TimerOnDLS(),
                 int(current_time.rescale(pq.us)
                     * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
@@ -285,7 +285,7 @@ class Calibration(base.Calibration):
             stimulation_time = hal.Timer.Value(int(
                 stimulation_time.rescale(pq.us)
                 * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
-            builder.wait_until(halco.TimerOnDLS(), stimulation_time)
+            builder.block_until(halco.TimerOnDLS(), stimulation_time)
 
             # stimulate
             builder = self.stimulate(builder, neuron_coord, stimulation_time)
@@ -293,7 +293,7 @@ class Calibration(base.Calibration):
             # wait for sampling to finish
             final_time = initial_wait + self.wait_between_neurons \
                 * (int(neuron_coord.toEnum()) + 1)
-            builder.wait_until(
+            builder.block_until(
                 halco.TimerOnDLS(),
                 int(final_time.rescale(pq.us)
                     * int(hal.Timer.Value.fpga_clock_cycles_per_us)))

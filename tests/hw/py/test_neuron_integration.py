@@ -90,14 +90,14 @@ class TestNeuronCalib(ConnectionSetup):
                 builder.write(halco.TimerOnDLS(), hal.Timer())
 
                 for event_id in range(n_events):  # send some spikes
-                    builder.wait_until(
+                    builder.block_until(
                         halco.TimerOnDLS(),
                         int((event_id * wait_between_events.rescale(pq.us))
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
                     builder.write(synram.toPADIEventOnDLS(), padi_event)
 
                 # wait for synaptic input time constant
-                builder.wait_until(
+                builder.block_until(
                     halco.TimerOnDLS(),
                     int((n_events + 1) * wait_between_events.rescale(pq.us)
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us)))

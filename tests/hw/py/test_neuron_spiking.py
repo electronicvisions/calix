@@ -67,7 +67,7 @@ class TestNeuronCalib(ConnectionSetup):
         builder.write(halco.TimerOnDLS(), hal.Timer())
 
         for event in range(n_events):  # send some spikes
-            builder.wait_until(
+            builder.block_until(
                 halco.TimerOnDLS(),
                 int((event * wait_between_events.rescale(pq.us)) * int(
                     hal.Timer.Value.fpga_clock_cycles_per_us)))

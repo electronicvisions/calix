@@ -431,7 +431,7 @@ class SynBiasCalibration(base.Calibration):
                 builder.write(halco.TimerOnDLS(), hal.Timer())
 
                 for i in range(self.n_events):
-                    builder.wait_until(
+                    builder.block_until(
                         halco.TimerOnDLS(),
                         int(i * self.wait_between_events.rescale(pq.us) * int(
                             hal.Timer.Value.fpga_clock_cycles_per_us)))
@@ -441,7 +441,7 @@ class SynBiasCalibration(base.Calibration):
                 # This means most synaptic current has flown onto the
                 # membrane, but it does not yet significantly decay due
                 # to leakage.
-                builder.wait_until(
+                builder.block_until(
                     halco.TimerOnDLS(),
                     int((self.n_events + 1)
                         * self.wait_between_events.rescale(pq.us)
