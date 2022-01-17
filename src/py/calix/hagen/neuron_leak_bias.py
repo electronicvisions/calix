@@ -699,6 +699,11 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         builder.write(halco.ReadoutSourceSelectionOnDLS(),
                       self.original_readout_config)
+
+        # disable offset current
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {halco.CapMemRowOnCapMemBlock.i_mem_offset: 0})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
         base.run(connection, builder)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,

@@ -377,6 +377,22 @@ class ThresholdCalibMADC(madc_base.Calibration):
 
         return max_reads
 
+    def postlude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Disable offset current CapMem cell again.
+
+        :param connection: Connection to the chip to run on.
+        """
+
+        super().postlude(connection)
+
+        builder = sta.PlaybackProgramBuilder()
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {
+                halco.CapMemRowOnCapMemBlock.i_mem_offset: 0})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+        base.run(connection, builder)
+
 
 class ThresholdCalibCADC(base.Calibration):
     """
@@ -396,6 +412,9 @@ class ThresholdCalibCADC(base.Calibration):
 
     Requirements:
     * Neuron membrane readout is connected to the CADCs (causal and acausal).
+
+    :ivar original_neuron_configs: List of neuron configs from before
+        the calibration, used to restore them in the postlude.
     """
 
     def __init__(self, target: Union[int, np.ndarray] = 125):
@@ -407,10 +426,12 @@ class ThresholdCalibCADC(base.Calibration):
             errors=["Spike threshold for neurons {0} has reached {1}."] * 2)
 
         self.target = target
+        self.original_neuron_configs: List[hal.NeuronConfig] = list()
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
-        Prepares chip for calibration.
+        Prepares chip for calibration, reads original neuron config in
+        order to restore it after calibration.
 
         Disable leak, set a low reset voltage and the offset current. Note
         that only the amplitude of the current is set but it is not enabled.
@@ -419,6 +440,11 @@ class ThresholdCalibCADC(base.Calibration):
         """
 
         builder = sta.PlaybackProgramBuilder()
+
+        # read original neuron config
+        tickets = list()
+        for coord in halco.iter_all(halco.NeuronConfigOnDLS):
+            tickets.append(builder.read(coord))
 
         # set reset potential low, set constant current, disable leak
         builder = helpers.capmem_set_neuron_cells(
@@ -440,6 +466,12 @@ class ThresholdCalibCADC(base.Calibration):
 
         # run program
         base.run(connection, builder)
+
+        # save original neuron configs to ivar
+        self.original_neuron_configs = list()
+        for coord, ticket in zip(
+                halco.iter_all(halco.NeuronConfigOnDLS), tickets):
+            self.original_neuron_configs.append(ticket.get())
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -483,3 +515,25 @@ class ThresholdCalibCADC(base.Calibration):
                 n_reads=n_samples, wait_time=0 * pq.us)
 
         return np.max(results, axis=0)
+
+    def postlude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Disable offset current CapMem cell again and restore original
+        neuron configs.
+
+        :param connection: Connection to the chip to run on.
+        """
+
+        super().postlude(connection)
+
+        builder = sta.PlaybackProgramBuilder()
+        builder = helpers.capmem_set_neuron_cells(
+            builder, {
+                halco.CapMemRowOnCapMemBlock.i_mem_offset: 0})
+        builder = helpers.wait(builder, constants.capmem_level_off_time)
+
+        for coord, config in zip(
+                halco.iter_all(halco.NeuronConfigOnDLS),
+                self.original_neuron_configs):
+            builder.write(coord, config)
+        base.run(connection, builder)
