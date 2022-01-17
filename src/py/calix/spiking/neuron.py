@@ -5,9 +5,11 @@ Provides an interface for calibrating LIF neurons.
 import numbers
 from typing import Optional, Union, List
 from dataclasses import dataclass
+
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import sta, halco, hal, hxcomm, lola
+
+from dlens_vx_v2 import sta, halco, hal, hxcomm, lola, logger
 
 from calix.common import algorithms, base, synapse, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
@@ -594,6 +596,13 @@ def calibrate(
             halco.iter_all(halco.NeuronConfigOnDLS),
             calib_result.neuron_configs):
         neuron_config.enable_threshold_comparator = True
+
+    # print warning in case of failed neurons
+    n_neurons_failed = np.sum(~calib_result.success)
+    if n_neurons_failed > 0:
+        logger.get("calix.spiking.neuron.calibrate").WARN(
+            f"Calibration failed for {n_neurons_failed} neurons: ",
+            np.arange(halco.NeuronConfigOnDLS.size)[~calib_result.success])
 
     result = calib_result.to_neuron_calib_result()
     builder = sta.PlaybackProgramBuilder()

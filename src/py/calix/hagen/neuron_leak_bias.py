@@ -591,6 +591,10 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
 
     :ivar neuron_configs: List of desired neuron configurations.
         Necessary to enable leak division.
+    :ivar adjust_bias_range: Enable/disable adjustment of leak division
+        to extend the dynamic range of calibration. By default, this
+        setting is enabled and we select appropriate settings during
+        the prelude.
     """
 
     def __init__(self,
@@ -623,6 +627,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         self.sampling_time = max(70 * pq.us, 8 * np.max(self.target)) \
             + self._wait_before_stimulation
         self.wait_between_neurons = 10 * self.sampling_time
+        self.adjust_bias_range: bool = True
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
@@ -655,31 +660,33 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         # run program
         base.run(connection, builder)
 
-        # decide whether leak division is required:
-        # inspect the feasible range with division.
-        for neuron_id in range(self.n_instances):
-            self.neuron_configs[neuron_id].enable_leak_division = True
-            self.neuron_configs[neuron_id].enable_leak_multiplication = False
+        if self.adjust_bias_range:
+            # decide whether leak division is required:
+            # inspect the feasible range with division.
+            for neuron_id in range(self.n_instances):
+                self.neuron_configs[neuron_id].enable_leak_division = True
+                self.neuron_configs[neuron_id].enable_leak_multiplication = \
+                    False
 
-        # measure at maximum leak bias current: If time constant is smaller
-        # smaller than the target, then keep division on.
-        builder = sta.PlaybackProgramBuilder()
-        builder = self.configure_parameters(
-            # subtract CapMem noise amplitude
-            builder, parameters=hal.CapMemCell.Value.max - 5)
-        min_tau_with_division = self.measure_results(connection, builder)
-        enable_division = min_tau_with_division < self.target
+            # measure at maximum leak bias current: If time constant is
+            # smaller than the target, then keep division enabled.
+            builder = sta.PlaybackProgramBuilder()
+            builder = self.configure_parameters(
+                # subtract CapMem noise amplitude
+                builder, parameters=hal.CapMemCell.Value.max - 5)
+            min_tau_with_division = self.measure_results(connection, builder)
+            enable_division = min_tau_with_division < self.target
 
-        # enabling leak multiplication is not supported for this method:
-        # the offset current is too weak to stimulate the membrane
-        # significantly if multiplication gets enabled.
-        # The calibration can therefore only be used if the target
-        # membrane time constant is larger than some 3 us.
+            # enabling leak multiplication is not supported for this method:
+            # the offset current is too weak to stimulate the membrane
+            # significantly if multiplication gets enabled.
+            # The calibration can therefore only be used if the target
+            # membrane time constant is larger than some 3 us.
 
-        # set up in neuron configs
-        for neuron_id in range(self.n_instances):
-            self.neuron_configs[neuron_id].enable_leak_division = \
-                enable_division[neuron_id]
+            # set up in neuron configs
+            for neuron_id in range(self.n_instances):
+                self.neuron_configs[neuron_id].enable_leak_division = \
+                    enable_division[neuron_id]
 
     def postlude(self, connection: hxcomm.ConnectionHandle):
         """
