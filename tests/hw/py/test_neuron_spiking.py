@@ -4,7 +4,7 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v2 import hal, halco, sta, hxcomm, logger, lola
 
-from calix.common import base, cadc
+from calix.common import base, cadc, helpers
 from calix.hagen import neuron_helpers
 import calix.spiking
 
@@ -25,10 +25,13 @@ class TestNeuronCalib(ConnectionSetup):
 
     :cvar log: Logger used for output.
     :cvar calib_result: Result of calibration, stored for re-applying.
+    :cvar target_equal_rates: Target spike rate in first test with equal
+        spikerates for all neurons.
     """
 
     log = logger.get("calix.tests.hw.test_neuron_spiking")
     calib_result: Optional[calix.spiking.SpikingCalibrationResult] = None
+    target_equal_rates = 100 * pq.kHz
 
     @classmethod
     def measure_spikes(cls, connection: hxcomm.ConnectionHandle, *,
@@ -38,7 +41,13 @@ class TestNeuronCalib(ConnectionSetup):
                        ) -> np.ndarray:
         """
         Sends test inputs to the synapse drivers.
-        Records the change in membrane potential of all neurons.
+        Records the number of spikes during stimulation.
+
+        Note that the timing of spike counter resets and reads is
+        not precise. The last neurons will record spikes for a
+        longer duration than the first neurons. If the neurons
+        spike by themselves (without stimulation), this may lead
+        to an increase of the number of spikes with the neuron id.
 
         :param connection: Connection to the chip to run on.
         :param excitatory: Switch between excitatory and inhibitory events.
@@ -110,6 +119,51 @@ class TestNeuronCalib(ConnectionSetup):
             np.sum(exc_spikes > 10), np.sum(inh_spikes > 10),
             "Stimulation seems not to affect neurons.")
 
+    @staticmethod
+    def measure_spikerate(
+            connection: hxcomm.ConnectionHandle, *,
+            accumulation_time: pq.Quantity = 1.5 * pq.ms) -> pq.Quantity:
+        """
+        Measure spike rate for a specified accumulation time.
+
+        Since we wait precisely for the accumulation_time for each neuron,
+        the timing is much more precise than if we were using
+        measure_spikes() without any input.
+
+        :param connection: Connection to the chip to run on.
+        :param accumulation_time: Wait time for each neuron, between spike
+            counter reset and read.
+
+        :return: Array of spike rates, i.e. the number of spikes divided
+            by the accumulation time. If the counter overflowed, we
+            return np.nan for those neurons.
+        """
+
+        tickets = list()
+        builder = sta.PlaybackProgramBuilder()
+
+        for coord in halco.iter_all(halco.NeuronConfigOnDLS):
+            # Reset spike counters
+            builder.write(coord.toSpikeCounterResetOnDLS(),
+                          hal.SpikeCounterReset())
+
+            # wait for accumulation time
+            helpers.wait(builder, accumulation_time)
+
+            # Read spike counters
+            tickets.append(builder.read(coord.toSpikeCounterReadOnDLS()))
+
+        base.run(connection, builder)
+
+        # evaluate results: calculate spike rate
+        results = np.empty(halco.NeuronConfigOnDLS.size, dtype=float)
+        for neuron_id, ticket in enumerate(tickets):
+            result = ticket.get()
+            results[neuron_id] = result.count \
+                if not result.overflow else np.nan
+
+        return results / accumulation_time
+
     def test_00_calibration(self):
         """
         Calibrates neurons to the given parameters and tests spike response.
@@ -146,7 +200,87 @@ class TestNeuronCalib(ConnectionSetup):
 
         self.helper_test_spikes()
 
-    def test_02_without_synin(self):
+    def test_02_leak_over_threshold(self):
+        """
+        Calibrate threshold for given firing rates. Use an equal rate
+        for all neurons.
+        """
+
+        # Increase range between reset and leak, to place threshold
+        calix.spiking.neuron.refine_potentials(
+            self.connection, self.__class__.calib_result.neuron_result,
+            leak=110, reset=60, threshold=120)
+
+        # Calibrate threshold for equal firing rates
+        calix.spiking.neuron.calibrate_leak_over_threshold(
+            self.connection, self.__class__.calib_result.neuron_result,
+            leak_over_threshold_rate=self.target_equal_rates)
+
+        # Measure spikes based on spike counters in neuron backend
+        rate_without_stimulation = self.measure_spikerate(self.connection)
+        self.log.DEBUG("Rate without stimulation, measured with spike "
+                       + "counters:\n", rate_without_stimulation)
+        self.assertGreater(
+            np.sum(rate_without_stimulation > 0.9 * self.target_equal_rates),
+            halco.NeuronConfigOnDLS.size * 0.9,
+            "Too few spikes in leak over threshold setup without syn. input.")
+        self.assertGreater(
+            np.sum(rate_without_stimulation < 1.15 * self.target_equal_rates),
+            halco.NeuronConfigOnDLS.size * 0.9,
+            "Too many spikes in leak over threshold setup without syn. input.")
+
+        # Measure spikes with stimulation
+        self.helper_test_spikes()
+
+    def test_03_lot_variable_targets(self):
+        """
+        Calibrate threshold for different firing rates, and only part of
+        the neurons. The other neurons are left untouched.
+        """
+
+        # Initial config: leak below threshold
+        calix.spiking.neuron.refine_potentials(
+            self.connection, self.__class__.calib_result.neuron_result,
+            leak=110, reset=60, threshold=120)
+        original_thresholds = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
+        for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+            original_thresholds[int(coord.toEnum())] = \
+                self.__class__.calib_result.neuron_result.neurons[
+                    coord].threshold.v_threshold
+
+        # Calibrate threshold for different firing rates
+        targets = np.linspace(20, 120, 16)  # 32 neurons per target
+        targets = np.repeat(targets, halco.NeuronConfigOnDLS.size / 16)
+        targets[::4] = 0  # leave every 4th neuron untouched
+        targets = targets * pq.kHz
+
+        calix.spiking.neuron.calibrate_leak_over_threshold(
+            self.connection, self.__class__.calib_result.neuron_result,
+            leak_over_threshold_rate=targets)
+
+        # Measure spikes without stimulation
+        rate_without_stimulation = self.measure_spikerate(self.connection)
+        self.log.DEBUG("Rate without stimulation:", rate_without_stimulation)
+        success = np.isclose(
+            rate_without_stimulation.rescale(pq.kHz).magnitude,
+            targets.rescale(pq.kHz).magnitude, atol=8, rtol=0.08)
+        self.assertGreater(
+            np.sum(success), halco.NeuronConfigOnDLS.size * 0.85,
+            "Too large deviations from target spike rate in leak over "
+            + "threshold setup with variable targets.")
+
+        # Assert every 4th neuron is untouched
+        new_thresholds = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
+        for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+            new_thresholds[int(coord.toEnum())] = \
+                self.__class__.calib_result.neuron_result.neurons[
+                    coord].threshold.v_threshold
+        np.testing.assert_array_equal(
+            new_thresholds[::4], original_thresholds[::4],
+            err_msg="Threshold parameter was changed for neurons that "
+            + "were not to be calibrated.")
+
+    def test_04_without_synin_calib(self):
         """
         Calibrate with synaptic input strength uncalibrated.
         Test spike response afterwards.

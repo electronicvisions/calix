@@ -216,7 +216,7 @@ class ResetPotentialCalibration(base.Calibration):
             self.target = neuron_helpers.cadc_read_neuron_potentials(
                 connection, builder)
         else:
-            self.target = np.empty(halco.NeuronConfigOnDLS.size, dtype=np.int)
+            self.target = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
             for synram in halco.iter_all(halco.SynramOnDLS):
                 neuron_reads = \
                     neuron_helpers.cadc_read_neurons_repetitive(

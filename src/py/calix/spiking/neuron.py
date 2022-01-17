@@ -667,3 +667,55 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
         config.threshold.enable = True
         builder.write(coord, config)
     base.run(connection, builder)
+
+
+def calibrate_leak_over_threshold(
+        connection: hxcomm.ConnectionHandle,
+        result: NeuronCalibResult,
+        leak_over_threshold_rate: pq.Quantity = 100 * pq.kHz):
+    """
+    Calibrate neurons to a specific firing rate in leak over threshold
+    setup, by adjusting the threshold.
+
+    The previously chosen threshold is disregarded here, it is not necessary
+    to choose a leak over threshold setup beforehand. There has to be
+    sufficient range between the reset and leak potential, though, in order
+    to calibrate the threshold in between the two.
+
+    :param connection: Connection to the chip to calibrate.
+    :param result: Result of the previous neuron calibration.
+        The spike thresholds will be adjusted.
+    :param leak_over_threshold_rate: Target spike rate, given with a
+        unit in the hardware time domain (so usual values
+        are 10 to 100 kHz). The threshold is calibrated such that
+        the neuron spikes with the given rate without any synaptic input.
+        The previously calibrated threshold is threfore overwritten.
+        If configuring an array in order to set individual targets
+        per neuron, use a rate of zero to leave the threshold untouched.
+    """
+
+    # apply calib result (in case chip is configured differently)
+    builder = sta.PlaybackProgramBuilder()
+    result.apply(builder)
+    base.run(connection, builder)
+
+    calibration = neuron_threshold.LeakOverThresholdCalib(
+        target=leak_over_threshold_rate)
+    calibration_result = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch())
+
+    # set new parameters in calib result
+    individual_targets = np.ndim(leak_over_threshold_rate) > 0
+    for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+        if individual_targets and \
+                leak_over_threshold_rate[int(coord.toEnum())] == 0:
+            continue
+        result.neurons[coord].threshold.v_threshold = \
+            hal.CapMemCell.Value(
+                calibration_result.calibrated_parameters[int(coord.toEnum())])
+
+    # apply calib result (restores config of neurons that are
+    # not to be calibrated)
+    builder = sta.PlaybackProgramBuilder()
+    result.apply(builder)
+    base.run(connection, builder)
