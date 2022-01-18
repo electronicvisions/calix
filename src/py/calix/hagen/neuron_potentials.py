@@ -139,9 +139,6 @@ class ResetPotentialCalibration(base.Calibration):
       may use the highnoise flag to indicate multiple measurements of the
       resting potential shall be taken in order to find the target
       reset potential.
-    * A slow refractory clock is applied to clock 0 from the
-      CommonNeuronBackendConfig. The reset period should last some 100 us
-      (at maximum reset counter value).
 
     :ivar highnoise: Decides whether to expect high noise on the
         membrane potential to be present. Setting this to True results
@@ -149,6 +146,9 @@ class ResetPotentialCalibration(base.Calibration):
         calibration target value.
     :ivar backend_configs: List containing neuron backend configs
         as read in the prelude of the calibration. Used to restore
+        the original config in the postlude.
+    :ivar common_backend_configs: List containing common neuron
+        backend configs as read during the prelude. Used to restore
         the original config in the postlude.
     """
 
@@ -171,6 +171,8 @@ class ResetPotentialCalibration(base.Calibration):
         self.target = target
         self.highnoise = highnoise
         self.backend_configs: Optional[List[hal.NeuronBackendConfig]] = None
+        self.common_backend_configs: Optional[List[
+            hal.CommonNeuronBackendConfig]] = None
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
@@ -191,15 +193,21 @@ class ResetPotentialCalibration(base.Calibration):
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
             backend_tickets.append(builder.read(coord))
 
-        # Reconfigure neuron backend
-        neuron_config = hal.NeuronBackendConfig()
-        neuron_config.refractory_time = \
-            hal.NeuronBackendConfig.RefractoryTime.max
-        neuron_config.select_input_clock = \
-            hal.NeuronBackendConfig.InputClock(0)
+        common_backend_tickets = list()
+        for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
+            common_backend_tickets.append(builder.read(coord))
 
+        # Reconfigure neuron backend
+        config = hal.CommonNeuronBackendConfig()
+        config.clock_scale_fast = 9  # slow clock to measure reset potential
+        config.clock_scale_slow = 9
+        for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
+            builder.write(coord, config)
+
+        config = hal.NeuronBackendConfig()
+        config.refractory_time = hal.NeuronBackendConfig.RefractoryTime.max
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
-            builder.write(coord, neuron_config)
+            builder.write(coord, config)
 
         # Obtain target for calibration
         if self.target is not None:
@@ -224,6 +232,10 @@ class ResetPotentialCalibration(base.Calibration):
         self.backend_configs = list()
         for ticket in backend_tickets:
             self.backend_configs.append(ticket.get())
+
+        self.common_backend_configs = list()
+        for ticket in common_backend_tickets:
+            self.common_backend_configs.append(ticket.get())
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -300,6 +312,11 @@ class ResetPotentialCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         for coord, config in zip(halco.iter_all(
                 halco.NeuronBackendConfigOnDLS), self.backend_configs):
+            builder.write(coord, config)
+
+        for coord, config in zip(
+                halco.iter_all(halco.CommonNeuronBackendConfigOnDLS),
+                self.common_backend_configs):
             builder.write(coord, config)
         base.run(connection, builder)
 
