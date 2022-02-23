@@ -279,7 +279,12 @@ class DACBiasCalibCADC(base.Calibration):
         target_range = range(40, 60)
 
         n_rows_enabled = halco.SynapseRowOnSynram.size // 4
-        for _ in range(50):
+
+        iteration = 0
+        while iteration < 30 and \
+                1 < n_rows_enabled < halco.SynapseRowOnSynram.size:
+            iteration += 1
+
             builder = sta.PlaybackProgramBuilder()
 
             # configure desired number of enabled rows
@@ -296,13 +301,13 @@ class DACBiasCalibCADC(base.Calibration):
             if self.target > target_range.stop:
                 n_rows_enabled = int(n_rows_enabled * 0.8)
             elif self.target < target_range.start:
-                n_rows_enabled = int(n_rows_enabled * 1.3)
+                n_rows_enabled = int(n_rows_enabled * 1.1)
         if self.target not in target_range:
             raise exceptions.CalibrationNotSuccessful(
                 "Optimal number of enabled synapse rows not found "
                 + "during prelude of Synapse DAC bias calibration. "
-                + f"last parameters: n_synapse_rows: {n_rows_enabled}, "
-                + f"target: {self.target}. Please select a more moderate"
+                + f"Last parameters: n_synapse_rows: {n_rows_enabled}, "
+                + f"target: {self.target}. Please select a more moderate "
                 + "target current for the synapse DAC bias.")
 
         log = logger.get("calix.common.synapse.DACBiasCalibCADC")
