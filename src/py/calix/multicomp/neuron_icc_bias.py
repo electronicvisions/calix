@@ -2,7 +2,7 @@ import numpy as np
 import quantities as pq
 
 from typing import Optional, List
-from dlens_vx_v2 import halco, sta, hxcomm, hal
+from dlens_vx_v3 import halco, sta, hxcomm, hal
 
 from calix import constants
 from scipy.optimize import curve_fit

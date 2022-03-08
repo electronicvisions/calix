@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import List, Union, Optional
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v3 import hal, halco, sta, logger, hxcomm
 
 from calix.common import algorithms, base, cadc_helpers, helpers, madc_base
 from calix.hagen import neuron_helpers
@@ -496,7 +496,7 @@ class ThresholdCalibMADC(madc_base.Calibration):
             builder, {
                 halco.CapMemRowOnCapMemBlock.i_mem_offset: 250,
                 halco.CapMemRowOnCapMemBlock.i_bias_leak: 0,
-                halco.CapMemRowOnCapMemBlock.v_reset: 450})
+                halco.CapMemRowOnCapMemBlock.v_reset: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # run program
@@ -675,7 +675,7 @@ class ThresholdCalibCADC(base.Calibration):
             builder, {
                 halco.CapMemRowOnCapMemBlock.i_mem_offset: 70,
                 halco.CapMemRowOnCapMemBlock.i_bias_leak: 0,
-                halco.CapMemRowOnCapMemBlock.v_reset: 450})
+                halco.CapMemRowOnCapMemBlock.v_reset: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
         # set neuron config suitably

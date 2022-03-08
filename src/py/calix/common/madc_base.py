@@ -9,7 +9,7 @@ import os
 import numpy as np
 import quantities as pq
 import matplotlib.pyplot as plt
-from dlens_vx_v2 import hal, sta, halco, hxcomm
+from dlens_vx_v3 import hal, sta, halco, hxcomm
 
 from calix.common import base, exceptions, helpers
 

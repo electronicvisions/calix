@@ -7,7 +7,7 @@ from typing import Union
 from pathlib import Path
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import sta, hxcomm
+from dlens_vx_v3 import sta, hxcomm
 
 import calix.spiking
 from calix.spiking import SpikingCalibrationResult

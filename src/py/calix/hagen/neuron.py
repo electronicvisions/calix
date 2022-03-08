@@ -8,7 +8,7 @@ from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import sta, halco, hal, hxcomm, lola
+from dlens_vx_v3 import sta, halco, hal, hxcomm, lola
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import neuron_helpers, neuron_evaluation, \
@@ -76,10 +76,6 @@ class CalibrationResultInternal:
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_inh_shift: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_drop: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_drop: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
     i_bias_leak: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_bias_reset: np.ndarray = np.empty(
@@ -93,6 +89,7 @@ class CalibrationResultInternal:
     i_syn_inh_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
     success: np.ndarray = np.ones(halco.NeuronConfigOnDLS.size, dtype=bool)
+    use_synin_small_capacitance: bool = True
 
     def to_atomic_neuron(self,
                          neuron_coord: halco.AtomicNeuronOnDLS
@@ -125,8 +122,7 @@ class CalibrationResultInternal:
             self.i_syn_exc_gm[neuron_id])
         anexc.i_bias_tau = hal.CapMemCell.Value(
             self.i_syn_exc_tau[neuron_id])
-        anexc.i_drop_input = hal.CapMemCell.Value(
-            self.i_syn_exc_drop[neuron_id])
+        anexc.enable_small_capacitance = self.use_synin_small_capacitance
 
         aninh = atomic_neuron.inhibitory_input
         aninh.i_shift_reference = hal.CapMemCell.Value(
@@ -135,8 +131,7 @@ class CalibrationResultInternal:
             self.i_syn_inh_gm[neuron_id])
         aninh.i_bias_tau = hal.CapMemCell.Value(
             self.i_syn_inh_tau[neuron_id])
-        aninh.i_drop_input = hal.CapMemCell.Value(
-            self.i_syn_inh_drop[neuron_id])
+        aninh.enable_small_capacitance = self.use_synin_small_capacitance
 
         return atomic_neuron
 
@@ -174,13 +169,13 @@ class CalibrationResultInternal:
         return result
 
 
-# pylint: disable=too-many-statements
+# pylint: disable=too-many-statements, too-many-locals
 def calibrate(
         connection: hxcomm.ConnectionHandle, *,
         target_leak_read: Union[int, np.ndarray] = 120,
         tau_mem: pq.quantity.Quantity = 60 * pq.us,
         tau_syn: pq.quantity.Quantity = 0.32 * pq.us,
-        i_synin_gm: int = 300, target_noise: Optional[float] = None,
+        i_synin_gm: int = 450, target_noise: Optional[float] = None,
         readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
         initial_configuration: Optional[
             Callable[[hxcomm.ConnectionHandle], None]] = None
@@ -314,26 +309,37 @@ def calibrate(
         builder, readout_neuron=readout_neuron)
     base.run(connection, builder)
 
-    # disable synaptic inputs initially
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=0)
-
     # call optional program for further initial configuration
     if initial_configuration is not None:
         initial_configuration(connection)
 
     # Initialize return object
     calib_result = CalibrationResultInternal()
-    calib_result.i_syn_exc_drop = initial_config[
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop]
-    calib_result.i_syn_inh_drop = initial_config[
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop]
     calib_result.i_bias_reset = initial_config[
         halco.CapMemRowOnCapMemBlock.i_bias_reset]
     calib_result.i_syn_exc_tau = initial_config[
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau]
     calib_result.i_syn_inh_tau = initial_config[
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau]
+
+    # disable synaptic inputs initially
+    neuron_helpers.reconfigure_synaptic_input(
+        connection, excitatory_biases=0, inhibitory_biases=0)
+
+    # select small capacitance mode for syn. input lines
+    tickets = list()
+    builder = sta.PlaybackProgramBuilder()
+    for coord in halco.iter_all(halco.NeuronConfigOnDLS):
+        tickets.append(builder.read(coord))
+    base.run(connection, builder)
+
+    builder = sta.PlaybackProgramBuilder()
+    for coord, ticket in zip(halco.iter_all(halco.NeuronConfigOnDLS), tickets):
+        config = ticket.get()
+        config.enable_synaptic_input_excitatory_small_capacitance = True
+        config.enable_synaptic_input_inhibitory_small_capacitance = True
+        builder.write(coord, config)
+    base.run(connection, builder)
 
     # Calibrate synaptic input time constant using MADC
     if np.all(tau_syn == 0 * pq.us):

@@ -3,7 +3,7 @@ import unittest
 import quantities as pq
 import numpy as np
 
-from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v3 import hal, halco, sta, logger, hxcomm
 
 from calix.common import algorithms, base, cadc, helpers
 from calix.hagen import neuron, neuron_potentials, neuron_helpers
@@ -40,14 +40,10 @@ class NeuronThresholdTest(ConnectionSetup):
 
         cadc.calibrate(self.connection)
 
-        # Increase i_synin_gm a bit to facilitate spiking.
-        # Set target_noise to None in order to keep the membrane time
-        # constant calibrated, and not optimize for noise.
-        # Set tau_syn in order to have it calibrated and not just configured
-        # to the minimum possible setting.
+        # using hagen mode calib: set syn. input bias and tau_syn
+        # more suitable for spiking operation
         neuron.calibrate(
-            self.connection, i_synin_gm=140, target_noise=None,
-            tau_syn=2 * pq.us)
+            self.connection, i_synin_gm=300, tau_syn=2 * pq.us)
 
     @staticmethod
     def preconfigure(connection: hxcomm.ConnectionHandle,

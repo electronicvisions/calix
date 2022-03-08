@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import halco, sta, hal, logger
+from dlens_vx_v3 import halco, sta, hal, logger
 
 from calix.common import algorithms, base, cadc
 from calix.hagen import neuron_helpers

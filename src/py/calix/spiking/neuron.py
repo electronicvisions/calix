@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import sta, halco, hal, hxcomm, lola, logger
+from dlens_vx_v3 import sta, halco, hal, hxcomm, lola, logger
 
 from calix.common import algorithms, base, synapse, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
@@ -29,10 +29,15 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
     v_threshold: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
+    i_syn_exc_coba: np.ndarray = np.zeros(
+        halco.NeuronConfigOnDLS.size, dtype=int)
+    i_syn_inh_coba: np.ndarray = np.zeros(
+        halco.NeuronConfigOnDLS.size, dtype=int)
     syn_bias_dac: np.ndarray = np.empty(
         halco.NeuronConfigBlockOnDLS.size, dtype=int)
     clock_settings: Optional[refractory_period.Settings] = None
     neuron_configs: Optional[List[hal.NeuronConfig]] = None
+    use_synin_small_capacitance: bool = False
 
     def set_neuron_configs_default(
             self, membrane_capacitance: Union[int, np.ndarray],
@@ -130,6 +135,11 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
         anref.input_clock = hal.NeuronBackendConfig.InputClock(
             self.clock_settings.input_clock[neuron_id])
 
+        atomic_neuron.excitatory_input.i_bias_coba = hal.CapMemCell.Value(
+            self.i_syn_exc_coba[neuron_id])
+        atomic_neuron.inhibitory_input.i_bias_coba = hal.CapMemCell.Value(
+            self.i_syn_inh_coba[neuron_id])
+
         return atomic_neuron
 
     def to_neuron_calib_result(self) -> NeuronCalibResult:
@@ -186,7 +196,7 @@ def calibrate(
         i_synin_gm: Union[int, np.ndarray] = 500,
         membrane_capacitance: Union[int, np.ndarray] = 63,
         refractory_time: pq.quantity.Quantity = 2. * pq.us,
-        synapse_dac_bias: int = 400,
+        synapse_dac_bias: int = 600,
         readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
         holdoff_time: pq.Quantity = 0 * pq.us
 ) -> NeuronCalibResult:
@@ -369,10 +379,6 @@ def calibrate(
     builder = sta.PlaybackProgramBuilder()
     builder, initial_config = neuron_helpers.configure_chip(
         builder, readout_neuron=readout_neuron)
-    calib_result.i_syn_exc_drop = initial_config[
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop]
-    calib_result.i_syn_inh_drop = initial_config[
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop]
     calib_result.i_bias_reset = initial_config[
         halco.CapMemRowOnCapMemBlock.i_bias_reset]
 
@@ -397,8 +403,7 @@ def calibrate(
         connection, excitatory_biases=0, inhibitory_biases=0)
 
     # calibrate leak near middle of CADC range
-    # choose 100 since some neurons can not reach higher leak potentials
-    calibration = neuron_potentials.LeakPotentialCalibration(100)
+    calibration = neuron_potentials.LeakPotentialCalibration(120)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     # decide how to execute synin calib

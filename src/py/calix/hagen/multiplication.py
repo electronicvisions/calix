@@ -8,7 +8,7 @@ import time
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import lola, halco, hal, sta, logger, hxcomm
+from dlens_vx_v3 import lola, halco, hal, sta, logger, hxcomm
 
 from calix.common import base, helpers
 from calix.hagen import neuron_helpers
@@ -92,18 +92,17 @@ class Multiplication:
         # Disable pullup of synaptic input lines (tau_syn -> inf) and
         # select the capacitor to be connected to the line.
         config.excitatory_input.enable = False
-        config.excitatory_input.enable_small_capacitor = False
+        config.excitatory_input.enable_small_capacitance = False
         config.excitatory_input.enable_high_resistance = True
         config.excitatory_input.i_bias_tau = 0
         config.inhibitory_input.enable = False
-        config.inhibitory_input.enable_small_capacitor = False
+        config.inhibitory_input.enable_small_capacitance = False
         config.inhibitory_input.enable_high_resistance = True
         config.inhibitory_input.i_bias_tau = 0
 
         # We need the source follower before the synaptic input OTA biased
-        # (i_drop_input) in order to see the potential at the readout.
-        config.excitatory_input.i_drop_input = 300 + helpers.capmem_noise()
-        config.inhibitory_input.i_drop_input = 310 + helpers.capmem_noise()
+        # (i_drop_input, which is a global bias current) in order to see
+        # the potential at the readout.
 
         # We choose the excitatory synaptic input line for the integration,
         # therefore we select it as readout source.

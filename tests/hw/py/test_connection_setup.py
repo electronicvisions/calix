@@ -9,7 +9,7 @@ and serializes default calibrations.
 import unittest
 import os
 
-from dlens_vx_v2 import logger
+from dlens_vx_v3 import logger
 
 from connection_setup import ConnectionSetup
 

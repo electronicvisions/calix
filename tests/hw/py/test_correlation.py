@@ -10,7 +10,7 @@ from typing import List
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import hal, halco, sta, lola, logger
+from dlens_vx_v3 import hal, halco, sta, lola, logger
 from calix.hagen import base, cadc, helpers
 from calix import constants
 

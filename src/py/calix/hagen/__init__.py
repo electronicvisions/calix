@@ -7,7 +7,7 @@ from typing import Tuple, Union, Optional
 from dataclasses import dataclass
 import numpy as np
 
-from dlens_vx_v2 import sta, hxcomm, halco, hal, lola
+from dlens_vx_v3 import sta, hxcomm, halco, hal, lola
 
 from calix.common import algorithms, base, cadc, synapse, helpers
 from calix.hagen import neuron, synapse_driver, neuron_helpers, multiplication
@@ -55,9 +55,9 @@ class HagenSyninCalibrationResult(base.CalibrationResult):
              self.syn_i_bias_dac})
 
         # static neuron configuration
+        config = lola.AtomicNeuron()
+        multiplication.Multiplication.configure_for_integration(config)
         for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
-            config = lola.AtomicNeuron()
-            multiplication.Multiplication.configure_for_integration(config)
             builder.write(coord, config)
 
         # Connect 1.2 V to synapse debug line:

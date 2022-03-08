@@ -12,7 +12,7 @@ import static java.util.UUID.randomUUID
 final String deploymentRoot = "/wang/data/calibration/hicann-dls-sr-hx/"
 
 enum HxVersion {
-	HXv2(2)
+	HXv3(3)
 
 	final int chipRevision
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
 }
 
 Closure calibrationPipeline = { HxVersion version ->
-	if (version == HxVersion.HXv2)
+	if (version == HxVersion.HXv3)
 	{
 		wafSetup(projects: ["calix", "hwdb"])
 	}

@@ -4,7 +4,7 @@ per quadrant.
 """
 
 import numpy as np
-from dlens_vx_v2 import halco, logger, hxcomm
+from dlens_vx_v3 import halco, logger, hxcomm
 from calix.hagen import neuron_helpers
 
 

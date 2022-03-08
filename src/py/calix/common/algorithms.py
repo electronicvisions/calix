@@ -9,7 +9,7 @@ from typing import Union, Optional, ClassVar
 import numbers
 from abc import abstractmethod
 import numpy as np
-from dlens_vx_v2 import sta, hxcomm
+from dlens_vx_v3 import sta, hxcomm
 
 from calix.common import base, boundary_check, exceptions, helpers
 

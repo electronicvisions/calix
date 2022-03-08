@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import hal
+from dlens_vx_v3 import hal
 
 
 # Assume refractory clock frequency yo be unchanged after

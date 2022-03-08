@@ -7,7 +7,7 @@ import os
 
 from calix.common import madc_base
 
-from dlens_vx_v2 import sta, logger
+from dlens_vx_v3 import sta, logger
 
 from connection_setup import ConnectionSetup
 

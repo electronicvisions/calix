@@ -10,7 +10,7 @@ import os
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
 from calix.hagen import neuron, neuron_helpers
@@ -42,7 +42,7 @@ class TestNeuronCalib(ConnectionSetup):
     def measure_amplitudes(
             cls,
             connection: hxcomm.ConnectionHandle, *,
-            excitatory: bool = True, n_events: int = 10,
+            excitatory: bool = True, n_events: int = 12,
             wait_between_events: pq.quantity.Quantity = 1.2 * pq.us,
             n_runs: int = 30) -> Tuple[np.ndarray, np.ndarray]:
         """

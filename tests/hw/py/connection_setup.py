@@ -3,7 +3,7 @@ from pathlib import Path
 import pickle
 import os
 
-from dlens_vx_v2 import sta, hxcomm, logger
+from dlens_vx_v3 import sta, hxcomm, logger
 
 from calix.common import base
 import calix.scripts.calix_generate_default_calibration as calib_generator

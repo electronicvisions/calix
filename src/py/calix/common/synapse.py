@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import hal, sta, halco, hxcomm, logger
+from dlens_vx_v3 import hal, sta, halco, hxcomm, logger
 
 from calix.common import base, cadc_helpers, madc_base, helpers, exceptions
 from calix.hagen import neuron_helpers

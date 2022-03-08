@@ -5,7 +5,7 @@ import numpy as np
 import scipy.stats
 import quantities as pq
 
-from dlens_vx_v2 import hal, halco, sta, hxcomm, logger
+from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
 from calix.common import base
 from calix.hagen import neuron_potentials, neuron_leak_bias, neuron_synin

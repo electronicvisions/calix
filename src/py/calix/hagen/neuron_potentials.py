@@ -5,7 +5,7 @@ Provides functions to calibrate leak and reset potential.
 from typing import Union, List, Optional
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
 from calix.hagen import neuron_helpers

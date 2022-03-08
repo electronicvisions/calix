@@ -8,7 +8,7 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dlens_vx_v2 import halco, logger
+from dlens_vx_v3 import halco, logger
 
 from calix.hagen import multiplication
 import calix.hagen

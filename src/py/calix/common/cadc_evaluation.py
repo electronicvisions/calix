@@ -4,7 +4,7 @@ CADC calibration.
 """
 
 import numpy as np
-from dlens_vx_v2 import halco, sta, logger, hxcomm
+from dlens_vx_v3 import halco, sta, logger, hxcomm
 
 from calix.common import cadc_helpers
 

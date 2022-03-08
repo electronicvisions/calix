@@ -8,7 +8,7 @@ changing the leak potential in one neuron after another.
 
 import unittest
 import numpy as np
-from dlens_vx_v2 import sta, halco, hal, logger
+from dlens_vx_v3 import sta, halco, hal, logger
 
 from calix.common import base, cadc, helpers
 from calix.hagen import neuron_helpers

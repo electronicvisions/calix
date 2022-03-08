@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from dlens_vx_v2 import logger
+from dlens_vx_v3 import logger
 from calix.common import base, boundary_check
 
 

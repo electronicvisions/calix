@@ -5,7 +5,7 @@ calibration purposes.
 
 from typing import Tuple
 import numpy as np
-from dlens_vx_v2 import halco, hal, sta, hxcomm
+from dlens_vx_v3 import halco, hal, sta, hxcomm
 
 from calix.common import base, helpers
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Tuple, Union, List, Optional, Dict
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import hal, sta, halco, lola, hxcomm
+from dlens_vx_v3 import hal, sta, halco, lola, hxcomm
 
 from calix.common import base, cadc_helpers, helpers
 from calix import constants
@@ -497,8 +497,8 @@ def set_analog_neuron_config(
         halco.CapMemRowOnCapMemBlock.i_bias_reset:
         hal.CapMemCell.Value.max - 2 * noise_amplitude,
         halco.CapMemRowOnCapMemBlock.v_reset: v_leak,
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_drop: 300,
-        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_drop: 300,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_coba: 0,
+        halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_coba: 0,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift: 310,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift: 310,
         halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
@@ -527,7 +527,8 @@ def set_global_capmem_config(
         halco.CapMemCellOnCapMemBlock.neuron_i_bias_readout_amp: 110,
         halco.CapMemCellOnCapMemBlock.neuron_i_bias_leak_source_follower: 100,
         halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: 1022,
-        halco.CapMemCellOnCapMemBlock.neuron_i_bias_spike_comparator: 200
+        halco.CapMemCellOnCapMemBlock.neuron_i_bias_spike_comparator: 200,
+        halco.CapMemCellOnCapMemBlock.neuron_i_bias_synin_drop: 300
     }
     builder = helpers.capmem_set_quadrant_cells(builder, parameters)
 

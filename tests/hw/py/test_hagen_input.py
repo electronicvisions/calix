@@ -9,7 +9,7 @@ from typing import Optional
 
 import numpy as np
 
-from dlens_vx_v2 import hal, halco, sta, logger
+from dlens_vx_v3 import hal, halco, sta, logger
 
 from calix.common import base, helpers
 from calix.hagen import synapse_driver

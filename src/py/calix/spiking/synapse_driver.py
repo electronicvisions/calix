@@ -5,7 +5,7 @@ for the usual spiking mode.
 
 from typing import Union
 import numpy as np
-from dlens_vx_v2 import hal, halco, sta, hxcomm, logger
+from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
 from calix import constants
 from calix.common import base, helpers

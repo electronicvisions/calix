@@ -13,7 +13,7 @@ be calibrated.
 from typing import Optional, Dict, Union
 from dataclasses import dataclass
 import numpy as np
-from dlens_vx_v2 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import multiplication
