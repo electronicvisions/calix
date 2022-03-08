@@ -357,7 +357,7 @@ class Calibration(base.Calibration):
         madc_samples = np.sort(
             program.madc_samples.to_numpy(), order="chip_time")
         madc_samples = madc_samples.astype(
-            [("value", int), ("fpga_time", int),
+            [("value", int), ("channel", int), ("fpga_time", int),
              ("chip_time", float)])
         madc_samples["chip_time"] /= int(
             hal.Timer.Value.fpga_clock_cycles_per_us)
