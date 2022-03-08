@@ -771,6 +771,13 @@ class SynTimeConstantCalibration(madc_base.Calibration):
             # cut at bounds
             tau = min(max(0.1, tau), 100)
 
+            # if the synaptic input line is floating (due to a too low bias
+            # current), the recorded trace is constant -> register high time
+            # constant such that bias is increased
+            if abs(scale) < 10:
+                neuron_fits.append(np.inf)
+                continue
+
             try:
                 fit_result = curve_fit(
                     fitfunc,
@@ -778,13 +785,13 @@ class SynTimeConstantCalibration(madc_base.Calibration):
                     neuron_data["value"], p0=[scale, tau, offset],
                     bounds=([-offset, 0.1, offset - 10],
                             [0, 100, offset + 10]))
-                neuron_fits.append(fit_result[0])
+                neuron_fits.append(fit_result[0][1])
             except RuntimeError as error:
                 raise exceptions.CalibrationNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
                     + str(error))
 
-        return np.array(neuron_fits)[:, 1] * pq.us
+        return np.array(neuron_fits) * pq.us
 
 
 class ExcSynTimeConstantCalibration(SynTimeConstantCalibration):
