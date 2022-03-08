@@ -5,12 +5,16 @@ calibration are significantly lower than one expects without calibration.
 
 import unittest
 import numpy as np
-from dlens_vx_v2 import sta, halco, hal
+from dlens_vx_v2 import sta, halco, hal, logger
 
 from calix.common import cadc, cadc_helpers, helpers
 from calix import constants
 
 from connection_setup import ConnectionSetup
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class TestCADCCalib(ConnectionSetup):

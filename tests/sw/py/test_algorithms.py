@@ -2,11 +2,15 @@ import numbers
 from typing import Optional, Union, ClassVar
 import unittest
 import numpy as np
-from dlens_vx_v2 import sta
+from dlens_vx_v2 import sta, logger
 
 from calix.common import algorithms, base
 
 from mock_connection_setup import ConnectionSetup
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class _AlgorithmsGeneral(ConnectionSetup):

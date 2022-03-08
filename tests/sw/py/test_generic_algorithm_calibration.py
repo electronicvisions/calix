@@ -3,11 +3,16 @@ import pkgutil
 import unittest
 from typing import Callable, Set, Type
 
+from dlens_vx_v2 import logger
 import calix
 from calix.common import exceptions
 from calix.common.base import Algorithm, Calibration
 
 from mock_connection_setup import ConnectionSetup
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class GenericCalibrationTest(ConnectionSetup):

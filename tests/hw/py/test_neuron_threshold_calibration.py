@@ -10,6 +10,10 @@ from calix.spiking import neuron_threshold
 from connection_setup import ConnectionSetup
 
 
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
+
+
 class NeuronThresholdTest(ConnectionSetup):
     """
     Calibrates chip with neuron spike threshold slightly above

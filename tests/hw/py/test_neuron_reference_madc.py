@@ -16,6 +16,10 @@ from calix import constants
 from connection_setup import ConnectionSetup
 
 
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
+
+
 class TestReferenceCalib(ConnectionSetup):
     """
     Runs a neuron calibration and ensures the results are ok.

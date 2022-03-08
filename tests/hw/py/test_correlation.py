@@ -17,6 +17,10 @@ from calix import constants
 from connection_setup import ConnectionSetup
 
 
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
+
+
 class TestCorrelation(ConnectionSetup):
     """
     Configures the chip such that correlation can be measured and read

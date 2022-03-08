@@ -16,6 +16,10 @@ import calix.hagen
 from connection_setup import ConnectionSetup
 
 
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
+
+
 class HagenInputTest(ConnectionSetup):
     """
     Provides methods for measuring the amplitudes sent by synapse drivers

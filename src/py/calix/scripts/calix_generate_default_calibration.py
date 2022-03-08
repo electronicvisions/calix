@@ -11,6 +11,7 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Union, List
 
+from dlens_vx_v2 import logger
 from dlens_vx_v2.hxcomm import ConnectionHandle, ManagedConnection
 from dlens_vx_v2.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
     run, to_json, to_portablebinary
@@ -22,6 +23,10 @@ from calix.spiking import SpikingCalibrationResult
 
 # TODO @JW: There should be a common base for these (Hagen, Spiking, ...)
 CalibrationResult = Union[HagenCalibrationResult, SpikingCalibrationResult]
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class CalibrationRecorder(metaclass=ABCMeta):

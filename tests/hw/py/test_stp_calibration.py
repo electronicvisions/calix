@@ -10,6 +10,10 @@ from calix.spiking import synapse_driver
 from connection_setup import ConnectionSetup
 
 
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
+
+
 class STPCalibrationTest(ConnectionSetup):
     """
     Test STP calibration (for spiking mode).

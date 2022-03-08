@@ -3,10 +3,14 @@ from itertools import product
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import halco, hal
+from dlens_vx_v2 import halco, hal, logger
 
 from calix.spiking.refractory_period import calculate_settings, Settings, \
     _clock_period, _clock_base_frequency
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class RefractoryPeriodTest(unittest.TestCase):

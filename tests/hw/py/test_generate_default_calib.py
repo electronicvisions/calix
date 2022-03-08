@@ -6,7 +6,12 @@ import unittest
 import os
 from pathlib import Path
 
+from dlens_vx_v2 import logger
 from calix.scripts import calix_generate_default_calibration
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class TestGenerateDefaultCalibration(unittest.TestCase):

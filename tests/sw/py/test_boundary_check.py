@@ -1,7 +1,12 @@
 import unittest
 import numpy as np
 
+from dlens_vx_v2 import logger
 from calix.common import base, boundary_check
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class BoundaryCheckTest(unittest.TestCase):

@@ -8,13 +8,17 @@ changing the leak potential in one neuron after another.
 
 import unittest
 import numpy as np
-from dlens_vx_v2 import sta, halco, hal
+from dlens_vx_v2 import sta, halco, hal, logger
 
 from calix.common import base, cadc, helpers
 from calix.hagen import neuron_helpers
 from calix import constants
 
 from connection_setup import ConnectionSetup
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class TestCADCAssignment(ConnectionSetup):
@@ -155,7 +159,7 @@ class TestCADCAssignment(ConnectionSetup):
         builder = self.preconfigure_chip(builder)
         base.run(self.connection, builder)
 
-        success = np.zeros(halco.NeuronConfigOnDLS.size, dtype=np.bool)
+        success = np.zeros(halco.NeuronConfigOnDLS.size, dtype=bool)
 
         # For each synapse switch assert it affects the right channels
         for neuron_id, neuron_coord in enumerate(
@@ -211,7 +215,7 @@ class TestCADCAssignment(ConnectionSetup):
 
         base.run(self.connection, builder)
 
-        success = np.zeros(halco.NeuronConfigOnDLS.size, dtype=np.bool)
+        success = np.zeros(halco.NeuronConfigOnDLS.size, dtype=bool)
 
         # For each neuron assert the leak potential changes the CADC reads
         for neuron_id, neuron_coord in enumerate(

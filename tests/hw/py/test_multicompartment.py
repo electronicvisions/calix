@@ -5,13 +5,17 @@ from typing import List
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v2 import halco, sta, hal
+from dlens_vx_v2 import halco, sta, hal, logger
 
 from calix.common import algorithms, base, cadc
 from calix.hagen import neuron_helpers
 from calix.multicomp.neuron_icc_bias import CalibrateICCMADC
 
 from connection_setup import ConnectionSetup
+
+
+log = logger.get("calix")
+logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
 class TestICCCalib(ConnectionSetup):
