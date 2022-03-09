@@ -229,6 +229,9 @@ class DACBiasCalibCADC(base.Calibration):
         :raises CalibrationNotSuccessful: If amplitudes can not be brought
             into a reliable range by adjusting the number of enabled
             synapse rows.
+        :raises AssertionError: If the number of enabled synapse rows is
+            not updated in a given iteration. This indicates a bug and
+            should not happen.
         """
 
         builder = sta.PlaybackProgramBuilder()
@@ -282,7 +285,7 @@ class DACBiasCalibCADC(base.Calibration):
 
         iteration = 0
         while iteration < 30 and \
-                1 < n_rows_enabled < halco.SynapseRowOnSynram.size:
+                1 <= n_rows_enabled <= halco.SynapseRowOnSynram.size:
             iteration += 1
 
             builder = sta.PlaybackProgramBuilder()
@@ -296,13 +299,18 @@ class DACBiasCalibCADC(base.Calibration):
             self.target = np.min(self.measure_results(connection, builder))
 
             # inspect amplitudes
-            if self.target in target_range:
+            if target_range.start < self.target < target_range.stop:
                 break
-            if self.target > target_range.stop:
+            if self.target >= target_range.stop:
                 n_rows_enabled = int(n_rows_enabled * 0.8)
-            elif self.target < target_range.start:
+            elif self.target <= target_range.start:
                 n_rows_enabled = int(n_rows_enabled * 1.1)
-        if self.target not in target_range:
+            else:  # raise in case n_rows_enabled is not updated
+                raise AssertionError(
+                    "No valid update rule for number of enabled synapse rows! "
+                    + f"n_rows_enabled: {n_rows_enabled}, "
+                    + f"target: {self.target}")
+        if not target_range.start < self.target < target_range.stop:
             raise exceptions.CalibrationNotSuccessful(
                 "Optimal number of enabled synapse rows not found "
                 + "during prelude of Synapse DAC bias calibration. "
@@ -311,7 +319,7 @@ class DACBiasCalibCADC(base.Calibration):
                 + "target current for the synapse DAC bias.")
 
         log = logger.get("calix.common.synapse.DACBiasCalibCADC")
-        log.DEBUG(f"Using {n_rows_enabled} synapse rows during DAC bias"
+        log.DEBUG(f"Using {n_rows_enabled} synapse rows during DAC bias "
                   + f"calib. Target amplitude: {self.target}")
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
