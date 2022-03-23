@@ -9,7 +9,7 @@ from typing import Optional
 
 import numpy as np
 
-from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v2 import hal, halco, sta, logger
 
 from calix.common import base, helpers
 from calix.hagen import synapse_driver
@@ -38,38 +38,33 @@ class HagenInputTest(ConnectionSetup):
         re-applying.
     """
 
-    # sweep vector address from low to high amplitudes twice
-    vector_addresses = np.arange(hal.SynapseQuad.Label.max, -1, -1)
+    # sweep vector address from low to high amplitudes
+    vector_activations = np.arange(1, hal.PADIEvent.HagenActivation.size)
 
     log = logger.get("calix.tests.hw.test_hagen_inputs")
     calib_result: Optional[calix.hagen.HagenCalibrationResult] = None
+    measurement = synapse_driver.SynapseDriverMeasurement(
+        n_parallel_measurements=8)
 
-    def measure_amplitudes(self, connection: hxcomm.ConnectionHandle
-                           ) -> np.ndarray:
+    def measure_amplitudes(self) -> np.ndarray:
         """
         Sweep the vector_addresses and record the amplitudes of
-        each synapse drivers. The median amplitude of 8 neurons
+        each synapse drivers. The median amplitude of all synapse columns
         acquired with the CADCs is used as synapse driver amplitude.
-
-        :param connection: Connection to the chip to run on.
 
         :return: Array of synapse driver amplitudes per address.
         """
 
-        amplitudes = np.empty((len(self.vector_addresses),
-                               halco.SynapseDriverOnDLS.size))
+        amplitudes = self.measurement.measure_syndrv_amplitudes(
+            self.connection, self.vector_activations)
 
-        for address_id, address in enumerate(self.vector_addresses):
-            builder = sta.PlaybackProgramBuilder()
-            builder = synapse_driver.set_synapse_pattern(
-                builder, address=address, weight=32)
-            amplitudes[address_id] = synapse_driver.measure_syndrv_amplitudes(
-                connection, builder, address=address, n_events=20)
-
-            self.log.DEBUG(
-                f"Amplitude at address {address}: "
-                + f"{amplitudes[address_id].mean():5.3f} +- "
-                + f"{amplitudes[address_id].std():5.3f}")
+        self.log.DEBUG(
+            "Obtained amplitudes:\n",
+            "\n".join([
+                f"Activation {activation}: "
+                + f"{amplitudes[index].mean():5.3f} +- "
+                + f"{amplitudes[index].std():5.3f}"
+                for index, activation in enumerate(self.vector_activations)]))
 
         return amplitudes
 
@@ -87,46 +82,46 @@ class HagenInputTest(ConnectionSetup):
         mean_amplitudes = np.mean(amplitudes, axis=1)
 
         # assert amplitudes increase on average
-        self.assertGreater(np.mean(np.diff(mean_amplitudes)), 0,
-                           "Amplitudes do not grow when reducing address.")
+        self.assertGreater(np.mean(np.diff(mean_amplitudes)), 0.5,
+                           "Amplitudes do not grow with activation.")
 
         # assert no saturation within 5 LSB on top and bottom
-        self.assertGreater(np.mean(np.diff(mean_amplitudes[:5])), 0,
+        self.assertGreater(np.mean(np.diff(mean_amplitudes[:5])), 0.2,
                            "Amplitudes do not increase in first 5 LSB "
-                           + "of adresses (activations).")
-        self.assertGreater(np.mean(np.diff(mean_amplitudes[-5:])), 0,
+                           + "of activations.")
+        self.assertGreater(np.mean(np.diff(mean_amplitudes[-5:])), 0.2,
                            "Amplitudes do not increase in last 5 LSB "
-                           + "of adresses (activations).")
+                           + "of activations.")
 
         # assert baseline is higher than -1
         baseline = np.min(mean_amplitudes)
         self.assertGreater(baseline, -1, "Amplitudes read lower than -1.")
 
-        # assert high amplitudes are higher than 50 LSB
-        # (some 60 to 80 LSB are expected)
+        # assert high amplitudes are higher than 20 LSB
+        # (some 30 LSB are expected)
         maximum = np.max(mean_amplitudes)
-        self.assertGreater(maximum, 50, "High amplitudes are low.")
+        self.assertGreater(maximum, 20, "High amplitudes are low.")
 
         # assert dynamic range is 8 times higher than baseline
         dynamic_range = maximum - baseline
         self.assertGreater(dynamic_range / np.abs(baseline), 8,
                            "Dynamic range is small.")
 
-        # assert std. dev. between drivers is at most 1/20 of dynamic range
+        # assert std. dev. between drivers is at most 1/8 of dynamic range
         mismatch = np.mean(np.std(amplitudes, axis=1))
-        self.assertLess(mismatch, dynamic_range / 20,
+        self.assertLess(mismatch, dynamic_range / 8,
                         "Mismatch between drivers is high.")
 
-        # assert mismatch is less than 5 LSB (some 2.5 LSB expected)
+        # assert mismatch is less than 4 LSB (some 2 LSB expected)
         self.assertLess(
-            mismatch, 5, "Mismatch between drivers is more than 5 LSB.")
+            mismatch, 4, "Mismatch between drivers is more than 4 LSB.")
 
     def test_00_calibrate(self):
         """
         Apply calibration of CADCs, neurons and synapse drivers.
         """
 
-        self.__class__.calib_result = self.apply_calibration("hagen")
+        self.__class__.calib_result = self.apply_calibration("hagen_synin")
 
     def test_01_hagen_mode(self):
         """
@@ -134,11 +129,8 @@ class HagenInputTest(ConnectionSetup):
         """
 
         # Sweep hagen activation and measure amplitudes per driver
-        amplitudes = self.measure_amplitudes(self.connection)
-
-        # Split results into two halfs, exclude address zero
-        for amplitude_half in (amplitudes[:32], amplitudes[32:]):
-            self.evaluate_amplitudes(amplitude_half)
+        amplitudes = self.measure_amplitudes()
+        self.evaluate_amplitudes(amplitudes)
 
     def test_02_overwrite(self):
         """
@@ -151,19 +143,17 @@ class HagenInputTest(ConnectionSetup):
             builder,
             {halco.CapMemCellOnCapMemBlock.stp_i_ramp: 400})
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
-            config = synapse_driver.syndrv_config_enabled()
+            config = hal.SynapseDriverConfig()
             config.hagen_dac_offset = \
                 hal.SynapseDriverConfig.HagenDACOffset.max // 2
             builder.write(coord, config)
         base.run(self.connection, builder)
 
         # Measure results, assert calibration is gone
-        amplitudes = self.measure_amplitudes(self.connection)
-
-        for amplitude_half in (amplitudes[:32], amplitudes[32:]):
-            self.assertRaises(
-                AssertionError,
-                self.evaluate_amplitudes, amplitude_half)
+        amplitudes = self.measure_amplitudes()
+        self.assertRaises(
+            AssertionError,
+            self.evaluate_amplitudes, amplitudes)
 
     def test_03_reapply(self):
         """
@@ -176,10 +166,8 @@ class HagenInputTest(ConnectionSetup):
         base.run(self.connection, builder)
 
         # Assert calibration works again
-        amplitudes = self.measure_amplitudes(self.connection)
-
-        for amplitude_half in (amplitudes[:32], amplitudes[32:]):
-            self.evaluate_amplitudes(amplitude_half)
+        amplitudes = self.measure_amplitudes()
+        self.evaluate_amplitudes(amplitudes)
 
 
 if __name__ == "__main__":

@@ -58,7 +58,7 @@ def build(bld):
         install_path='${PREFIX}/bin/tests',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
-        test_timeout=600,  # 10 minutes
+        test_timeout=1800,  # 30 minutes
         )
 
     bld(name='calix_pyhwtests',

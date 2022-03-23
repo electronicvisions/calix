@@ -10,6 +10,55 @@ from dlens_vx_v2 import hal, halco, sta, hxcomm, logger
 from calix import constants
 from calix.common import base, helpers
 import calix.hagen.synapse_driver as hagen_driver
+from calix.hagen import multiplication
+
+
+class STPMultiplication(multiplication.Multiplication):
+    """
+    Perform vector-matrix multiplications, but without hagen-mode
+    pulse length encoding. The pulse length is instead determined
+    by the STP voltage.
+
+    Note that we set a static voltage for both v_recover and v_charge
+    and this way leave no dynamic range for modulation of amplitudes
+    depending on their timing. We only set a medium amplitude with
+    a suitable voltage v_stp := v_recover = v_charge.
+    """
+
+    def preconfigure(self, connection: hxcomm.ConnectionHandle) -> None:
+        """
+        Call preconfigure from parent class, but disable
+        hagen-mode encoding (use STP voltages instead).
+
+        :param connection: Connection to the chip to run on.
+        """
+
+        super().preconfigure(connection)
+
+        # read synapse driver config
+        syndrv_tickets = list()
+        builder = sta.PlaybackProgramBuilder()
+        for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
+            syndrv_tickets.append(builder.read(
+                halco.SynapseDriverOnDLS(
+                    coord,
+                    block=self.synram_coord.toSynapseDriverBlockOnDLS())))
+        base.run(connection, builder)
+
+        # write synapse driver config with hagen encoding disabled
+        builder = sta.PlaybackProgramBuilder()
+        for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
+            config = syndrv_tickets[coord.toEnum()].get()
+            config.enable_stp = True
+            config.enable_hagen_modulation = False
+            config.enable_hagen_dac = False
+
+            builder.write(
+                halco.SynapseDriverOnDLS(
+                    coord,
+                    block=self.synram_coord.toSynapseDriverBlockOnDLS()),
+                config)
+        base.run(connection, builder)
 
 
 class STPOffsetCalibration(base.Calibration):
@@ -19,29 +68,29 @@ class STPOffsetCalibration(base.Calibration):
 
     Since the hagen-mode DAC is not involved now, the STP voltages can
     use a higher dynamic range determined by v_charge and v_recover.
-    This usually means a higher STP ramp current can be used compared
-    to hagen mode.
+    This usually means a different STP ramp current is used than in
+    hagen mode.
 
     Drivers connected to different CapMem instances are calibrated to
     different targets since deviations in STP voltages and ramp currents
     (which are set for each CapMem instance individually) have higher
     variations than can be compensated with the STP offset.
 
+    Note that this calibration measures synapse drivers' outputs on the
+    synaptic input lines, not on the neurons. The neurons are reconfigured
+    for this purpose. If they were calibrated, you will need to re-apply
+    their calibration after the STP offsets are calibrated.
+
     Requirements:
-    * Neurons are calibrated for integration mode.
-    * Synaptic events can reach the neurons, i.e. the synapse DAC bias
-      is set and the `hal.ColumnCurrentSwitch`es allow currents from
-      the synapses through.
-    * Neuron membrane readout is connected to the CADCs (causal and acausal).
+    * CADCs and Synapse DAC biases are calibrated.
 
     :ivar v_stp: STP voltage to use during amplitude measurement,
         reached by setting v_charge and v_recover to this value.
         If an array of values is given, they are configured per quadrant.
     :ivar i_ramp: STP ramp current.
         If an array of values is given, they are configured per quadrant.
-    :ivar address: Address to use when sending spikes. Only 0 and 32 will
-        work reliably, since we re-use some hagen-mode functions which
-        truncate the lower 5 address bits.
+    :ivar measurement: Instance of measurement class, in order to measure
+        the characteristic output amplitudes of each synapse driver.
     """
 
     def __init__(self, v_stp: Union[int, np.ndarray] = 180,
@@ -52,19 +101,10 @@ class STPOffsetCalibration(base.Calibration):
             n_instances=halco.SynapseDriverOnDLS.size,
             inverted=True)
 
-        self.default_syndrv_config = hal.SynapseDriverConfig()
-        self.default_syndrv_config.enable_address_out = True
-        self.default_syndrv_config.enable_receiver = True
-        self.default_syndrv_config.row_mode_top = \
-            hal.SynapseDriverConfig.RowMode.excitatory
-        self.default_syndrv_config.row_mode_bottom = \
-            hal.SynapseDriverConfig.RowMode.excitatory
-        self.default_syndrv_config.enable_stp = True
-        self.default_syndrv_config.row_address_compare_mask = 0b00000
-
         self.v_stp = v_stp
         self.i_ramp = i_ramp
-        self.address: hal.SynapseQuad.Label = hal.SynapseQuad.Label(32)
+        self.measurement = hagen_driver.SynapseDriverMeasurement()
+        self.measurement.multiplication = STPMultiplication(signed_mode=False)
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -79,8 +119,7 @@ class STPOffsetCalibration(base.Calibration):
         """
 
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
-            synapse_driver_config = hal.SynapseDriverConfig(
-                self.default_syndrv_config)  # copy
+            synapse_driver_config = hal.SynapseDriverConfig()
             synapse_driver_config.offset = int(
                 parameters[int(coord.toEnum())])
 
@@ -95,13 +134,17 @@ class STPOffsetCalibration(base.Calibration):
         Read output amplitudes of synapse drivers.
 
         :param connection: Connection to the chip to run on.
-        :param builder: Builder to send events and read on.
+        :param builder: Builder that is run before measuring.
 
         :return: Array of synapse drivers' output amplitudes.
         """
 
-        return hagen_driver.measure_syndrv_amplitudes(
-            connection, builder, address=self.address)
+        base.run(connection, builder)
+        results = self.measurement.measure_syndrv_amplitudes(
+            connection,  # use any non-zero activation:
+            activations=hal.PADIEvent.HagenActivation.max)
+
+        return results
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
@@ -119,17 +162,21 @@ class STPOffsetCalibration(base.Calibration):
         })
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
-        builder = hagen_driver.set_synapse_pattern(
-            builder, address=self.address)
         builder = self.configure_parameters(
             builder, np.ones(halco.SynapseDriverOnDLS.size, dtype=int)
             * (hal.SynapseDriverConfig.Offset.max // 2))
 
         # Use median value of CapMem block as a calibration target
         results = self.measure_results(connection, builder)
-        block_results = np.median(
-            hagen_driver.STPRampCalibration.reshape_syndrv_amplitudes(results),
-            axis=1)
+
+        block_results = [
+            list() for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
+        for coord, result in zip(
+                halco.iter_all(halco.SynapseDriverOnDLS), results):
+            block_results[int(coord.toCapMemBlockOnDLS().toEnum())].append(
+                result)
+        block_results = np.median(block_results, axis=1)
+
         self.target = np.empty(halco.SynapseDriverOnDLS.size)
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
             self.target[int(coord.toEnum())] = \

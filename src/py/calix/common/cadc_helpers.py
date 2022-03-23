@@ -46,6 +46,10 @@ def configure_readout_cadc_debug(builder: sta.PlaybackProgramBuilder
 
     builder.write(halco.CapMemBlockConfigOnDLS(), capmem_config)
 
+    # set shift register default: otherwise, the pad may be connected
+    # to something on the board.
+    builder.write(halco.ShiftRegisterOnBoard(), hal.ShiftRegister())
+
     return builder
 
 
