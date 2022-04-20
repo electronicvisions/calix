@@ -304,7 +304,8 @@ class DACBiasCalibCADC(base.Calibration):
             if self.target >= target_range.stop:
                 n_rows_enabled = int(n_rows_enabled * 0.8)
             elif self.target <= target_range.start:
-                n_rows_enabled = int(n_rows_enabled * 1.1)
+                n_rows_enabled = max(  # increase by at least 1
+                    int(n_rows_enabled * 1.1), n_rows_enabled + 1)
             else:  # raise in case n_rows_enabled is not updated
                 raise AssertionError(
                     "No valid update rule for number of enabled synapse rows! "
