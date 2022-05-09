@@ -193,7 +193,7 @@ class CalibrateICCMADC(madc_base.Calibration):
         # smaller than the target, then enable division.
         builder = sta.PlaybackProgramBuilder()
         builder = self.configure_parameters(
-            builder, parameters=63 + helpers.capmem_noise(
+            builder, parameters=200 + helpers.capmem_noise(
                 size=self.n_instances))
         maximum_timeconstant = self.measure_results(connection, builder)
         enable_division = maximum_timeconstant < self.target
