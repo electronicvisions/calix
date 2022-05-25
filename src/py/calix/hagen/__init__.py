@@ -14,7 +14,7 @@ from calix import constants
 
 
 @dataclass
-class HagenCalibrationResult:
+class HagenCalibrationResult(base.CalibrationResult):
     """
     Data class containing results of cadc, neuron and synapse driver
     calibration, all what is necessary for operation in hagen mode.

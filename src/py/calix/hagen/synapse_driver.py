@@ -6,7 +6,7 @@ dynamic range, and calibrating the comparator offsets such that
 different drivers yield the same amplitudes.
 """
 
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional, Dict, Union
 from dataclasses import dataclass
 import copy
 import numpy as np
@@ -19,7 +19,7 @@ from calix import constants
 
 
 @dataclass
-class SynapseDriverCalibResult:
+class SynapseDriverCalibResult(base.CalibrationResult):
     """
     Result object of a synapse driver calibration.
 
@@ -32,14 +32,12 @@ class SynapseDriverCalibResult:
         halco.SynapseDriverOnDLS, hal.SynapseDriverConfig]
     success: Dict[halco.SynapseDriverOnDLS, bool]
 
-    def apply(self, builder: sta.PlaybackProgramBuilder
-              ) -> sta.PlaybackProgramBuilder:
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
         """
         Apply the calibration result in the given builder.
 
-        :param builder: Builder to append instructions to.
-
-        :return: Builder with instructions appended.
+        :param builder: Builder or dumper to append instructions to.
         """
 
         builder = preconfigure_capmem(builder)
@@ -48,8 +46,6 @@ class SynapseDriverCalibResult:
 
         for coord, config in self.synapse_driver_configs.items():
             builder.write(coord, config)
-
-        return builder
 
 
 @dataclass

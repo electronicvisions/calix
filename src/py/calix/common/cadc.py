@@ -2,7 +2,7 @@
 Calibrates all CADC channels on Hicann-X for a given dynamic range.
 """
 
-from typing import Optional
+from typing import Optional, Union
 import os
 from dataclasses import dataclass
 import numpy as np
@@ -14,7 +14,7 @@ from calix import constants
 
 
 @dataclass
-class CADCCalibResult:
+class CADCCalibResult(base.CalibrationResult):
     """
     Result object for the CADC calibration.
 
@@ -36,19 +36,16 @@ class CADCCalibResult:
         halco.CADCChannelConfigOnDLS.size, dtype=int)
     success: Optional[np.ndarray] = None
 
-    def apply(
-            self,
-            builder: sta.PlaybackProgramBuilder
-    ) -> sta.PlaybackProgramBuilder:
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
         """
         Apply the calibration into the given builder.
 
         Applying configures and enables the CADC so that it is
         ready for usage, just like after running the calibration.
 
-        :param builder: Builder to append configuration instructions to.
-
-        :return: Builder with configuration instructions appended.
+        :param builder: Builder or dumper to append configuration
+            instructions to.
         """
 
         # global digital CADC block config
@@ -74,8 +71,6 @@ class CADCCalibResult:
             config = hal.CADCChannelConfig()
             config.offset = self.channel_offset[int(coord)]
             builder.write(coord, config)
-
-        return builder
 
 
 class RampOffsetCalibration(base.Calibration):

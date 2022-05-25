@@ -169,8 +169,8 @@ class HagenInputTest(ConnectionSetup):
         """
 
         # Apply calibration again
-        builder = self.__class__.calib_result.synapse_driver_result.apply(
-            builder=sta.PlaybackProgramBuilder())
+        builder = sta.PlaybackProgramBuilder()
+        self.__class__.calib_result.synapse_driver_result.apply(builder)
         base.run(self.connection, builder)
 
         # Assert calibration works again

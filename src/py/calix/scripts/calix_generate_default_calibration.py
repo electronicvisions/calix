@@ -9,7 +9,7 @@ import pickle
 import gzip
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Union, List
+from typing import List
 
 from dlens_vx_v2 import logger
 from dlens_vx_v2.hxcomm import ConnectionHandle, ManagedConnection
@@ -17,12 +17,8 @@ from dlens_vx_v2.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
     run, to_json, to_portablebinary
 
 import calix.hagen
-from calix.hagen import HagenCalibrationResult
 import calix.spiking
-from calix.spiking import SpikingCalibrationResult
-
-# TODO @JW: There should be a common base for these (Hagen, Spiking, ...)
-CalibrationResult = Union[HagenCalibrationResult, SpikingCalibrationResult]
+from calix.common.base import CalibrationResult
 
 
 log = logger.get("calix")

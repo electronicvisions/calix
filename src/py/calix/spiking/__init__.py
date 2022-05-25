@@ -1,14 +1,14 @@
-from typing import Optional
+from typing import Optional, Union
 from dataclasses import dataclass
 
-from calix.common import cadc, helpers
+from calix.common import base, cadc, helpers
 from calix.spiking import neuron
 from calix import constants
 from dlens_vx_v2 import sta, hxcomm
 
 
 @dataclass
-class SpikingCalibrationResult:
+class SpikingCalibrationResult(base.CalibrationResult):
     """
     Data class containing results of cadc and neuron
     calibration, all what is necessary for operation in spiking mode.
@@ -21,8 +21,8 @@ class SpikingCalibrationResult:
     cadc_result: cadc.CADCCalibResult
     neuron_result: neuron.NeuronCalibResult
 
-    def apply(self, builder: sta.PlaybackProgramBuilder
-              ) -> sta.PlaybackProgramBuilder:
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
         """
         Apply the calib to the chip.
 
@@ -30,14 +30,10 @@ class SpikingCalibrationResult:
         the stadls ExperimentInit().
 
         :param builder: Builder to append instructions to.
-
-        :return: Builder with configuration appended.
         """
 
         self.cadc_result.apply(builder)
         self.neuron_result.apply(builder)
-
-        return builder
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,

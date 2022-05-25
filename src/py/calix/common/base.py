@@ -39,12 +39,40 @@ ParameterRange = namedtuple("ParameterRange", ["lower", "upper"])
 
 
 @dataclass
-class CalibrationResult:
+class CalibrationResult(ABC):
     """
-    Data structure for calibration results.
+    Data structure for higher-level calibration results, that combine
+    multiple parameters into a logal unit.
+
+    Used as base type for hagen and spiking calibration results.
+    """
+
+    # The following function should take a union type exposed from
+    # haldls as an argument, cf. issue 3995.
+    # To be updated also in derived classes.
+    @abstractmethod
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
+        """
+        Apply the saved calib result to the chip.
+
+        This function should work with either a builder or a dumper.
+
+        :param builder: Builder or dumper to append instructions to.
+        """
+
+        raise NotImplementedError
+
+
+@dataclass
+class ParameterCalibrationResult:
+    """
+    Data structure for calibration results of single parameters.
+
     Contains an array of calibrated parameters and a mask
     indicating calibration success.
     """
+
     calibrated_parameters: np.ndarray
     success: np.ndarray
 
@@ -87,7 +115,7 @@ class Calibration(ABC):
         self.n_instances = n_instances
         self.errors = errors
         self.target: Union[numbers.Integral, np.ndarray, None] = None
-        self.result: Optional[CalibrationResult] = None
+        self.result: Optional[ParameterCalibrationResult] = None
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
@@ -159,7 +187,7 @@ class Calibration(ABC):
     def run(self, connection: hxcomm.ConnectionHandle,
             algorithm: Algorithm,
             target: Union[numbers.Integral, np.ndarray, None] = None
-            ) -> CalibrationResult:
+            ) -> ParameterCalibrationResult:
         """
         Use the provided algorithm to find optimal parameters.
 
@@ -177,7 +205,8 @@ class Calibration(ABC):
         :raises TypeError: If neither the target parameter or the attribute
             self.target are defined.
 
-        :return: CalibrationResult, containing the optimal parameters.
+        :return: ParameterCalibrationResult, containing the optimal
+            parameters.
         """
 
         # Call prelude, check if target exists
@@ -211,7 +240,8 @@ class Calibration(ABC):
             result = check_range_boundaries(
                 calibrated_parameters, self.parameter_range)
 
-        self.result = CalibrationResult(result.parameters, ~result.error_mask)
+        self.result = ParameterCalibrationResult(
+            result.parameters, ~result.error_mask)
 
         # Call postlude
         self.postlude(connection)

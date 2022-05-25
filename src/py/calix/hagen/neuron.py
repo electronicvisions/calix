@@ -17,7 +17,7 @@ from calix import constants
 
 
 @dataclass
-class NeuronCalibResult:
+class NeuronCalibResult(base.CalibrationResult):
     """
     Result object of a neuron calibration.
     Holds calibrated parameters for all neurons and their calibration success.
@@ -27,17 +27,16 @@ class NeuronCalibResult:
     cocos: dict()  # some coordinate, some container
     success: Dict[halco.AtomicNeuronOnDLS, bool]
 
-    def apply(self, builder: sta.PlaybackProgramBuilder) \
-            -> sta.PlaybackProgramBuilder:
+    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
+                                   sta.PlaybackProgramBuilderDumper]):
         """
         Apply the calibration in the given builder.
 
         Configures neurons in a "default-working" state with
         calibration applied, just like after the calibration.
 
-        :param builder: Builder to append configuration instructions to.
-
-        :return: Builder with configuration instructions appended.
+        :param builder: Builder or dumper to append configuration
+            instructions to.
         """
 
         for neuron_coord, neuron in self.neurons.items():
@@ -47,8 +46,6 @@ class NeuronCalibResult:
             builder.write(coord, container)
 
         builder = helpers.wait(builder, constants.capmem_level_off_time)
-
-        return builder
 
     @property
     def success_mask(self) -> np.ndarray:
