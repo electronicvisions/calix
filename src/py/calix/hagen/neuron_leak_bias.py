@@ -502,13 +502,14 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
 
         def find_exponential_start(samples: np.ndarray) -> Optional[int]:
             """
-            Find start of expoential rise.
+            Find start of exponential rise.
 
-            Find index where the expoential rise begins.
+            Find index where the exponential rise begins.
             :param samples: MADC trace to investigate.
 
             :return: Index of detected start of the exponential rise.
             """
+
             leak_potential = np.mean(samples['value'][:-10])
             reset_potential = np.min(samples['value'])
             diff = leak_potential - reset_potential
@@ -794,20 +795,35 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
 
         def find_exponential_start(samples: np.ndarray) -> int:
             """
-            Find start of expoential decay.
+            Find half amplitude of exponential decay.
 
-            Find index where the expoential decays begins.
+            Find index where the exponential decay has reached half
+            its amplitude.
+
+            In case this function fails to find the expected edge,
+            it returns 0.
+
             :param samples: MADC trace to investigate.
 
-            :return: Index of detected start of the exponential decay.
+            :return: Index of detected midpoint of the exponential decay.
             """
+
             leak_potential = np.mean(samples['value'][:-10])
             current_potential = np.max(samples['value'])
             diff = current_potential - leak_potential
 
-            # detect end of current period
+            # detect midpoint of exponential decay after current is disabled
             current = samples['value'] - leak_potential > diff / 2
-            return np.arange(len(current))[current][-1]
+            fit_start_index = np.arange(len(current))[current][-1]
+
+            # If fit start is close to the end of the trace, return
+            # first sample as start (which is already the guessed
+            # end time for the offset current).
+            # This may happen if the leak potential is very close
+            # to the potential with the current enabled.
+            if (len(current) - fit_start_index) < 100:
+                return 0
+            return fit_start_index
 
         neuron_fits = list()
         for neuron_id, neuron_data in enumerate(samples):
@@ -818,7 +834,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
             stop = int(int(self.madc_config.number_of_samples) * 0.95)
             neuron_samples = neuron_data[start:stop]
 
-            # only fit to exponential rise
+            # only fit to lower half of exponential decay
             start = find_exponential_start(neuron_samples)
             neuron_samples = neuron_samples[start:]
 
@@ -834,6 +850,12 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
             p_0['tau'] = min(max(0.1, p_0['tau']), 100)
+
+            if len(neuron_samples) < 100:
+                raise AssertionError(
+                    "Number of MADC samples to fit membrane time constant is "
+                    + f"too small: {len(neuron_samples)}.")
+
             try:
                 popt, _ = curve_fit(
                     fitfunc,

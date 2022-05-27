@@ -509,6 +509,12 @@ def calibrate(
         calib_result.i_syn_inh_gm = i_synin_gm if equalize_synin \
             else i_synin_gm[1]
 
+        # Set suitable membrane time constant for leak potential calib
+        calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
+            target_time_const=30 * pq.us)
+        calibration.run(
+            connection, algorithm=algorithms.NoisyBinarySearch())
+
     # set desired neuron configs, disable syn. input and spikes again
     builder = sta.PlaybackProgramBuilder()
     for neuron_coord, neuron_config in zip(
