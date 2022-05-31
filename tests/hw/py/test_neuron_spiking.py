@@ -1,10 +1,12 @@
 import unittest
 from typing import Optional
+
 import numpy as np
 import quantities as pq
-from dlens_vx_v2 import hal, halco, sta, hxcomm, logger, lola
 
-from calix.common import base, cadc, helpers
+from dlens_vx_v2 import hal, halco, sta, hxcomm, logger
+
+from calix.common import base, helpers
 from calix.hagen import neuron_helpers
 import calix.spiking
 
@@ -166,41 +168,13 @@ class TestNeuronCalib(ConnectionSetup):
 
     def test_00_calibration(self):
         """
-        Calibrates neurons to the given parameters and tests spike response.
-        Afterwards, refine calibration and test spike response again.
+        Load calibration and test spike response.
         """
 
-        cadc_result = cadc.calibrate(self.connection)
-        neuron_result = calix.spiking.neuron.calibrate(self.connection)
-        self.__class__.calib_result = calix.spiking.SpikingCalibrationResult(
-            cadc_result, neuron_result)
-
+        self.__class__.calib_result = self.apply_calibration("spiking")
         self.helper_test_spikes()
 
-        cadc.calibrate(self.connection)
-        calix.spiking.neuron.refine_potentials(
-            self.connection, self.__class__.calib_result.neuron_result,
-            leak=100, reset=90, threshold=140)
-
-        self.helper_test_spikes()
-
-    def test_01_reapply(self):
-        """
-        Test spike response after overwrite and re-application of stored calib.
-        """
-
-        builder = sta.PlaybackProgramBuilder()
-        for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
-            builder.write(neuron_coord, lola.AtomicNeuron())
-        base.run(self.connection, builder)
-
-        builder = sta.PlaybackProgramBuilder()
-        self.__class__.calib_result.apply(builder)
-        base.run(self.connection, builder)
-
-        self.helper_test_spikes()
-
-    def test_02_leak_over_threshold(self):
+    def test_01_leak_over_threshold(self):
         """
         Calibrate threshold for given firing rates. Use an equal rate
         for all neurons.
@@ -232,7 +206,7 @@ class TestNeuronCalib(ConnectionSetup):
         # Measure spikes with stimulation
         self.helper_test_spikes()
 
-    def test_03_lot_variable_targets(self):
+    def test_02_lot_variable_targets(self):
         """
         Calibrate threshold for different firing rates, and only part of
         the neurons. The other neurons are left untouched.
@@ -280,7 +254,7 @@ class TestNeuronCalib(ConnectionSetup):
             err_msg="Threshold parameter was changed for neurons that "
             + "were not to be calibrated.")
 
-    def test_04_without_synin_calib(self):
+    def test_03_without_synin_calib(self):
         """
         Calibrate with synaptic input strength uncalibrated.
         Test spike response afterwards.

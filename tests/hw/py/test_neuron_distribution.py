@@ -170,10 +170,10 @@ class TestNeuronDistribution(ConnectionSetup):
 
     def test_00_calibration(self):
         """
-        Calibrate neurons to default parameters.
+        Load neuron calibration with spiking default parameters.
         """
 
-        self.__class__.calib_result = calix.spiking.calibrate(self.connection)
+        self.__class__.calib_result = self.apply_calibration("spiking")
         self.ParameterTest.calib_result = self.__class__.calib_result
 
         self.__class__.neuron_configs = list()

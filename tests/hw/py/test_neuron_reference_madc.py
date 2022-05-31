@@ -5,11 +5,11 @@ the drift of the membrane potentials is not too large.
 """
 
 import unittest
+
 import numpy as np
 from dlens_vx_v2 import halco, sta, logger
 
 from calix.common import algorithms, base, helpers
-import calix.hagen
 from calix.hagen import neuron_synin
 from calix import constants
 
@@ -49,10 +49,10 @@ class TestReferenceCalib(ConnectionSetup):
 
     def test_00_calibration(self):
         """
-        Executes standard hagen-mode calibration.
+        Loads standard hagen-mode calibration.
         """
 
-        calix.hagen.calibrate(self.connection)
+        self.apply_calibration("hagen")
 
     def test_01_overwrite(self):
         """

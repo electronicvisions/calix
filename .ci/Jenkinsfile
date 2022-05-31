@@ -30,5 +30,6 @@ stage("finalization") {
 	runOnSlave(label: "frontend") {
 		archiveArtifacts 'calix/multiplication_synin.png'
 		archiveArtifacts 'calix/calib_eval.npz'
+		archiveArtifacts 'calix/calibs/'
 	}
 }

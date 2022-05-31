@@ -6,7 +6,9 @@ with the addresses.
 
 import unittest
 from typing import Optional
+
 import numpy as np
+
 from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
 from calix.common import base, helpers
@@ -121,10 +123,10 @@ class HagenInputTest(ConnectionSetup):
 
     def test_00_calibrate(self):
         """
-        Calibrate CADCs, neurons and synapse drivers.
+        Apply calibration of CADCs, neurons and synapse drivers.
         """
 
-        self.__class__.calib_result = calix.hagen.calibrate(self.connection)
+        self.__class__.calib_result = self.apply_calibration("hagen")
 
     def test_01_hagen_mode(self):
         """
@@ -171,40 +173,6 @@ class HagenInputTest(ConnectionSetup):
         # Apply calibration again
         builder = sta.PlaybackProgramBuilder()
         self.__class__.calib_result.synapse_driver_result.apply(builder)
-        base.run(self.connection, builder)
-
-        # Assert calibration works again
-        amplitudes = self.measure_amplitudes(self.connection)
-
-        for amplitude_half in (amplitudes[:32], amplitudes[32:]):
-            self.evaluate_amplitudes(amplitude_half)
-
-    def test_04_overwrite_all(self):
-        """
-        Overwrite all calibration, i.e. CADC, neurons and synapse driver.
-        Assert the tests fail.
-        """
-
-        builder, _ = sta.ExperimentInit().generate()
-        base.run(self.connection, builder)
-
-        # Measure results, assert calibration is gone
-        amplitudes = self.measure_amplitudes(self.connection)
-
-        for amplitude_half in (amplitudes[:32], amplitudes[32:]):
-            self.assertRaises(
-                AssertionError,
-                self.evaluate_amplitudes, amplitude_half)
-
-    def test_05_reapply_all(self):
-        """
-        Re-apply CADC, neuron and synapse driver calibration.
-        Assert the tests work again.
-        """
-
-        # Apply whole calibration again
-        builder = sta.PlaybackProgramBuilder()
-        self.__class__.calib_result.apply(builder)
         base.run(self.connection, builder)
 
         # Assert calibration works again

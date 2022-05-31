@@ -1,35 +1,38 @@
 """
-Test the script that generates and serializes default calibrations.
+Assert that all default calibrations are available from the
+apply_calibration method in connection_setup.
+
+In turn, this tests most parts of the script that generates
+and serializes default calibrations.
 """
 
 import unittest
 import os
-from pathlib import Path
 
 from dlens_vx_v2 import logger
-from calix.scripts import calix_generate_default_calibration
+
+from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")
 logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
-class TestGenerateDefaultCalibration(unittest.TestCase):
+class TestConnectionSetup(ConnectionSetup):
     """
-    Run the default calibrations, assert they run and the generated files
-    are not empty.
+    Request the default calibrations, assert they are available on
+    disk in all expected formats and are not empty.
     """
 
     def test_run_and_save_all(self):
-        calix_generate_default_calibration.run_and_save_all(Path("."))
-
         expected_prefixes = ["hagen", "hagen_synin", "spiking"]
         expected_suffixes = ["calix-native.pkl", "cocolist.pbin",
                              "cocolist.json.gz"]
 
         for expected_prefix in expected_prefixes:
+            self.apply_calibration(expected_prefix)
             for expected_suffix in expected_suffixes:
-                expected_filename = "_".join(
+                expected_filename = self.target_directory / "_".join(
                     [expected_prefix, expected_suffix])
 
                 self.assertGreater(

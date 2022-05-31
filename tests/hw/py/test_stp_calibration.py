@@ -1,9 +1,10 @@
 import unittest
+
 import numpy as np
+
 from dlens_vx_v2 import halco, sta, logger, hxcomm
 
-from calix.common import algorithms, base, cadc
-from calix.hagen import neuron
+from calix.common import algorithms
 import calix.hagen.synapse_driver as hagen_driver
 from calix.spiking import synapse_driver
 
@@ -50,9 +51,11 @@ class STPCalibrationTest(ConnectionSetup):
         return amplitudes
 
     def test_00_neuron_calibration(self):
-        cadc.calibrate(
-            self.connection, base.ParameterRange(100, 450))
-        neuron.calibrate(self.connection)
+        """
+        Load hagen-mode neuron calibration.
+        """
+
+        self.apply_calibration("hagen")
 
     def test_01_stp_calibration(self):
         # Configure things for baseline read

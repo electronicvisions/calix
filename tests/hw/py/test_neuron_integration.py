@@ -6,8 +6,10 @@ some test events afterwards. Asserts the observed amplitudes are right.
 from typing import Tuple, List, Optional
 import unittest
 import os
+
 import numpy as np
 import quantities as pq
+
 from dlens_vx_v2 import hal, sta, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
@@ -41,7 +43,7 @@ class TestNeuronCalib(ConnectionSetup):
             cls,
             connection: hxcomm.ConnectionHandle, *,
             excitatory: bool = True, n_events: int = 10,
-            wait_between_events: pq.quantity.Quantity = 1.5 * pq.us,
+            wait_between_events: pq.quantity.Quantity = 1.2 * pq.us,
             n_runs: int = 30) -> Tuple[np.ndarray, np.ndarray]:
         """
         Inject synaptic events and measure membrane potential of all neurons.
@@ -78,7 +80,7 @@ class TestNeuronCalib(ConnectionSetup):
             builder = neuron_helpers.reset_neurons(builder)
 
             # wait for a typical integration time, without any inputs arriving
-            builder = helpers.wait(builder, 30 * pq.us)
+            builder = helpers.wait(builder, 10 * pq.us)
 
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
             baselines.append(ticket)
@@ -303,13 +305,13 @@ class TestNeuronCalib(ConnectionSetup):
 
     def test_00_neuron_calibration(self):
         """
-        Executes calibration.
+        Loads calibration.
         """
 
-        self.__class__.cadc_result = cadc.calibrate(
-            self.connection, dynamic_range=base.ParameterRange(100, 450))
-        self.__class__.calibration_result = neuron.calibrate(
-            self.connection)
+        result = self.apply_calibration("hagen")
+
+        self.__class__.cadc_result = result.cadc_result
+        self.__class__.calibration_result = result.neuron_result
 
     def test_01_calibration_results(self):
         # Require 60% success rate of calibration
@@ -349,24 +351,6 @@ class TestNeuronCalib(ConnectionSetup):
     def test_04_overwrite_w_baseline(self):
         self.assertRaises(AssertionError,
                           self.evaluate_baseline_calib, self.connection)
-
-    def test_05_reapply_calibration(self):
-        """
-        Load the calibration, assert the test is ok again.
-        """
-
-        # Apply result of previous calibration
-        builder = sta.PlaybackProgramBuilder()
-        self.__class__.cadc_result.apply(builder)
-        self.__class__.calibration_result.apply(builder)
-        builder = helpers.wait(builder, constants.capmem_level_off_time)
-        base.run(self.connection, builder)
-
-        # Measure results, assert calibration is applied properly
-        self.evaluate_calibration(self.connection)
-
-    def test_06_reapply_w_baseline(self):
-        self.evaluate_baseline_calib(self.connection)
 
 
 if __name__ == "__main__":

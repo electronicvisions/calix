@@ -194,8 +194,11 @@ class MultiplyAccumulateTest(ConnectionSetup):
         plt.close()
 
     def test_00_calibrate(self):
-        self.__class__.calib_result = \
-            calix.hagen.calibrate_for_synin_integration(self.connection)
+        """
+        Loads calibration for integration on synaptic input lines.
+        """
+
+        self.__class__.calib_result = self.apply_calibration("hagen_synin")
 
     def test_01_multiplication(self, n_runs: int = 30):
         """
