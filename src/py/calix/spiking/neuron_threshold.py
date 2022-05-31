@@ -540,6 +540,10 @@ class ThresholdCalibMADC(madc_base.Calibration):
         config.enable_membrane_offset = True
         builder.write(neuron_coord, config)
 
+        # reset neuron - some may be stuck in reset or otherwise broken
+        # cf. issue 3996
+        builder.write(neuron_coord.toNeuronResetOnDLS(), hal.NeuronReset())
+
         return builder
 
     def neuron_config_disabled(self, neuron_coord: halco.NeuronConfigOnDLS
@@ -722,6 +726,10 @@ class ThresholdCalibCADC(base.Calibration):
 
         :return: Array of near-threshold CADC reads.
         """
+
+        # reset neurons - some may be stuck in reset or otherwise broken
+        # cf. issue 3996
+        builder = neuron_helpers.reset_neurons(builder)
 
         n_samples = 2000
         results = np.empty((n_samples, halco.NeuronConfigOnDLS.size))

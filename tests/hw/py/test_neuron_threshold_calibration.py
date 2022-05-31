@@ -116,7 +116,7 @@ class NeuronThresholdTest(ConnectionSetup):
             float(self.n_events * self.wait_time.rescale(pq.us)),
             float(self.wait_time.rescale(pq.us)))
         spikes_expected = np.histogram(spike_times, bins=time_bins)[0].astype(
-            np.bool)
+            bool)
 
         # sort recorded spikes into bins
         spikes_recorded = np.histogram(spikes, bins=time_bins)[0]
@@ -252,6 +252,8 @@ class NeuronThresholdTest(ConnectionSetup):
             check.prelude(self.connection)
             results = check.measure_results(
                 self.connection, builder=sta.PlaybackProgramBuilder())
+            self.__class__.log.TRACE(
+                f"MADC results at target {target}:", results)
 
             # assert at most 5% of neurons deviate by more than 20 MADC LSB
             # from median threshold of all neurons
@@ -260,6 +262,9 @@ class NeuronThresholdTest(ConnectionSetup):
             outliers = np.sum([
                 results > median + allowed_deviation,
                 results < median - allowed_deviation])
+
+            self.__class__.log.INFO(
+                f"{outliers} neurons deviated significantly from median.")
             self.assertLess(
                 outliers, halco.NeuronConfigOnDLS.size * 0.05,
                 "CADC-based threshold calib shows too many outliers when "
