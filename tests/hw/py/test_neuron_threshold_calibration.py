@@ -1,6 +1,8 @@
 import unittest
-import numpy as np
+
 import quantities as pq
+import numpy as np
+
 from dlens_vx_v2 import hal, halco, sta, logger, hxcomm
 
 from calix.common import algorithms, base, cadc, helpers
@@ -232,7 +234,7 @@ class NeuronThresholdTest(ConnectionSetup):
                 "MADC-based threshold calib shows too many outliers "
                 + f"at target {target} when checked via the CADC.")
 
-    def test_03_madc_based(self):
+    def test_03_cadc_based(self):
         """
         Calibrate the spike threshold via the CADC-based method,
         ThresholdCalibCADC. Use the MADC-based method to measure the

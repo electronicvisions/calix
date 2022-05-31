@@ -58,6 +58,12 @@ class STPCalibrationTest(ConnectionSetup):
         self.apply_calibration("hagen")
 
     def test_01_stp_calibration(self):
+        """
+        Measure amplitudes of synapse drivers before calibration of STP
+        offsets and afterwards. Assert the standrad deviations of
+        amplitudes within a quadrant decreases.
+        """
+
         # Configure things for baseline read
         calib = synapse_driver.STPOffsetCalibration()
         calib.prelude(self.connection)
