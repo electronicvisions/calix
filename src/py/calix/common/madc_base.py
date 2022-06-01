@@ -362,7 +362,9 @@ class Calibration(base.Calibration):
 
         # convert chip_time of samples to us
         madc_samples = np.sort(
-            program.madc_samples.to_numpy(), order="chip_time")
+            program.madc_samples.to_numpy(), order="chip_time",
+            kind="stable"  # almost sorted data expected, use tim-/radix sort
+        )
         madc_samples = madc_samples.astype(
             [("value", int), ("channel", int), ("fpga_time", int),
              ("chip_time", float)])
