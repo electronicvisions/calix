@@ -28,8 +28,11 @@ withCcache() {
 
 stage("finalization") {
 	runOnSlave(label: "frontend") {
-		archiveArtifacts 'calix/multiplication_synin.png'
-		archiveArtifacts 'calix/calib_eval.npz'
-		archiveArtifacts 'calix/calibs/'
+		archiveArtifacts artifacts: 'calix/multiplication_synin.png',
+		    allowEmptyArchive: true
+		archiveArtifacts artifacts: 'calix/calib_eval.npz',
+		    allowEmptyArchive: true
+		archiveArtifacts artifacts: 'calix/calibs/',
+		    allowEmptyArchive: true
 	}
 }
