@@ -31,12 +31,17 @@ class SpikingCalibOptions(base.CalibOptions):
 
     :ivar cadc_options: Further options for CADC calibration.
     :ivar neuron_options: Further options for neuron calibration.
+    :ivar refine_potentials: Switch whether after the neuron calibration,
+        the CADCs and neuron potentials are calibrated again. This mitigates
+        CapMem crosstalk effects. By default, refinement is only performed
+        if COBA mode is disabled.
     """
 
     cadc_options: cadc.CADCCalibOptions = field(
         default_factory=cadc.CADCCalibOptions)
     neuron_options: neuron.NeuronCalibOptions = field(
         default_factory=neuron.NeuronCalibOptions)
+    refine_potentials: Optional[bool] = None
 
 
 @dataclass
@@ -132,17 +137,28 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     neuron_result = neuron.calibrate(
         connection, target.neuron_target, options.neuron_options)
 
-    # re-calibrate CADCs
-    # The newly set CapMem cells during the neuron calibration introduce
-    # crosstalk on the CapMem, which means the previous CADC calibration
-    # is no longer precise. We repeat the calib after the neurons are
-    # configured to mitigate this crosstalk.
-    cadc_result = cadc.calibrate(
-        connection, target.cadc_target, options.cadc_options)
+    # Refine potentials only if COBA mode is not selected:
+    # The large voltage swings on v_mem during refinement with the
+    # default binary search algorithm may affect the synaptic input
+    # bias current (modulated by COBA) so much that a constant current
+    # onto the membrane is generated, shifting the membrane potential.
+    # Refinement may work for low synaptic input bias currents or
+    # using more benign algorithms, but generally, there may be problems.
+    # Also, precise potentials will not be as important in COBA mode.
+    if options.refine_potentials or (
+            options.refine_potentials is None
+            and target.neuron_target.e_coba_reversal is None):
+        # re-calibrate CADCs
+        # The newly set CapMem cells during the neuron calibration introduce
+        # crosstalk on the CapMem, which means the previous CADC calibration
+        # is no longer precise. We repeat the calib after the neurons are
+        # configured to mitigate this crosstalk.
+        cadc_result = cadc.calibrate(
+            connection, target.cadc_target, options.cadc_options)
 
-    # re-calibrate neuron potentials
-    neuron.refine_potentials(
-        connection, neuron_result, target.neuron_target)
+        # re-calibrate neuron potentials
+        neuron.refine_potentials(
+            connection, neuron_result, target.neuron_target)
 
     return SpikingCalibResult(
         target=target, options=options,

@@ -18,7 +18,7 @@ from dlens_vx_v3 import sta, halco, hal, hxcomm
 
 from calix.common import algorithms, base, synapse, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
-    neuron_potentials
+    neuron_potentials, neuron_synin_coba
 from calix import constants
 
 if TYPE_CHECKING:
@@ -64,6 +64,62 @@ class SyninParameters:
             self.equalize_synin = True
             self.i_synin_gm = np.array(
                 [self.i_synin_gm] * halco.SynapticInputOnNeuron.size)
+
+
+class COBAParameters:
+    """
+    Collection of parameters for COBA synaptic input calibration.
+
+    :ivar e_coba_reversal: COBA reversal potentials, adjusted in
+        shape as necessary.
+    :ivar e_coba_reference: COBA reference potentials, adjusted in
+        shape and filled with default values where necessary.
+    :ivar calibrate_coba: Decide whether conductance-based calibration
+        routines for the synaptic input are to be called.
+    """
+
+    def __init__(self, target: neuron.NeuronCalibTarget):
+        """
+        :param target: Neuron calibration target parameters.
+        """
+
+        self.e_coba_reversal = deepcopy(target.e_coba_reversal)
+        self.e_coba_reference = deepcopy(target.e_coba_reference)
+
+        if self.e_coba_reversal is None:
+            self.calibrate_coba = False
+            return
+
+        self.calibrate_coba = True
+
+        if self.e_coba_reference is None:
+            self.e_coba_reference = np.array([np.nan, np.nan])
+        else:
+            self.e_coba_reference = np.array(
+                self.e_coba_reference, dtype=float)
+        if self.e_coba_reference.shape == ():
+            self.e_coba_reference = np.tile(
+                self.e_coba_reference,
+                (halco.SynapticInputOnNeuron.size,
+                 halco.NeuronConfigOnDLS.size))
+        elif self.e_coba_reference.shape \
+                == (halco.SynapticInputOnNeuron.size,):
+            self.e_coba_reference = np.repeat(
+                self.e_coba_reference[:, np.newaxis],
+                halco.NeuronConfigOnDLS.size, axis=1)
+
+        # fill COBA reference potential with defaults where necessary
+        default_e_coba_reference = np.mean(
+            np.array(
+                [np.broadcast_to(target.leak, halco.NeuronConfigOnDLS.size),
+                 np.broadcast_to(target.threshold,
+                                 halco.NeuronConfigOnDLS.size)]),
+            axis=0)
+        default_e_coba_reference = np.repeat(
+            default_e_coba_reference[np.newaxis],
+            halco.SynapticInputOnNeuron.size, axis=0)
+        self.e_coba_reference[np.isnan(self.e_coba_reference)] = \
+            default_e_coba_reference[np.isnan(self.e_coba_reference)]
 
 
 def calibrate_tau_syn(
@@ -406,6 +462,85 @@ def calibrate_tau_mem(
         calib_result.neuron_configs[neuron_id] \
             .enable_leak_multiplication = \
             neuron_config.enable_leak_multiplication
+
+
+def calibrate_synin_coba(
+        connection: hxcomm.ConnectionHandle,
+        target: neuron.NeuronCalibTarget,
+        calib_result: neuron.NeuronCalibResult):
+    """
+    Calibrate synaptic input in COBA mode, i.e. calibrate the OTA
+    that modulates the CUBA OTA's bias.
+
+    :param connection: Connection to the chip to run on.
+    :param target: Target for neuron calibration.
+    :param calib_result: Neuron calibration result.
+    """
+
+    coba_parameters = COBAParameters(target)
+
+    # return early if COBA mode is not used for any neuron
+    if not coba_parameters.calibrate_coba:
+        return
+
+    # calibrate tau_mem to an integration-mode, but lower value
+    calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
+        target_time_const=30 * pq.us)
+    calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch())
+
+    # calibrate COBA excitatory synaptic input:
+    # enable excitatory COBA modulation for requested neurons
+    builder = sta.PlaybackProgramBuilder()
+    for neuron_coord, neuron_config in zip(
+            halco.iter_all(halco.NeuronConfigOnDLS),
+            calib_result.neuron_configs):
+        # In neuron_config, the excitatory COBA input is already active
+        # for the neurons where modulation was requested.
+        neuron_config = hal.NeuronConfig(neuron_config)  # copy
+        neuron_config.enable_synaptic_input_excitatory_high_resistance = \
+            False
+        neuron_config.enable_threshold_comparator = False
+        neuron_config.enable_synaptic_input_inhibitory = False
+        builder.write(neuron_coord, neuron_config)
+    base.run(connection, builder)
+
+    if np.any(coba_parameters.e_coba_reversal[0] < np.inf):
+        calibration = neuron_synin_coba.ExcCOBABiasCalib(
+            e_coba_reference=coba_parameters.e_coba_reference[0],
+            e_coba_reversal=coba_parameters.e_coba_reversal[0])
+        calib_result.i_syn_exc_coba = calibration.run(
+            connection, algorithm=algorithms.NoisyBinarySearch()
+        ).calibrated_parameters
+        calib_result.e_syn_exc_rev = calibration.coba_reference_calib \
+            .result.calibrated_parameters
+
+    # calibrate COBA inhibitory synaptic input:
+    # enable inhibitory COBA modulation for requested neurons
+    builder = sta.PlaybackProgramBuilder()
+    for neuron_coord, neuron_config in zip(
+            halco.iter_all(halco.NeuronConfigOnDLS),
+            calib_result.neuron_configs):
+        # In neuron_config, the inhibitory COBA input is already active
+        # for the neurons where modulation was requested.
+        neuron_config = hal.NeuronConfig(neuron_config)  # copy
+        neuron_config.enable_synaptic_input_inhibitory_high_resistance = \
+            False
+        neuron_config.enable_threshold_comparator = False
+        neuron_config.enable_synaptic_input_excitatory = False
+        builder.write(neuron_coord, neuron_config)
+    base.run(connection, builder)
+
+    if np.any(coba_parameters.e_coba_reversal[1] > -np.inf):
+        calibration = neuron_synin_coba.InhCOBABiasCalib(
+            e_coba_reference=coba_parameters.e_coba_reference[1],
+            e_coba_reversal=coba_parameters.e_coba_reversal[1])
+        calib_result.i_syn_inh_coba = calibration.run(
+            connection, algorithm=algorithms.NoisyBinarySearch()
+        ).calibrated_parameters
+        calib_result.e_syn_inh_rev = \
+            (calibration.coba_reference_calib.result
+             ).calibrated_parameters
 
 
 def disable_synin_and_threshold(

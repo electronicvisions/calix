@@ -50,6 +50,34 @@ class NeuronCalibTarget(base.CalibTarget):
         the result of calibration. Instead, the values are set up
         per neuron and used during the later parts, i.e. synaptic
         input reference calibration.
+    :ivar e_coba_reversal: COBA synaptic input reversal potential.
+        At this potential, the synaptic input strength will be zero.
+        The distance between COBA reversal and reference potential
+        determines the strength of the amplitude modulation.
+        Note that in biological context, the difference between reference
+        and reversal potentials is a scaling factor for the conductance
+        achieved by an input event.
+        Optional: If None, the synaptic input will use CUBA mode for all
+        neurons.
+        Given as an array (2,) for excitatory and inhibitory synaptic
+        input, respectively; or an array (2, 512) for individual targets
+        per neuron. Given in CADC units. The values may exceed the dynamic
+        range of leak and CADC. In this case, the calibration is performed
+        at a lower, linearly interpolated value.
+        You can also disable COBA modulation per neuron by setting np.inf
+        or -np.inf as reversal potentials for excitatory and inhibitory
+        synaptic inputs, respectively.
+    :ivar e_coba_reference: COBA synaptic input reference potential:
+        At this potential, the original CUBA synaptic input strength,
+        given via i_synin_gm, is not modified by COBA modulation.
+        Optional: If None or numpy.nan, the midpoint between leak and
+        threshold will be used.
+        Given as an array (2,) for excitatory and inhibitory synaptic
+        input, respectively; or an array (2, 512) for individual targets
+        per neuron. Given in CADC units. The values must be reachable by
+        the leak term, and the dynamic range of the CADC must allow for
+        measurement of synaptic input amplitudes on top of this potential.
+        We recommend choosing a value between the leak and threshold.
     :ivar membrane_capacitance: Selected membrane capacitance.
         The available range is 0 to approximately 2.2 pF, represented
         as 0 to 63 LSB.
@@ -71,6 +99,8 @@ class NeuronCalibTarget(base.CalibTarget):
     tau_mem: pq.quantity.Quantity = 10. * pq.us
     tau_syn: pq.quantity.Quantity = 10. * pq.us
     i_synin_gm: Union[int, np.ndarray] = 500
+    e_coba_reversal: Optional[np.ndarray] = None
+    e_coba_reference: Optional[np.ndarray] = None
     membrane_capacitance: Union[int, np.ndarray] = 63
     refractory_time: pq.quantity.Quantity = 2. * pq.us
     synapse_dac_bias: int = 600
@@ -83,6 +113,8 @@ class NeuronCalibTarget(base.CalibTarget):
         "tau_mem": base.ParameterRange(0.5 * pq.us, 60 * pq.us),
         "tau_syn": base.ParameterRange(0.3 * pq.us, 30 * pq.us),
         "i_synin_gm": base.ParameterRange(30, 800),
+        "e_coba_reversal": base.ParameterRange(-np.inf, np.inf),
+        "e_coba_reference": base.ParameterRange(60, 160),
         "membrane_capacitance": base.ParameterRange(
             hal.NeuronConfig.MembraneCapacitorSize.min,
             hal.NeuronConfig.MembraneCapacitorSize.max),
@@ -168,6 +200,12 @@ NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
     i_synin_gm=np.ones(
         halco.SynapticInputOnNeuron.size,
         dtype=int) * NeuronCalibTarget.i_synin_gm,
+    e_coba_reversal=np.repeat(
+        np.array([np.inf, -np.inf])[:, np.newaxis],
+        halco.AtomicNeuronOnDLS.size, axis=1),
+    e_coba_reference=np.ones((
+        halco.SynapticInputOnNeuron.size,
+        halco.AtomicNeuronOnDLS.size)) * np.nan,
     membrane_capacitance=np.ones(
         halco.AtomicNeuronOnDLS.size,
         dtype=int) * NeuronCalibTarget.membrane_capacitance,
@@ -210,6 +248,10 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_inh_coba: np.ndarray = np.zeros(
         halco.NeuronConfigOnDLS.size, dtype=int)
+    e_syn_exc_rev: np.ndarray = np.zeros(
+        halco.NeuronConfigOnDLS.size, dtype=int)
+    e_syn_inh_rev: np.ndarray = np.zeros(
+        halco.NeuronConfigOnDLS.size, dtype=int)
     syn_bias_dac: np.ndarray = np.empty(
         halco.NeuronConfigBlockOnDLS.size, dtype=int)
     clock_settings: Optional[refractory_period.Settings] = None
@@ -220,7 +262,8 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
             self, membrane_capacitance: Union[
                 hal.NeuronConfig.MembraneCapacitorSize, np.ndarray],
             tau_syn: pq.Quantity,
-            readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None):
+            readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
+            e_coba_reversal: Optional[np.ndarray] = None):
         """
         Fill neuron configs with the given membrane capacitances, but
         otherwise default values.
@@ -229,6 +272,14 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
         :param tau_syn: Synaptic input time constant. Used to
             decide whether the high resistance mode is enabled.
         :param readout_neuron: Neuron to enable readout for.
+        :param e_coba_reversal: COBA-mode reversal potential. Used to
+            decide whether to enable COBA mode on a per-neuron basis:
+            If the reversal potential is [+ infinite, - infinite], for
+            excitatory and inhibitory input respectively, CUBA mode will
+            be used.
+            The array can be of shape (2,) providing global values for
+            inhibitory/excitatory synapses or of shape (2, 512) setting
+            the reversal potential for each neuron individually.
         """
 
         def find_neuron_value(array: Union[numbers.Integral, np.ndarray],
@@ -251,6 +302,9 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
             except TypeError:
                 return array
 
+        if e_coba_reversal is None:
+            e_coba_reversal = np.array([np.inf, -np.inf])
+
         self.neuron_configs = []
         if np.ndim(tau_syn) > 0 \
                 and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
@@ -263,6 +317,10 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
         for neuron_id in range(halco.NeuronConfigOnDLS.size):
             config = neuron_helpers.neuron_config_default()
             config.enable_threshold_comparator = True
+            config.enable_synaptic_input_excitatory_coba_mode = \
+                find_neuron_value(e_coba_reversal[0], neuron_id) < np.inf
+            config.enable_synaptic_input_inhibitory_coba_mode = \
+                find_neuron_value(e_coba_reversal[1], neuron_id) > -np.inf
 
             if readout_neuron is not None:
                 if int(readout_neuron.toNeuronConfigOnDLS().toEnum()
@@ -316,8 +374,12 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
 
         atomic_neuron.excitatory_input.i_bias_coba = hal.CapMemCell.Value(
             self.i_syn_exc_coba[neuron_id])
+        atomic_neuron.excitatory_input.v_rev_coba = hal.CapMemCell.Value(
+            self.e_syn_exc_rev[neuron_id])
         atomic_neuron.inhibitory_input.i_bias_coba = hal.CapMemCell.Value(
             self.i_syn_inh_coba[neuron_id])
+        atomic_neuron.inhibitory_input.v_rev_coba = hal.CapMemCell.Value(
+            self.e_syn_inh_rev[neuron_id])
 
         return atomic_neuron
 
@@ -475,7 +537,8 @@ def calibrate(
     # create result object
     calib_result = _CalibResultInternal()
     calib_result.set_neuron_configs_default(
-        target.membrane_capacitance, target.tau_syn, options.readout_neuron)
+        target.membrane_capacitance, target.tau_syn, options.readout_neuron,
+        target.e_coba_reversal)
 
     # Calculate refractory time
     calib_result.clock_settings = refractory_period.calculate_settings(
@@ -513,6 +576,8 @@ def calibrate(
     # calibrate syn. input references at final biases
     neuron_calib_parts.calibrate_synin_references(
         connection, target_cadc_reads, calib_result)
+
+    neuron_calib_parts.calibrate_synin_coba(connection, target, calib_result)
 
     # leave state with synin-calib configuration
     neuron_calib_parts.finalize_synin_calib(connection, calib_result)

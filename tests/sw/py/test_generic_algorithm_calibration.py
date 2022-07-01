@@ -52,6 +52,10 @@ class GenericCalibTest(ConnectionSetup):
                 self.skipTest(f"{calibration_type.__name__} cannot be "
                               f"default-constructed: {error}")
                 raise
+            except ValueError as error:
+                self.skipTest(f"{calibration_type.__name__} cannot be "
+                              f"default-constructed: {error}")
+                raise
 
             # Restrict parameter range of calibration in order to save runtime
             # We don't expect sensible results anyway, we only want to

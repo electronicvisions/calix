@@ -36,5 +36,7 @@ stage("finalization") {
 		    allowEmptyArchive: true
 		archiveArtifacts artifacts: 'calix/calibs/',
 		    allowEmptyArchive: true
+		archiveArtifacts artifacts: 'calix/coba_modulation.png',
+		    allowEmptyArchive: true
 	}
 }

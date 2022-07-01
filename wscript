@@ -71,7 +71,7 @@ def build(bld):
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
         skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE,
-        test_timeout=1200  # 20 minutes
+        test_timeout=45 * 60
         )
 
     if bld.env.DOXYGEN:

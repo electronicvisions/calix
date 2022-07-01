@@ -134,7 +134,7 @@ Closure calibrationPipeline = { HxVersion version ->
 				onSlurmResource(partition: "cube",
 				                wafer: setup.waferId,
 				                "fpga-without-aout": setup.fpgaId,
-				                time: "30:00") {
+				                time: "50:00") {
 					if (setup.hxCubeId == setup.GERRIT_HXCUBE_ID) {
 						configureHxCubeBitfile()
 					}

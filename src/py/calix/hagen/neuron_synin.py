@@ -228,23 +228,37 @@ class SynBiasCalib(base.Calib):
     :ivar n_runs: Number of runs to average results from during measurement
         of amplitudes.
     :ivar wait_between_events: Wait time between two successive input events.
+    :ivar reliable_amplitudes: Maximum amplitude that is reliably observable
+        using the CADC. Used to find n_events during prelude.
+    :ivar recalibrate_reference: Decide whether the OTA's reference
+        potential is recalibrated during prelude and each time the bias
+        current is touched.
     """
 
-    def __init__(self, target_leak_read: np.ndarray,
+    def __init__(self, target_leak_read: Optional[np.ndarray] = None,
                  parameter_range: base.ParameterRange
                  = base.ParameterRange(hal.CapMemCell.Value.min,
                                        hal.CapMemCell.Value.max),
-                 target: Optional[np.ndarray] = None):
+                 target: Optional[np.ndarray] = None,
+                 recalibrate_reference: bool = True):
         """
         :param target_leak_read: Target CADC read for synaptic input
             reference potential calibration, which is called after each
-            change of the bias current.
+            change of the bias current. This parameter must be given if
+            recalibrate_reference is True (default), but can be left
+            None otherwise.
         :param parameter_range: Allowed range of synaptic input OTA
             bias current.
         :param target: Target amplitudes for events. If given, the
             measurement of target amplitudes in prelude is skipped.
             This can be useful when calibrating inhibitory and excitatory
             synaptic inputs to the same amplitude targets.
+        :param recalibrate_reference: Decide whether the OTA's reference
+            potential is recalibrated during prelude and each time the bias
+            current is touched.
+
+        :raises ValueError: If target_leak_read is None while
+            recalibrate_references is True.
         """
 
         super().__init__(
@@ -257,6 +271,13 @@ class SynBiasCalib(base.Calib):
         self.n_events: int = 15  # number of events to send during measuring
         self.n_runs: int = 5     # number of runs to average during measuring
         self.wait_between_events: pq.quantity.Quantity = 1 * pq.us
+
+        self.reliable_amplitudes = 60  # use amplitude lower than this
+        self.recalibrate_reference = recalibrate_reference
+        if self.recalibrate_reference and target_leak_read is None:
+            raise ValueError(
+                "target_leak_read must be given if OTA's reference "
+                + "potentials are to be recalibrated.")
 
     @property
     @abstractmethod
@@ -333,27 +354,27 @@ class SynBiasCalib(base.Calib):
 
         if self.target is None:
             # Recalibrate synaptic input reference potential (once)
-            self.syn_ref_calib.run(
-                connection, algorithm=algorithms.NoisyBinarySearch())
+            if self.recalibrate_reference:
+                self.syn_ref_calib.run(
+                    connection, algorithm=algorithms.NoisyBinarySearch())
 
             # Measure current amplitudes, use median as target
-            reliable_amplitudes = 60  # use amplitude lower than this
             max_retries = 50  # adjust n_events at most that many times
 
             for _ in range(max_retries):
                 self.target = int(np.median(self.measure_amplitudes(
                     connection, builder=sta.PlaybackProgramBuilder(),
                     recalibrate_syn_ref=False)))
-                if self.target < reliable_amplitudes:
+                if self.target < self.reliable_amplitudes:
                     break
                 self.n_events = int(self.n_events * 0.8)
                 if self.n_events == 0:
                     raise exceptions.CalibNotSuccessful(
                         "A single event's amplitude exceeds "
                         + "the reliable range: "
-                        + f"{self.target} > {reliable_amplitudes}.")
+                        + f"{self.target} > {self.reliable_amplitudes}.")
 
-            if self.target > reliable_amplitudes:
+            if self.target > self.reliable_amplitudes:
                 raise exceptions.CalibNotSuccessful(
                     "Target neuron amplitudes are too high.")
 
@@ -386,7 +407,7 @@ class SynBiasCalib(base.Calib):
 
     def measure_amplitudes(self, connection: hxcomm.ConnectionHandle,
                            builder: sta.PlaybackProgramBuilder,
-                           recalibrate_syn_ref: bool = True
+                           recalibrate_syn_ref: Optional[bool] = None
                            ) -> np.ndarray:
         """
         Send stimuli to all neurons using a few rows of synapses (as
@@ -408,7 +429,8 @@ class SynBiasCalib(base.Calib):
         """
 
         # Recalibrate synaptic input reference potential
-        if recalibrate_syn_ref:
+        if recalibrate_syn_ref or \
+                (recalibrate_syn_ref is None and self.recalibrate_reference):
             self.syn_ref_calib.run(
                 connection, algorithm=algorithms.NoisyBinarySearch())
 
@@ -481,7 +503,7 @@ class SynBiasCalib(base.Calib):
         Calls the measure_amplitudes function using the default
         setting to recalibrate the synaptic reference potentials before
         measuring. This function only exists to keep the same arguments as in
-        the base calibration class.
+        the base calib class.
 
         :param connection: Connection to the chip to run on.
         :param builder: Builder to append stimulate/read instructions, then
