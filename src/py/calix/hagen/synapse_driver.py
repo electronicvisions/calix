@@ -669,7 +669,7 @@ class HagenDACOffsetCalibration(base.Calibration):
 
         maximum_amplitudes = self.measure_results(connection, builder)
         self.log.DEBUG("Maximum amplitudes per driver:",
-                       self.maximum_amplitudes)
+                       maximum_amplitudes)
 
         # restore previous i_ramp and test activation
         builder = sta.PlaybackProgramBuilder()
