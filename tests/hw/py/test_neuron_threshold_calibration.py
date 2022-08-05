@@ -165,9 +165,10 @@ class NeuronThresholdTest(ConnectionSetup):
         # buffer program for a bit
         builder = helpers.wait(builder, 1000 * pq.us)
 
-        # reset all timers
-        builder.write(halco.TimerOnDLS(), hal.Timer())
+        # reset all timers, systime sync
         builder.write(halco.SystimeSyncOnFPGA(), hal.SystimeSync())
+        builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.systime)
+        builder.write(halco.TimerOnDLS(), hal.Timer())
 
         # enable recording of spikes
         config = hal.EventRecordingConfig()

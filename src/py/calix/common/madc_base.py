@@ -232,8 +232,10 @@ class Calibration(base.Calibration):
         builder.write(halco.EventRecordingConfigOnFPGA(), config)
 
         # initial wait, systime sync
-        initial_wait = 1000 * pq.us
         builder.write(halco.SystimeSyncOnFPGA(), hal.SystimeSync())
+        builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.systime)
+
+        initial_wait = 1000 * pq.us
         builder = helpers.wait(builder, initial_wait)
 
         switching_time_tickets = list()
