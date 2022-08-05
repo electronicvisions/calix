@@ -5,12 +5,15 @@ Provides an abstract base class for calibrations utilizing the MADC.
 from abc import abstractmethod, ABC
 from typing import Optional, List, Tuple
 import os
+
 import numpy as np
 import quantities as pq
 import matplotlib.pyplot as plt
+
 from dlens_vx_v3 import hal, sta, halco, hxcomm
 
 from calix.common import base, exceptions, helpers
+from calix import constants
 
 
 class Recorder(ABC):
@@ -38,7 +41,7 @@ class Recorder(ABC):
     :ivar _wait_before_stimulation: Time to wait after triggering
         MADC sampling before stimulation. Marked private since analyzing
         the trace is typically not robust against changing this number.
-    :ivar _dead_time: Time to wait before triggering the MADC
+    :ivar dead_time: Time to wait before triggering the MADC
         sampling after the previous sampling period ended. Within
         this time, the neuron connections are changed. A minimum of 1 us
         is recommended.
@@ -51,6 +54,11 @@ class Recorder(ABC):
     :ivar madc_config: Static configuration of the MADC. Written during
         prepare_recording() and used to obtain the sample rate. The number
         of samples is calculated automatically based on the sampling_time.
+    :ivar invalid_samples_time: Timeframe in the beginning of a
+        trace that is considered invalid. The MADC will start recording
+        samples, but only after this time has elapsed, the sampling_time
+        starts and samples are returned. This works around a bug, see
+        issue 4008 for details.
     """
 
     def __init__(self):
@@ -60,7 +68,8 @@ class Recorder(ABC):
         self.sampling_time = 40 * pq.us
         self.wait_between_neurons = 10 * self.sampling_time
         self._wait_before_stimulation = 2 * pq.us
-        self._dead_time = 1 * pq.us
+        self.dead_time = 1 * pq.us
+        self.invalid_samples_time = 8 * pq.us  # see issue 4008
 
         # Assume MADC input frequency to be unchanged after sta.ExperimentInit:
         # This should be replaced by looking it up from a chip object,
@@ -101,11 +110,13 @@ class Recorder(ABC):
                       hal.CapMemCell(400))
         builder.write(halco.CapMemCellOnDLS.readout_sc_amp_v_ref,
                       hal.CapMemCell(400))
+        helpers.wait(builder, constants.capmem_level_off_time)
 
         # static MADC config
         self.madc_config.number_of_samples = int(
             self.madc_config.calculate_sample_rate(self.madc_input_frequency)
-            * self.sampling_time.rescale(pq.s))
+            * (self.sampling_time.rescale(pq.s)
+               + self.invalid_samples_time.rescale(pq.s)))
         builder.write(halco.MADCConfigOnDLS(), self.madc_config)
 
         # run program
@@ -177,7 +188,7 @@ class Recorder(ABC):
     def build_measurement_program(
             self, builder: sta.PlaybackProgramBuilder) -> Tuple[
                 sta.PlaybackProgramBuilder, List[
-                    sta.ContainerTicket_EventRecordingConfig]]:
+                    sta.ContainerTicket_NullPayloadReadable]]:
         """
         Builds a program to measure an arbitrary MADC trace for each
         neuron.
@@ -185,13 +196,15 @@ class Recorder(ABC):
         One neuron after another is connected to the MADC,
         the stimulate function is called and samples are recorded.
         The timing of each neuron is recorded, tickets containing the
-        time of stimulation are returned along with the builder.
+        start and stop of the recording time are returned along with
+        the builder.
 
         :param builder: Builder to append instructions to.
 
         :return: Tuple containing:
             * Builder with instructions appended.
-            * List of read tickets just before stimulating each neuron.
+            * List of read tickets marking start and end of the
+              recording of each neuron.
         """
 
         # wake up MADC
@@ -255,51 +268,63 @@ class Recorder(ABC):
             config.enable_buffer_to_pad[
                 halco.SourceMultiplexerOnReadoutSourceSelection(0)] = True
             builder.write(halco.ReadoutSourceSelectionOnDLS(), config)
+            builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
             # trigger MADC sampling
-            current_time = initial_wait + self._dead_time \
+            current_time = initial_wait + self.dead_time \
                 + self.wait_between_neurons * int(neuron_coord.toEnum())
             builder.block_until(
                 halco.TimerOnDLS(),
                 int(current_time.rescale(pq.us)
                     * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
-            madc_control.wake_up = False
+            madc_control = hal.MADCControl()
+            madc_control.enable_power_down_after_sampling = \
+                int(neuron_coord.toEnum()) == halco.NeuronConfigOnDLS.max
             madc_control.start_recording = True
+            madc_control.wake_up = False
+            madc_control.enable_pre_amplifier = True
             builder.write(halco.MADCControlOnDLS(), madc_control)
-
-            # read something to get time of relevant samples
-            switching_time_tickets.append(builder.read(
-                halco.EventRecordingConfigOnFPGA()))
 
             # let MADC return to READY once given number of samples is acquired
             # We need to disable the `start_recording` setting quickly, since
             # the MADC will trigger multiple times if any of the following
             # waits would be larger than the sampling time.
             madc_control.start_recording = False
-            if int(neuron_coord.toEnum()) == halco.NeuronConfigOnDLS.max:
-                # turn off MADC after last neuron is measured
-                madc_control.enable_power_down_after_sampling = True
             builder.write(halco.MADCControlOnDLS(), madc_control)
 
+            # read something once valid samples are returned (to get time)
+            current_time += self.invalid_samples_time
+            builder.block_until(
+                halco.TimerOnDLS(),
+                int(current_time.rescale(pq.us)
+                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+            switching_time_tickets.append(builder.read(
+                halco.NullPayloadReadableOnFPGA()))
+
             # wait before stimulation
-            stimulation_time = initial_wait + self._dead_time \
-                + self._wait_before_stimulation + self.wait_between_neurons \
-                * int(neuron_coord.toEnum())
-            stimulation_time = hal.Timer.Value(int(
-                stimulation_time.rescale(pq.us)
-                * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
-            builder.block_until(halco.TimerOnDLS(), stimulation_time)
+            current_time += self._wait_before_stimulation
+            builder.block_until(
+                halco.TimerOnDLS(),
+                int((current_time).rescale(pq.us)
+                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
             # stimulate
-            builder = self.stimulate(builder, neuron_coord, stimulation_time)
+            builder = self.stimulate(
+                builder, neuron_coord,
+                int((current_time).rescale(pq.us)
+                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
             # wait for sampling to finish
-            final_time = initial_wait + self.wait_between_neurons \
+            current_time = initial_wait + self.wait_between_neurons \
                 * (int(neuron_coord.toEnum()) + 1)
             builder.block_until(
                 halco.TimerOnDLS(),
-                int(final_time.rescale(pq.us)
+                int(current_time.rescale(pq.us)
                     * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+
+            # read something once valid samples end (to get time)
+            switching_time_tickets.append(builder.read(
+                halco.NullPayloadReadableOnFPGA()))
 
             # disconnect neuron
             builder.write(
@@ -335,11 +360,10 @@ class Recorder(ABC):
         program = base.run(connection, builder)
 
         # convert switching times to us
-        for neuron_id in range(halco.NeuronConfigOnDLS.size):
-            switching_times[neuron_id] = (
-                float(switching_times[neuron_id].fpga_time)
+        for index, _ in enumerate(switching_times):
+            switching_times[index] = (
+                float(switching_times[index].fpga_time)
                 / int(hal.Timer.Value.fpga_clock_cycles_per_us))
-        switching_times.append(np.inf)  # last neuron's samples
 
         # convert chip_time of samples to us
         madc_samples = np.sort(
@@ -357,13 +381,14 @@ class Recorder(ABC):
             madc_samples["chip_time"], switching_times)
         neuron_samples = []
         for neuron_id in range(halco.NeuronConfigOnDLS.size):
-            neuron_slice = slice(switching_indices[neuron_id],
-                                 switching_indices[neuron_id + 1])
+            neuron_slice = slice(switching_indices[neuron_id * 2],
+                                 switching_indices[neuron_id * 2 + 1])
             neuron_samples.append(madc_samples[neuron_slice])
 
         # raise error if less than 95% of requested samples are received
-        n_samples_required = int(int(
-            self.madc_config.number_of_samples) * 0.95)
+        n_samples_required = int(
+            self.madc_config.calculate_sample_rate(self.madc_input_frequency)
+            * self.sampling_time.rescale(pq.s) * 0.95)
         n_samples_received = np.array([len(res) for res in neuron_samples])
         if np.any(n_samples_received < n_samples_required):
             raise exceptions.TooFewSamplesError(
@@ -519,18 +544,11 @@ class MembraneRecorder(Recorder):
             record_traces() function.
         """
 
-        # restrict plotting range:
-        # The first samples may be invalid, and the last samples
-        # may already contain samples of the next observed neuron,
-        # since the switching times between neurons are not recorded
-        # accurately within Calibration.record_traces().
-        plot_slice = slice(10, -100)
-
         for neuron_id, neuron_samples in enumerate(samples):
             plt.figure()
-            plt.plot(neuron_samples[plot_slice]["chip_time"]
-                     - neuron_samples[plot_slice]["chip_time"][0],
-                     neuron_samples[plot_slice]["value"])
+            plt.plot(neuron_samples["chip_time"]
+                     - neuron_samples["chip_time"][0],
+                     neuron_samples["value"])
             plt.savefig(f"trace_neuron{neuron_id}.png", dpi=300)
             plt.close()
 
