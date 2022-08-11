@@ -80,6 +80,9 @@ class GenericCalibTest(ConnectionSetup):
             except exceptions.CalibNotSuccessful as error:
                 self.skipTest("Calib was not successful, which is "
                               + "to be expected in this test.")
+            except exceptions.HardwareError as error:
+                self.skipTest("Hardware behaved unexpectedly, which is "
+                              + "to be expected in this test.")
             except exceptions.CalibNotSupported as error:
                 self.skipTest(
                     f"Calib is deliberately not supported: {error}")

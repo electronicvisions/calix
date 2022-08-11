@@ -43,3 +43,9 @@ class ExcessiveNoiseError(AlgorithmError):
     of the dynamic range of the calibration within the first step,
     we raise this error as applying this amount of noise is not sensible.
     """
+
+
+class HardwareError(Exception):
+    """
+    Raised in case the hardware behaves unexpectedly.
+    """

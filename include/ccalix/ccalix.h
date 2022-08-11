@@ -1,6 +1,7 @@
 #include "ccalix/genpybind.h"
 #include "ccalix/hagen/multiplication.h"
 #include "ccalix/helpers.h"
+#include "ccalix/spiking/correlation_measurement.h"
 
 GENPYBIND_MANUAL({
 	parent.attr("__variant__") = "pybind11";
