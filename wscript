@@ -14,6 +14,7 @@ def options(opt):
     opt.load('pytest')
     opt.load('pylint')
     opt.load('pycodestyle')
+    opt.load('doxygen')
 
 
 def configure(cfg):
@@ -22,6 +23,7 @@ def configure(cfg):
     cfg.load('pytest')
     cfg.load('pylint')
     cfg.load('pycodestyle')
+    cfg.load('doxygen')
 
 
 def build(bld):
@@ -70,6 +72,20 @@ def build(bld):
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
         skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE,
         test_timeout=1200  # 20 minutes
+        )
+
+    if bld.env.DOXYGEN:
+        bld(
+            target = 'doxygen_calix',
+            features = 'doxygen',
+            doxyfile = bld.root.make_node(join(get_toplevel_path(), "code-format", "doxyfile")),
+            doxy_inputs = 'src/py/calix',
+            install_path = 'doc/calix',
+            pars = {
+                "PROJECT_NAME": "\"calix\"",
+                "OUTPUT_DIRECTORY": join(get_toplevel_path(), "build", "calix", "doc"),
+                "PYTHON_DOCSTRING": "NO",
+            },
         )
 
     bld.add_post_fun(summary)
