@@ -714,10 +714,10 @@ def reconfigure_synaptic_input(
 
     # inspect given biases more closely to decide per-neuron
     # which synaptic inputs to reconfigure
-    if isinstance(excitatory_biases, int):
+    if excitatory_biases is not None and np.ndim(excitatory_biases) == 0:
         excitatory_biases = np.ones(
             halco.NeuronConfigOnDLS.size, dtype=int) * excitatory_biases
-    if isinstance(inhibitory_biases, int):
+    if inhibitory_biases is not None and np.ndim(inhibitory_biases) == 0:
         inhibitory_biases = np.ones(
             halco.NeuronConfigOnDLS.size, dtype=int) * inhibitory_biases
 

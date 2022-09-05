@@ -417,6 +417,7 @@ def calibrate(
         equalize_synin = False
     else:
         equalize_synin = True
+        i_synin_gm = np.array([i_synin_gm] * halco.SynapticInputOnNeuron.size)
 
     if calibrate_synin:
         # ensure syn. input high resistance mode is off
@@ -462,15 +463,14 @@ def calibrate(
         target_cadc_reads = neuron_helpers.cadc_read_neuron_potentials(
             connection)
         neuron_helpers.reconfigure_synaptic_input(
-            connection, excitatory_biases=i_synin_gm
-            if equalize_synin else i_synin_gm[0])
+            connection, excitatory_biases=i_synin_gm[0])
 
         exc_synin_calibration = neuron_synin.ExcSynBiasCalibration(
             target_leak_read=target_cadc_reads,
             parameter_range=base.ParameterRange(hal.CapMemCell.Value.min, min(
                 # the upper boundary is restricted to avoid starting in a
                 # very noisy environment, which may not work for low targets.
-                (i_synin_gm * 1.8) + 100, hal.CapMemCell.Value.max)))
+                (i_synin_gm[0] * 1.8) + 100, hal.CapMemCell.Value.max)))
 
         result = exc_synin_calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch())
@@ -481,14 +481,14 @@ def calibrate(
         # Disable exc. synaptic input, enable and calibrate inhibitory
         neuron_helpers.reconfigure_synaptic_input(
             connection, excitatory_biases=0,
-            inhibitory_biases=i_synin_gm if equalize_synin else i_synin_gm[1])
+            inhibitory_biases=i_synin_gm[1])
 
         calibration = neuron_synin.InhSynBiasCalibration(
             target_leak_read=target_cadc_reads,
             parameter_range=base.ParameterRange(0, min(
                 # the upper boundary is restricted to avoid starting in a
                 # very noisy environment, which may not work for low targets.
-                (i_synin_gm * 1.8) + 100, hal.CapMemCell.Value.max)),
+                (i_synin_gm[1] * 1.8) + 100, hal.CapMemCell.Value.max)),
             target=exc_synin_calibration.target if equalize_synin else None)
         if equalize_synin:
             # match number of input events to the one found during the
@@ -511,10 +511,8 @@ def calibrate(
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         base.run(connection, builder)
     else:
-        calib_result.i_syn_exc_gm = i_synin_gm if equalize_synin \
-            else i_synin_gm[0]
-        calib_result.i_syn_inh_gm = i_synin_gm if equalize_synin \
-            else i_synin_gm[1]
+        calib_result.i_syn_exc_gm = i_synin_gm[0]
+        calib_result.i_syn_inh_gm = i_synin_gm[1]
 
         # Set suitable membrane time constant for leak potential calib
         calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
