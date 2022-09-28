@@ -727,22 +727,25 @@ class ThresholdCalibCADC(base.Calib):
         :return: Array of near-threshold CADC reads.
         """
 
-        # reset neurons - some may be stuck in reset or otherwise broken
-        # cf. issue 3996
-        builder = neuron_helpers.reset_neurons(builder)
+        n_samples_per_batch = 1000
+        n_batches = 3
+        results = np.empty((n_batches, n_samples_per_batch,
+                            halco.NeuronConfigOnDLS.size))
+        for batch_id in range(n_batches):
+            # reset neurons - some may be stuck in reset or otherwise broken
+            # cf. issue 3996
+            builder = neuron_helpers.reset_neurons(builder)
 
-        n_samples = 2000
-        results = np.empty((n_samples, halco.NeuronConfigOnDLS.size))
-        results[:, :halco.SynapseOnSynapseRow.size] = \
-            neuron_helpers.cadc_read_neurons_repetitive(
-                connection, builder, synram=halco.SynramOnDLS.top,
-                n_reads=n_samples, wait_time=0 * pq.us)
-        results[:, halco.SynapseOnSynapseRow.size:] = \
-            neuron_helpers.cadc_read_neurons_repetitive(
-                connection, builder, synram=halco.SynramOnDLS.bottom,
-                n_reads=n_samples, wait_time=0 * pq.us)
+            results[batch_id, :, :halco.SynapseOnSynapseRow.size] = \
+                neuron_helpers.cadc_read_neurons_repetitive(
+                    connection, builder, synram=halco.SynramOnDLS.top,
+                    n_reads=n_samples_per_batch, wait_time=0 * pq.us)
+            results[batch_id, :, halco.SynapseOnSynapseRow.size:] = \
+                neuron_helpers.cadc_read_neurons_repetitive(
+                    connection, builder, synram=halco.SynramOnDLS.bottom,
+                    n_reads=n_samples_per_batch, wait_time=0 * pq.us)
 
-        return np.max(results, axis=0)
+        return np.max(results, axis=(0, 1))
 
     def postlude(self, connection: hxcomm.ConnectionHandle):
         """
