@@ -307,7 +307,7 @@ class Multiplication:
         :return: Spike packet to chip.
         """
 
-        label = hal.SpikeLabel()
+        label = halco.SpikeLabel()
 
         # select target PADI bus
         label.spl1_address = int(
@@ -426,7 +426,7 @@ class Multiplication:
                     vector_builder.write(
                         halco.SpikePack1ToChipOnDLS(),
                         self.prepare_event(
-                            hal.SynapseLabelValue(entry),
+                            halco.SynapseLabel(entry),
                             halco.SynapseDriverOnSynapseDriverBlock(row // 2)))
 
                     # wait only if needed:
