@@ -286,7 +286,7 @@ class DACBiasCalibCADC(base.Calib):
         # The target amplitudes are quite high: The typical saturation
         # in hagen mode is not an issue here, since all synapses are
         # stimulated at once.
-        target_range = range(40, 60)
+        target_range = range(30, 40)
 
         n_rows_enabled = halco.SynapseRowOnSynram.size // 4
 
