@@ -5,11 +5,11 @@ import numpy as np
 
 from dlens_vx_v3 import hal, halco, sta, logger, hxcomm
 
+from connection_setup import ConnectionSetup
+
 from calix.common import algorithms, base, cadc, helpers
 from calix.hagen import neuron, neuron_potentials, neuron_helpers
 from calix.spiking import neuron_threshold
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")
@@ -60,7 +60,7 @@ class NeuronThresholdTest(ConnectionSetup):
 
         # Read neuron backend configs
         builder = sta.PlaybackProgramBuilder()
-        tickets = list()
+        tickets = []
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
             tickets.append(builder.read(coord))
         base.run(connection, builder)
@@ -196,7 +196,7 @@ class NeuronThresholdTest(ConnectionSetup):
 
         # run program
         program = base.run(self.connection, builder)
-        self.__class__.log.DEBUG("Got {0} spikes".format(len(program.spikes)))
+        self.__class__.log.DEBUG(f"Got {len(program.spikes)} spikes")
 
         self.analyze_spikes(program.spikes)
 

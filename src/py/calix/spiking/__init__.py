@@ -1,10 +1,11 @@
 from typing import Optional, Union
 from dataclasses import dataclass
 
+from dlens_vx_v3 import sta, hxcomm
+
 from calix.common import base, cadc, helpers
 from calix.spiking import neuron
 from calix import constants
-from dlens_vx_v3 import sta, hxcomm
 
 
 @dataclass
@@ -64,12 +65,12 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # calibrate CADCs
     if cadc_kwargs is None:
-        cadc_kwargs = dict()
+        cadc_kwargs = {}
     cadc_result = cadc.calibrate(connection, **cadc_kwargs)
 
     # calibrate neurons
     if neuron_kwargs is None:
-        neuron_kwargs = dict()
+        neuron_kwargs = {}
     neuron_result = neuron.calibrate(connection, **neuron_kwargs)
 
     # re-calibrate CADCs

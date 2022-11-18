@@ -113,9 +113,8 @@ class LeakPotentialCalibration(base.Calibration):
             "calix.hagen.neuron_potentials"
             + ".LeakPotentialCalibration.postlude"
         ).INFO("Calibrated v_leak, CADC statistics: "
-               + "{0:5.2f} +- {1:4.2f}".format(
-                   np.mean(reads[self.result.success]),
-                   np.std(reads[self.result.success])))
+               + f"{np.mean(reads[self.result.success]):5.2f} +- "
+               + f"{np.std(reads[self.result.success]):4.2f}")
 
 
 class ResetPotentialCalibration(base.Calibration):
@@ -189,11 +188,11 @@ class ResetPotentialCalibration(base.Calibration):
 
         # Read the previous neuron backend configs
         builder = sta.PlaybackProgramBuilder()
-        backend_tickets = list()
+        backend_tickets = []
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
             backend_tickets.append(builder.read(coord))
 
-        common_backend_tickets = list()
+        common_backend_tickets = []
         for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
             common_backend_tickets.append(builder.read(coord))
 
@@ -229,11 +228,11 @@ class ResetPotentialCalibration(base.Calibration):
                     np.mean(neuron_reads, axis=0)
 
         # extract the previous neuron backend configs from tickets
-        self.backend_configs = list()
+        self.backend_configs = []
         for ticket in backend_tickets:
             self.backend_configs.append(ticket.get())
 
-        self.common_backend_configs = list()
+        self.common_backend_configs = []
         for ticket in common_backend_tickets:
             self.common_backend_configs.append(ticket.get())
 
@@ -269,7 +268,7 @@ class ResetPotentialCalibration(base.Calibration):
         :return: Membrane potentials of neurons during reset.
         """
 
-        tickets = list()
+        tickets = []
 
         for synram in halco.iter_all(halco.SynramOnDLS):
             # trigger neuron resets
@@ -304,9 +303,8 @@ class ResetPotentialCalibration(base.Calibration):
             "calix.hagen.neuron_potentials"
             + ".ResetPotentialCalibration.postlude"
         ).INFO("Calibrated v_reset, CADC statistics: "
-               + "{0:5.2f} +- {1:4.2f}".format(
-                   np.mean(results[self.result.success]),
-                   np.std(results[self.result.success])))
+               + f"{np.mean(results[self.result.success]):5.2f} +- "
+               + f"{np.std(results[self.result.success]):4.2f}")
 
         # Set up original neuron backend config again
         builder = sta.PlaybackProgramBuilder()

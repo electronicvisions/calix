@@ -47,7 +47,7 @@ def check_range_boundaries(parameters: np.ndarray,
 
     result = BoundaryCheckResult(
         parameters, error_mask=np.empty_like(parameters, dtype=bool),
-        messages=list())
+        messages=[])
 
     below_mask = parameters <= boundaries.lower
     result.parameters[below_mask] = boundaries.lower

@@ -216,7 +216,7 @@ class DACBiasCalibCADC(base.Calibration):
                 hal.CapMemCell.Value.min, hal.CapMemCell.Value.max),
             n_instances=halco.NeuronConfigBlockOnDLS.size,
             inverted=False)
-        self.original_neuron_config: List[hal.NeuronConfig] = list()
+        self.original_neuron_config: List[hal.NeuronConfig] = []
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
@@ -244,7 +244,7 @@ class DACBiasCalibCADC(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
 
         # read current neuron config
-        neuron_tickets = list()
+        neuron_tickets = []
         for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
             neuron_tickets.append(builder.read(neuron_coord))
 
@@ -278,7 +278,7 @@ class DACBiasCalibCADC(base.Calibration):
         base.run(connection, builder)
 
         # inspect reads
-        self.original_neuron_config = list()
+        self.original_neuron_config = []
         for ticket in neuron_tickets:
             self.original_neuron_config.append(ticket.get())
 
@@ -363,8 +363,8 @@ class DACBiasCalibCADC(base.Calibration):
             potential per quadrant.
         """
 
-        baseline_reads = list()
-        result_reads = list()
+        baseline_reads = []
+        result_reads = []
 
         for synram in halco.iter_all(halco.SynramOnDLS):
             # read baseline

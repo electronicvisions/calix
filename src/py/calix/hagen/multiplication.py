@@ -206,8 +206,8 @@ class Multiplication:
 
         # read current synapse driver and neuron config (to keep calibration
         # of synapse drivers)
-        syndrv_tickets = list()
-        neuron_tickets = list()
+        syndrv_tickets = []
+        neuron_tickets = []
         builder = sta.PlaybackProgramBuilder()
         for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
             syndrv_tickets.append(builder.read(
@@ -391,7 +391,7 @@ class Multiplication:
             * List of CADC sample row tickets, contianing results
         """
 
-        read_tickets = list()
+        read_tickets = []
         builder = sta.PlaybackProgramBuilder()
 
         for vector in vectors.copy():

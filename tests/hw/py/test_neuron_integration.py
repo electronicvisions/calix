@@ -12,11 +12,11 @@ import quantities as pq
 
 from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
 
+from connection_setup import ConnectionSetup
+
 from calix.common import base, cadc, cadc_helpers, helpers
 from calix.hagen import neuron, neuron_helpers
 from calix import constants
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")
@@ -65,8 +65,8 @@ class TestNeuronCalib(ConnectionSetup):
             dimension contains all neurons' results.
         """
 
-        baselines = list()
-        results = list()
+        baselines = []
+        results = []
 
         builder = sta.PlaybackProgramBuilder()
         row_mode = hal.SynapseDriverConfig.RowMode.excitatory if excitatory \
@@ -134,7 +134,7 @@ class TestNeuronCalib(ConnectionSetup):
         :return: List of strings (lines) that contain statistics.
         """
 
-        out = list()
+        out = []
         baselines = neuron_helpers.reshape_neuron_quadrants(baseline_data)
         results = np.array([neuron_helpers.reshape_neuron_quadrants(result)
                             for result in result_data])
@@ -184,6 +184,7 @@ class TestNeuronCalib(ConnectionSetup):
         """
 
         # log results with statistics by quadrant
+        # pylint: disable=consider-using-f-string
         self.log.DEBUG("Sent inputs with baseline {0}calibrated.".format(
             "un" if expected_baseline is None else ""))
 

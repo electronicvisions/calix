@@ -4,13 +4,13 @@ import numpy as np
 
 from dlens_vx_v3 import hal, halco, sta, logger, hxcomm
 
+from connection_setup import ConnectionSetup
+
 from calix.common import algorithms, base, cadc, synapse, helpers
 from calix.hagen import neuron_helpers
 import calix.hagen.synapse_driver as hagen_driver
 from calix.spiking import synapse_driver
 from calix import constants
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")
@@ -94,7 +94,7 @@ class STPCalibrationTest(ConnectionSetup):
         uncalibrated_amplitudes = self.measure_amplitudes(self.connection)
 
         block_results = [
-            list() for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
+            [] for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
         for coord, result in zip(
                 halco.iter_all(halco.SynapseDriverOnDLS),
                 uncalibrated_amplitudes):
@@ -114,7 +114,7 @@ class STPCalibrationTest(ConnectionSetup):
         calibrated_amplitudes = self.measure_amplitudes(self.connection)
 
         block_results = [
-            list() for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
+            [] for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
         for coord, result in zip(
                 halco.iter_all(halco.SynapseDriverOnDLS),
                 calibrated_amplitudes):

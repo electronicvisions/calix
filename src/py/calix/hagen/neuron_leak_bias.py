@@ -171,8 +171,8 @@ class MembraneTimeConstCalibCADC(base.Calibration):
         :return: Array of all neurons' CADC reads.
         """
 
-        read_tickets = list()
-        read_positions = list()
+        read_tickets = []
+        read_positions = []
 
         runs_in_builder = 0
         builder = sta.PlaybackProgramBuilder()
@@ -518,7 +518,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
             refractory = leak_potential - samples['value'] > diff / 2
             return np.arange(len(refractory))[refractory][-1]
 
-        neuron_fits = list()
+        neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
             # remove unreliable samples
             start = int(self._wait_before_stimulation.rescale(pq.s)
@@ -532,7 +532,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
             neuron_samples = neuron_samples[start:]
 
             # estimate start values for fit
-            p_0 = dict()
+            p_0 = {}
             p_0['offset'] = np.mean(neuron_samples["value"][-10:])
             p_0['scale'] = np.min(neuron_samples["value"]) - p_0['offset']
             index_tau = np.argmax(neuron_samples["value"]
@@ -832,7 +832,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
                 return 0
             return fit_start_index
 
-        neuron_fits = list()
+        neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
             # remove unreliable samples
             start = int(self._wait_before_stimulation.rescale(pq.s)
@@ -846,7 +846,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
             neuron_samples = neuron_samples[start:]
 
             # estimate start values for fit
-            p_0 = dict()
+            p_0 = {}
             p_0['offset'] = np.mean(neuron_samples["value"][-10:])
             p_0['scale'] = np.max(neuron_samples["value"]) - p_0['offset']
             index_tau = np.argmin(neuron_samples["value"]
@@ -1006,7 +1006,7 @@ class LeakBiasCalibration(base.Calibration):
             connection, builder)
 
         n_reads = 60
-        synram_results = list()
+        synram_results = []
         for synram in halco.iter_all(halco.SynramOnDLS):
             synram_results.append(
                 neuron_helpers.cadc_read_neurons_repetitive(
@@ -1082,9 +1082,8 @@ class LeakBiasCalibration(base.Calibration):
         # Print results
         log.INFO(
             "Calibrated i_bias_leak, obtained noise: "
-            + "{0:5.2f} +- {1:4.2f}".format(
-                np.mean(results[~high_mask]),
-                np.std(results[~high_mask])))
+            + f"{np.mean(results[~high_mask]):5.2f} +- "
+            + f"{np.std(results[~high_mask]):4.2f}")
 
         log.DEBUG("Leak bias currents:" + os.linesep
                   + f"{self.result.calibrated_parameters}")

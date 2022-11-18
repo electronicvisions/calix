@@ -91,7 +91,7 @@ class Calibration(base.Calibration):
         readout_ticket = builder.read(halco.ReadoutSourceSelectionOnDLS())
 
         # read current neuron config
-        neuron_tickets = list()
+        neuron_tickets = []
         for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
             neuron_tickets.append(builder.read(neuron_coord))
 
@@ -118,7 +118,7 @@ class Calibration(base.Calibration):
 
         # inspect reads
         self.original_readout_config = readout_ticket.get()
-        self.original_neuron_configs = list()
+        self.original_neuron_configs = []
         for ticket in neuron_tickets:
             self.original_neuron_configs.append(ticket.get())
 
@@ -238,7 +238,7 @@ class Calibration(base.Calibration):
         initial_wait = 1000 * pq.us
         builder = helpers.wait(builder, initial_wait)
 
-        switching_time_tickets = list()
+        switching_time_tickets = []
         for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
             # connect neuron to shared line
             builder.write(
@@ -376,7 +376,7 @@ class Calibration(base.Calibration):
         # split MADC samples by neuron
         switching_indices = np.searchsorted(
             madc_samples["chip_time"], switching_times)
-        neuron_samples = list()
+        neuron_samples = []
         for neuron_id in range(halco.NeuronConfigOnDLS.size):
             neuron_slice = slice(switching_indices[neuron_id],
                                  switching_indices[neuron_id + 1])

@@ -84,7 +84,7 @@ class _SynapseDriverResultInternal:
         :return: Equivalent SynapseDriverCalibResult.
         """
 
-        result = SynapseDriverCalibResult(dict(), dict(), dict())
+        result = SynapseDriverCalibResult({}, {}, {})
 
         for capmem_block, ramp_current in zip(
                 halco.iter_all(halco.CapMemBlockOnDLS), self.ramp_current):
@@ -478,7 +478,7 @@ class STPRampCalibration(base.Calibration):
         """
 
         quadrant_results = [
-            list() for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
+            [] for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
         for coord in halco.iter_all(halco.SynapseDriverOnDLS):
             quadrant_results[int(coord.toCapMemBlockOnDLS().toEnum())].append(
                 results[int(coord.toEnum())])
@@ -650,7 +650,7 @@ class HagenDACOffsetCalibration(base.Calibration):
         :return: Array of maximum amplitudes per driver.
         """
 
-        iramp_tickets = list()
+        iramp_tickets = []
         previous_test_activation = self.test_activation
         self.test_activation = hal.PADIEvent.HagenActivation.max
 

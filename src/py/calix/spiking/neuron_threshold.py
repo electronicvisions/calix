@@ -92,7 +92,7 @@ class _SpikeCounterCalibration(base.Calibration):
                 * (self.accumulation_time + initial_wait).rescale(pq.us))))
 
         # Read spike counters
-        tickets = list()
+        tickets = []
         for neuron_id, coord in enumerate(
                 halco.iter_all(halco.NeuronConfigOnDLS)):
             tickets.append(builder.read(coord.toSpikeCounterReadOnDLS()))
@@ -157,7 +157,7 @@ class NeuronThresholdCalibration(_SpikeCounterCalibration):
         """
 
         # Read current neuron configs
-        tickets = list()
+        tickets = []
         builder = sta.PlaybackProgramBuilder()
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
@@ -327,12 +327,12 @@ class LeakOverThresholdCalib(_SpikeCounterCalibration):
 
         # read original neuron config and CapMem values
         builder = sta.PlaybackProgramBuilder()
-        neuron_tickets = list()
+        neuron_tickets = []
         for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
             neuron_tickets.append(builder.read(coord))
 
         # read original common neuron backend configs
-        common_backend_tickets = list()
+        common_backend_tickets = []
         for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
             common_backend_tickets.append(builder.read(coord))
 
@@ -349,7 +349,7 @@ class LeakOverThresholdCalib(_SpikeCounterCalibration):
             builder.write(coord, config)
 
         # obtain CADC read at reset potential
-        reset_tickets = list()
+        reset_tickets = []
         for synram in halco.iter_all(halco.SynramOnDLS):
             builder = neuron_helpers.reset_neurons(builder, synram)
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
@@ -650,7 +650,7 @@ class ThresholdCalibCADC(base.Calibration):
             errors=["Spike threshold for neurons {0} has reached {1}."] * 2)
 
         self.target = target
-        self.original_neuron_configs: List[hal.NeuronConfig] = list()
+        self.original_neuron_configs: List[hal.NeuronConfig] = []
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
@@ -666,7 +666,7 @@ class ThresholdCalibCADC(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
 
         # read original neuron config
-        tickets = list()
+        tickets = []
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
 
@@ -692,7 +692,7 @@ class ThresholdCalibCADC(base.Calibration):
         base.run(connection, builder)
 
         # save original neuron configs to ivar
-        self.original_neuron_configs = list()
+        self.original_neuron_configs = []
         for coord, ticket in zip(
                 halco.iter_all(halco.NeuronConfigOnDLS), tickets):
             self.original_neuron_configs.append(ticket.get())

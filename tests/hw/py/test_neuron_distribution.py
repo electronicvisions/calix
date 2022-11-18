@@ -7,12 +7,12 @@ import quantities as pq
 
 from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
+from connection_setup import ConnectionSetup
+
 from calix.common import base
 from calix.hagen import neuron_potentials, neuron_leak_bias, neuron_synin
 from calix.spiking import neuron_threshold
 import calix.spiking
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")
@@ -33,8 +33,8 @@ class TestNeuronDistribution(ConnectionSetup):
 
     log = logger.get("calix.tests.hw.test_neuron_distribution")
     calib_result: Optional[calix.spiking.SpikingCalibrationResult] = None
-    neuron_configs: List[hal.NeuronConfig] = list()
-    results: Dict[str, np.ndarray] = dict()
+    neuron_configs: List[hal.NeuronConfig] = []
+    results: Dict[str, np.ndarray] = {}
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -176,7 +176,7 @@ class TestNeuronDistribution(ConnectionSetup):
         self.__class__.calib_result = self.apply_calibration("spiking")
         self.ParameterTest.calib_result = self.__class__.calib_result
 
-        self.__class__.neuron_configs = list()
+        self.__class__.neuron_configs = []
         for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
             self.__class__.neuron_configs.append(
                 self.__class__.calib_result.neuron_result.neurons[

@@ -356,7 +356,7 @@ class CalibrateICCMADC(madc_base.Calibration):
                 -np.heaviside(variable_x - x_offset, 1)
                 * (variable_x - x_offset) / tau) + offset
 
-        neuron_fits = list()
+        neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
             # The first samples may be the last samples of the previous neuron
             # dicard them as well as the last few samples
@@ -372,7 +372,7 @@ class CalibrateICCMADC(madc_base.Calibration):
                 - neuron_data['chip_time'][0]
 
             # estimate start values for fit
-            p_0 = dict()
+            p_0 = {}
             p_0['offset'] = np.mean(neuron_samples["value"][-100:])
             start_decay = np.argmax(
                 neuron_samples['chip_time']

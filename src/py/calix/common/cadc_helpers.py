@@ -144,7 +144,7 @@ def read_cadcs(connection: hxcomm.ConnectionHandle,
     """
 
     # Construct read builder
-    read_tickets = list()
+    read_tickets = []
     read_builder = sta.PlaybackProgramBuilder()
 
     for synram in halco.iter_all(halco.SynramOnDLS):
@@ -192,7 +192,7 @@ def reshape_cadc_quadrants(cadc_results: np.ndarray) -> np.ndarray:
     """
 
     cadc_channels = list(halco.iter_all(halco.CADCChannelConfigOnDLS))
-    quadrant_reads = list()
+    quadrant_reads = []
 
     for quadrant_coord in halco.iter_all(halco.NeuronConfigBlockOnDLS):
         quadrant_reads.append(

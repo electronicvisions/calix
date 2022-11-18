@@ -6,11 +6,11 @@ import quantities as pq
 
 from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
+from connection_setup import ConnectionSetup
+
 from calix.common import base, helpers
 from calix.hagen import neuron_helpers
 import calix.spiking
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")
@@ -60,7 +60,7 @@ class TestNeuronCalib(ConnectionSetup):
         :return: Number of spikes for each neuron.
         """
 
-        tickets = list()
+        tickets = []
 
         builder = sta.PlaybackProgramBuilder()
         builder = neuron_helpers.enable_all_synapse_drivers(
@@ -141,7 +141,7 @@ class TestNeuronCalib(ConnectionSetup):
             return np.nan for those neurons.
         """
 
-        tickets = list()
+        tickets = []
         builder = sta.PlaybackProgramBuilder()
 
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):

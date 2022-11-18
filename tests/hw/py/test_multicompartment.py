@@ -7,11 +7,11 @@ import quantities as pq
 
 from dlens_vx_v3 import halco, sta, hal, logger
 
+from connection_setup import ConnectionSetup
+
 from calix.common import algorithms, base, cadc
 from calix.hagen import neuron_helpers
 from calix.multicomp.neuron_icc_bias import CalibrateICCMADC
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")

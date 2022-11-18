@@ -11,10 +11,11 @@ import numpy as np
 import quantities as pq
 
 from dlens_vx_v3 import hal, halco, sta, lola, logger
-from calix.hagen import base, cadc, helpers
-from calix import constants
 
 from connection_setup import ConnectionSetup
+
+from calix.hagen import base, cadc, helpers
+from calix import constants
 
 
 log = logger.get("calix")
@@ -56,7 +57,7 @@ class TestCorrelation(ConnectionSetup):
                             halco.SynapseOnSynapseRow.size), dtype=int)
         addresses = np.zeros(halco.SynapseOnSynapseRow.size, dtype=int)
 
-        target_slice = list()
+        target_slice = []
         for entry in halco.iter_all(halco.EntryOnQuad):
             target_slice.append(
                 int(quad.toNeuronColumnOnDLS()[entry]))
@@ -254,7 +255,7 @@ class TestCorrelation(ConnectionSetup):
             [causal row 0, acausal row 0, causal row 1, ...]
         """
 
-        tickets = list()
+        tickets = []
 
         for row in halco.iter_all(halco.SynapseRowOnSynram):
             # causal read
@@ -450,7 +451,7 @@ class TestCorrelation(ConnectionSetup):
 
         for synram in halco.iter_all(halco.SynramOnDLS):
             for quad in halco.iter_all(halco.SynapseQuadColumnOnDLS):
-                target_slice = list()
+                target_slice = []
                 for entry in halco.iter_all(halco.EntryOnQuad):
                     target_slice.append(
                         int(quad.toNeuronColumnOnDLS()[entry])

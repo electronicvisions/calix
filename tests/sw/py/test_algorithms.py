@@ -4,9 +4,9 @@ import unittest
 import numpy as np
 from dlens_vx_v3 import sta, logger
 
-from calix.common import algorithms, base
-
 from mock_connection_setup import ConnectionSetup
+
+from calix.common import algorithms, base
 
 
 log = logger.get("calix")

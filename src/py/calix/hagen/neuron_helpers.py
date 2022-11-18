@@ -100,7 +100,7 @@ class CADCReadNeurons(sta.PlaybackGenerator):
         """
 
         builder = sta.PlaybackProgramBuilder()
-        tickets = list()
+        tickets = []
         for synram in halco.iter_all(halco.SynramOnDLS):
             coord = halco.CADCSampleRowOnDLS(
                 block=halco.SynapseRowOnSynram(),
@@ -232,7 +232,7 @@ def cadc_read_neurons_repetitive(
         the number of reads, the second the number of neurons on synram.
     """
 
-    read_tickets = list()
+    read_tickets = []
 
     for _ in range(n_reads):
         # Trigger neuron resets if desired
@@ -693,7 +693,7 @@ def reconfigure_synaptic_input(
 
     # Read current neuron configurations
     builder = sta.PlaybackProgramBuilder()
-    read_tickets = list()
+    read_tickets = []
 
     for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
         read_tickets.append(builder.read(neuron_coord))
@@ -701,7 +701,7 @@ def reconfigure_synaptic_input(
 
     # Reconfigure CapMem bias currents
     builder = sta.PlaybackProgramBuilder()
-    config = dict()
+    config = {}
     if excitatory_biases is not None:
         config.update({
             halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm:

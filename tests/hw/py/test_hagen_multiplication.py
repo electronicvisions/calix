@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 
 from dlens_vx_v3 import halco, logger
 
+from connection_setup import ConnectionSetup
+
 from calix.hagen import multiplication
 import calix.hagen
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")

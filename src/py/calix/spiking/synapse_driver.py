@@ -36,7 +36,7 @@ class STPMultiplication(multiplication.Multiplication):
         super().preconfigure(connection)
 
         # read synapse driver config
-        syndrv_tickets = list()
+        syndrv_tickets = []
         builder = sta.PlaybackProgramBuilder()
         for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
             syndrv_tickets.append(builder.read(
@@ -170,7 +170,7 @@ class STPOffsetCalibration(base.Calibration):
         results = self.measure_results(connection, builder)
 
         block_results = [
-            list() for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
+            [] for _ in halco.iter_all(halco.CapMemBlockOnDLS)]
         for coord, result in zip(
                 halco.iter_all(halco.SynapseDriverOnDLS), results):
             block_results[int(coord.toCapMemBlockOnDLS().toEnum())].append(

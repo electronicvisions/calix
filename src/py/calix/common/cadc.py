@@ -331,7 +331,7 @@ class ChannelOffsetCalibration(base.Calibration):
         if abs(read_target - middle_of_cadc_range) > allowed_deviation:
             log = logger.get(
                 "calix.common.cadc.ChannelOffsetCalibration.find_target_read")
-            log.WARN("Median read has been {0} ".format(read_target)
+            log.WARN(f"Median read has been {read_target} "
                      + f"while a value around {middle_of_cadc_range} is "
                      + "expected." + os.linesep
                      + "Check if the first parts of the calibration worked "
@@ -487,8 +487,7 @@ def calibrate(
         connection, algorithms.BinarySearch(), target=read_range.lower)
     calib_result.v_ramp_offset = result.calibrated_parameters
     calib_result.success = cadc_helpers.convert_success_masks(result.success)
-    log.INFO("Calibrated v_ramp_start, values: {0}".format(
-        calib_result.v_ramp_offset))
+    log.INFO(f"Calibrated v_ramp_start, values: {calib_result.v_ramp_offset}")
 
     # Part 2: Ramp slope
     calibration = RampSlopeCalibration(dynamic_range_max=dynamic_range.upper)
@@ -498,8 +497,7 @@ def calibrate(
     calib_result.success = np.all([
         calib_result.success,
         cadc_helpers.convert_success_masks(result.success)], axis=0)
-    log.INFO("Calibrated i_ramp, values: {0}".format(
-        calib_result.i_ramp_slope))
+    log.INFO(f"Calibrated i_ramp, values: {calib_result.i_ramp_slope}")
 
     if calibrate_offsets:
         # Part 3: Channel offsets
@@ -511,7 +509,7 @@ def calibrate(
         calib_result.channel_offset = result.calibrated_parameters
         calib_result.success = np.all([
             calib_result.success, result.success], axis=0)
-        log.INFO("Calibrated digital offsets, values: {0}".format(
-            calib_result.channel_offset))
+        log.INFO("Calibrated digital offsets, values: "
+                 + f"{calib_result.channel_offset}")
 
     return calib_result

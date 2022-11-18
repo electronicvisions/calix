@@ -417,8 +417,8 @@ class SynBiasCalibration(base.Calibration):
         for bus in halco.iter_all(halco.PADIBusOnPADIBusBlock):
             padi_event.fire_bus[bus] = True  # pylint: disable=unsupported-assignment-operation
 
-        results = list()
-        baselines = list()
+        results = []
+        baselines = []
 
         for _ in range(self.n_runs):
             for synram in halco.iter_all(halco.SynramOnDLS):
@@ -749,7 +749,7 @@ class SynTimeConstantCalibration(madc_base.Calibration):
         def fitfunc(time_t, scale, tau, offset):
             return scale * np.exp(-time_t / tau) + offset
 
-        neuron_fits = list()
+        neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
             # remove unreliable samples at beginning/end of trace
             start_index = np.argmax(neuron_data["chip_time"] * pq.us
@@ -981,7 +981,7 @@ class SynReferenceCalibMADC(madc_base.Calibration):
                  ).rescale(pq.s) * self.madc_config.calculate_sample_rate(
                      self.madc_input_frequency)),
             int(int(self.madc_config.number_of_samples) * 0.9))
-        neuron_fits = list()
+        neuron_fits = []
         for neuron_data in samples:
             neuron_data = neuron_data[fit_slice]
             guessed_slope = \

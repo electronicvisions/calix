@@ -10,11 +10,11 @@ import unittest
 import numpy as np
 from dlens_vx_v3 import sta, halco, hal, logger
 
+from connection_setup import ConnectionSetup
+
 from calix.common import base, cadc, helpers
 from calix.hagen import neuron_helpers
 from calix import constants
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")

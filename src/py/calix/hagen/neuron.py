@@ -24,7 +24,7 @@ class NeuronCalibResult(base.CalibrationResult):
     """
 
     neurons: Dict[halco.AtomicNeuronOnDLS, lola.AtomicNeuron]
-    cocos: dict()  # some coordinate, some container
+    cocos: {}  # some coordinate, some container
     success: Dict[halco.AtomicNeuronOnDLS, bool]
 
     def apply(self, builder: Union[sta.PlaybackProgramBuilder,
@@ -143,7 +143,7 @@ class CalibrationResultInternal:
         :return: Equivalent NeuronCalibResult.
         """
 
-        result = NeuronCalibResult(dict(), dict(), dict())
+        result = NeuronCalibResult({}, {}, {})
 
         # set neuron configuration, including CapMem
         for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
@@ -327,7 +327,7 @@ def calibrate(
         connection, excitatory_biases=0, inhibitory_biases=0)
 
     # select small capacitance mode for syn. input lines
-    tickets = list()
+    tickets = []
     builder = sta.PlaybackProgramBuilder()
     for coord in halco.iter_all(halco.NeuronConfigOnDLS):
         tickets.append(builder.read(coord))

@@ -227,7 +227,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     # calibrate synapse drivers
     # (uses external DAC for resetting potentials on synaptic input lines)
     if synapse_driver_kwargs is None:
-        synapse_driver_kwargs = dict()
+        synapse_driver_kwargs = {}
     synapse_driver_result = synapse_driver.calibrate(
         connection, **synapse_driver_kwargs)
 
@@ -244,7 +244,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # calibrate neurons
     if neuron_kwargs is None:
-        neuron_kwargs = dict()
+        neuron_kwargs = {}
     neuron_result = neuron.calibrate(connection, **neuron_kwargs)
 
     # set leak biases to zero
@@ -323,7 +323,7 @@ def calibrate_for_synin_integration(
 
     # calibrate synapse drivers
     if synapse_driver_kwargs is None:
-        synapse_driver_kwargs = dict()
+        synapse_driver_kwargs = {}
     synapse_driver_result = synapse_driver.calibrate(
         connection, **synapse_driver_kwargs)
 

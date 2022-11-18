@@ -28,6 +28,7 @@ def measure_quadrant_results(connection: hxcomm.ConnectionHandle,
     success_mask = neuron_helpers.reshape_neuron_quadrants(success_mask)
 
     for target_quadrant in range(halco.NeuronConfigBlockOnDLS.size):
+        # pylint: disable=consider-using-f-string
         log.DEBUG("Quadrant {0:1d}: resting pot. {1:5.2f} +- {2:4.2f}".format(
             target_quadrant,
             np.mean(results[target_quadrant][success_mask[target_quadrant]]),

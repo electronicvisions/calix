@@ -11,11 +11,11 @@ import numpy as np
 
 from dlens_vx_v3 import hal, halco, sta, logger
 
+from connection_setup import ConnectionSetup
+
 from calix.common import base, helpers
 from calix.hagen import synapse_driver
 import calix.hagen
-
-from connection_setup import ConnectionSetup
 
 
 log = logger.get("calix")

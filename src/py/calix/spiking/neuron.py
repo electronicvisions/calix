@@ -73,7 +73,7 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
             except TypeError:
                 return array
 
-        self.neuron_configs = list()
+        self.neuron_configs = []
         if np.ndim(tau_syn) > 0 \
                 and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
             tau_syn_exc = tau_syn[0]
@@ -421,7 +421,7 @@ def calibrate(
 
     if calibrate_synin:
         # ensure syn. input high resistance mode is off
-        neuron_configs_synin_calib = list()
+        neuron_configs_synin_calib = []
         for neuron_coord, neuron_config in zip(
                 halco.iter_all(halco.NeuronConfigOnDLS),
                 calib_result.neuron_configs):
