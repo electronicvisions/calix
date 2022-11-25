@@ -94,7 +94,8 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
             tau_exc = find_neuron_value(tau_syn_exc, neuron_id)
             tau_inh = find_neuron_value(tau_syn_inh, neuron_id)
             c_mem = find_neuron_value(membrane_capacitance, neuron_id)
-            config.membrane_capacitor_size = c_mem
+            config.membrane_capacitor_size = \
+                hal.NeuronConfig.MembraneCapacitorSize(c_mem)
 
             # min. tau_syn with high resistance mode: some 20 us
             if tau_exc < 20 * pq.us:
@@ -407,6 +408,8 @@ def calibrate(
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     # decide how to execute synin calib
+    if not isinstance(i_synin_gm, np.ndarray) and np.ndim(i_synin_gm) > 0:
+        i_synin_gm = np.array(i_synin_gm)
     if np.ndim(i_synin_gm) > 0 \
             and i_synin_gm.shape[-1] == halco.NeuronConfigOnDLS.size:
         calibrate_synin = False
