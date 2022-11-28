@@ -13,12 +13,12 @@ import quantities as pq
 
 from dlens_vx_v3 import sta, halco, hal, hxcomm, lola, logger
 
-from calix.common import algorithms, base, synapse, helpers
-from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
-    neuron_potentials
+from calix.common import algorithms, base, helpers
+from calix.hagen import neuron_helpers, neuron_potentials
 import calix.hagen.neuron as hagen_neuron
 from calix.hagen.neuron import NeuronCalibResult
-from calix.spiking import neuron_threshold, refractory_period
+from calix.spiking import neuron_threshold, refractory_period, \
+    neuron_calib_parts
 from calix import constants
 
 
@@ -497,9 +497,11 @@ def calibrate(
             "deprecated. Please now use the target and options classes.",
             DeprecationWarning, stacklevel=2)
 
+    # process target
     target.check()
     synin_parameters = target.prepare_synin()
 
+    # create result object
     calib_result = _CalibrationResultInternal()
     calib_result.set_neuron_configs_default(
         target.membrane_capacitance, target.tau_syn, options.readout_neuron)
@@ -509,71 +511,18 @@ def calibrate(
         tau_ref=target.refractory_time, holdoff_time=target.holdoff_time)
 
     # Configure chip for calibration
-    # We start using a hagen-mode-like setup until the synaptic input is
-    # calibrated. Afterwards we calibrate parameters like the spike threshold.
     builder = sta.PlaybackProgramBuilder()
     builder, _ = neuron_helpers.configure_chip(
         builder, readout_neuron=options.readout_neuron)
     base.run(connection, builder)
 
-    # calibrate synaptic input time constant to given target
-    if np.ndim(target.tau_syn) > 0 \
-            and target.tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.ExcSynTimeConstantCalibration(
-            neuron_configs=calib_result.neuron_configs,
-            target=target.tau_syn[0])
-    else:
-        calibration = neuron_synin.ExcSynTimeConstantCalibration(
-            neuron_configs=calib_result.neuron_configs,
-            target=target.tau_syn)
-    result = calibration.run(
-        connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.i_syn_exc_tau = result.calibrated_parameters
-    calib_result.success = np.all([
-        calib_result.success, result.success], axis=0)
+    neuron_calib_parts.disable_synin_and_threshold(connection, calib_result)
 
-    if np.ndim(target.tau_syn) > 0 \
-            and target.tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.InhSynTimeConstantCalibration(
-            neuron_configs=calib_result.neuron_configs,
-            target=target.tau_syn[1])
-    else:
-        calibration = neuron_synin.InhSynTimeConstantCalibration(
-            neuron_configs=calib_result.neuron_configs,
-            target=target.tau_syn)
-    result = calibration.run(
-        connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.i_syn_inh_tau = result.calibrated_parameters
-    calib_result.success = np.all([
-        calib_result.success, result.success], axis=0)
+    neuron_calib_parts.calibrate_tau_syn(
+        connection, target.tau_syn, calib_result)
 
-    # Configure neurons without syn. input and threshold disabled
-    builder = sta.PlaybackProgramBuilder()
-    for neuron_coord, neuron_config in zip(
-            halco.iter_all(halco.NeuronConfigOnDLS),
-            calib_result.neuron_configs):
-        neuron_config = hal.NeuronConfig(neuron_config)  # copy
-        neuron_config.enable_threshold_comparator = False
-        builder.write(neuron_coord, neuron_config)
-    base.run(connection, builder)
-
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=0)
-
-    # set synapse DAC bias current
-    builder = sta.PlaybackProgramBuilder()
-    builder = helpers.capmem_set_quadrant_cells(
-        builder,
-        {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac:
-         target.synapse_dac_bias})
-    builder = helpers.wait(builder, constants.capmem_level_off_time)
-    base.run(connection, builder)
-
-    # Calibrate synapse DAC bias current
-    # The CADC-based calibration is faster and provides sufficient accuracy.
-    calibration = synapse.DACBiasCalibCADC()
-    calib_result.syn_bias_dac = calibration.run(
-        connection, algorithm=algorithms.BinarySearch()).calibrated_parameters
+    neuron_calib_parts.calibrate_synapse_dac_bias(
+        connection, target.synapse_dac_bias, calib_result)
 
     # calibrate threshold
     calibration = neuron_threshold.ThresholdCalibCADC()
@@ -582,201 +531,34 @@ def calibrate(
         target=target.threshold
     ).calibrated_parameters
 
-    # Configure chip for synin calibration:
-    # The synaptic input calibration needs to run in a hagen-mode-like setup,
-    # therefore we overwrite all previous calibrations (like spike threshold)
-    # and cherry-pick the desired ones (like synaptic time constant).
-    builder = sta.PlaybackProgramBuilder()
-    builder, initial_config = neuron_helpers.configure_chip(
-        builder, readout_neuron=options.readout_neuron)
-    calib_result.i_bias_reset = initial_config[
-        halco.CapMemRowOnCapMemBlock.i_bias_reset]
+    # bring chip into a state for synin calibration
+    target_cadc_reads = neuron_calib_parts.prepare_for_synin_calib(
+        connection, options, calib_result)
 
-    # re-apply syn. input time constant calib which we need,
-    # re-apply spike threshold which may affect CapMem crosstalk,
-    # re-apply synapse DAC bias calib
-    builder = helpers.capmem_set_neuron_cells(
-        builder, {halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
-                  calib_result.i_syn_exc_tau,
-                  halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
-                  calib_result.i_syn_inh_tau,
-                  halco.CapMemRowOnCapMemBlock.v_threshold:
-                  calib_result.v_threshold})
-    builder = helpers.capmem_set_quadrant_cells(
-        builder, {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac:
-                  calib_result.syn_bias_dac})
-    builder = helpers.wait(builder, constants.capmem_level_off_time)
-    base.run(connection, builder)
-
-    # disable synaptic inputs initially
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=0)
-
-    # calibrate leak near middle of CADC range
-    calibration = neuron_potentials.LeakPotentialCalibration(120)
-    calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
-
+    # calibrate or configure CUBA synaptic input OTA biases
     if synin_parameters.calibrate_synin:
-        # ensure syn. input high resistance mode is off
-        neuron_configs_synin_calib = []
-        for neuron_coord, neuron_config in zip(
-                halco.iter_all(halco.NeuronConfigOnDLS),
-                calib_result.neuron_configs):
-            neuron_config = hal.NeuronConfig(neuron_config)  # copy
-            neuron_config.enable_threshold_comparator = False
-            neuron_config.enable_synaptic_input_excitatory_high_resistance = \
-                False
-            neuron_config.enable_synaptic_input_inhibitory_high_resistance = \
-                False
-            neuron_config.enable_synaptic_input_excitatory = False
-            neuron_config.enable_synaptic_input_inhibitory = False
-            builder.write(neuron_coord, neuron_config)
-            neuron_configs_synin_calib.append(neuron_config)
-        base.run(connection, builder)
-
-        # calibrate synaptic input time constant to a low value as a
-        # single event could charge the membrane too much at high synaptic time
-        # constants. The real synaptic time constant is reapplied later.
-        small_tau_syn = 1.5 * pq.us
-        calibration = neuron_synin.ExcSynTimeConstantCalibration(
-            neuron_configs=neuron_configs_synin_calib,
-            target=small_tau_syn)
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch())
-
-        calibration = neuron_synin.InhSynTimeConstantCalibration(
-            neuron_configs=neuron_configs_synin_calib,
-            target=small_tau_syn)
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch())
-
-        # Equalize membrane time constant for synin calib
-        calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
-            target_time_const=60 * pq.us)
-        calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch())
-
-        # Enable and calibrate excitatory synaptic input amplitudes to median
-        target_cadc_reads = neuron_helpers.cadc_read_neuron_potentials(
-            connection)
-        neuron_helpers.reconfigure_synaptic_input(
-            connection, excitatory_biases=synin_parameters.i_synin_gm[0])
-
-        exc_synin_calibration = neuron_synin.ExcSynBiasCalibration(
-            target_leak_read=target_cadc_reads,
-            parameter_range=base.ParameterRange(hal.CapMemCell.Value.min, min(
-                # the upper boundary is restricted to avoid starting in a
-                # very noisy environment, which may not work for low targets.
-                (synin_parameters.i_synin_gm[0] * 1.8) + 100,
-                hal.CapMemCell.Value.max)))
-
-        result = exc_synin_calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch())
-        calib_result.i_syn_exc_gm = result.calibrated_parameters
-        calib_result.success = np.all(
-            [calib_result.success, result.success], axis=0)
-
-        # Disable exc. synaptic input, enable and calibrate inhibitory
-        neuron_helpers.reconfigure_synaptic_input(
-            connection, excitatory_biases=0,
-            inhibitory_biases=synin_parameters.i_synin_gm[1])
-
-        calibration = neuron_synin.InhSynBiasCalibration(
-            target_leak_read=target_cadc_reads,
-            parameter_range=base.ParameterRange(0, min(
-                # the upper boundary is restricted to avoid starting in a
-                # very noisy environment, which may not work for low targets.
-                (synin_parameters.i_synin_gm[1] * 1.8) + 100,
-                hal.CapMemCell.Value.max)),
-            target=exc_synin_calibration.target
-            if synin_parameters.equalize_synin else None)
-        if synin_parameters.equalize_synin:
-            # match number of input events to the one found during the
-            # excitatory calibration, where it was dynamically adjusted.
-            calibration.n_events = exc_synin_calibration.n_events
-
-        result = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch())
-        calib_result.i_syn_inh_gm = result.calibrated_parameters
-        calib_result.success = np.all(
-            [calib_result.success, result.success], axis=0)
-
-        # re-apply synaptic input time constant
-        builder = sta.PlaybackProgramBuilder()
-        builder = helpers.capmem_set_neuron_cells(
-            builder, {halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
-                      calib_result.i_syn_exc_tau,
-                      halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau:
-                      calib_result.i_syn_inh_tau})
-        builder = helpers.wait(builder, constants.capmem_level_off_time)
-        base.run(connection, builder)
+        neuron_calib_parts.calibrate_synaptic_input(
+            connection, synin_parameters, calib_result, target_cadc_reads)
     else:
         calib_result.i_syn_exc_gm = synin_parameters.i_synin_gm[0]
         calib_result.i_syn_inh_gm = synin_parameters.i_synin_gm[1]
 
-        # Set suitable membrane time constant for leak potential calib
-        calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
-            target_time_const=30 * pq.us)
-        calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch())
+    # calibrate syn. input references at final biases
+    neuron_calib_parts.calibrate_synin_references(
+        connection, target_cadc_reads, calib_result)
+
+    # leave state with synin-calib configuration
+    neuron_calib_parts.finalize_synin_calib(connection, calib_result)
 
     # set desired neuron configs, disable syn. input and spikes again
-    builder = sta.PlaybackProgramBuilder()
-    for neuron_coord, neuron_config in zip(
-            halco.iter_all(halco.NeuronConfigOnDLS),
-            calib_result.neuron_configs):
-        neuron_config = hal.NeuronConfig(neuron_config)  # copy
-        neuron_config.enable_threshold_comparator = False
-        builder.write(neuron_coord, neuron_config)
-    base.run(connection, builder)
-
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=0)
+    neuron_calib_parts.disable_synin_and_threshold(connection, calib_result)
 
     # calibrate leak
     calibration = neuron_potentials.LeakPotentialCalibration(target.leak)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
-    # Re-enable synaptic inputs and calibrate reference
-    target_cadc_reads = neuron_helpers.cadc_read_neuron_potentials(
-        connection)
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=calib_result.i_syn_exc_gm)
-    calibration = neuron_synin.ExcSynReferenceCalibration(
-        target=target_cadc_reads)
-    result = calibration.run(
-        connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.i_syn_exc_shift = result.calibrated_parameters
-    calib_result.success = np.all([
-        calib_result.success, result.success], axis=0)
-
-    neuron_helpers.reconfigure_synaptic_input(
-        connection, inhibitory_biases=calib_result.i_syn_inh_gm)
-    calibration = neuron_synin.InhSynReferenceCalibration(
-        target=target_cadc_reads)
-    result = calibration.run(
-        connection, algorithm=algorithms.NoisyBinarySearch())
-    calib_result.i_syn_inh_shift = result.calibrated_parameters
-    calib_result.success = np.all([
-        calib_result.success, result.success], axis=0)
-
-    # calibrate membrane time constant
-    if np.min(target.tau_mem) >= 3 * pq.us:
-        # if all target time constants are at least 3 us, use offset currents
-        calibration = neuron_leak_bias.MembraneTimeConstCalibOffset(
-            neuron_configs=calib_result.neuron_configs,
-            target=target.tau_mem)
-    else:
-        # if at least one neuron targets a faster membrane time constant,
-        # use resets in order to achieve enough amplitude for the fits.
-        calibration = neuron_leak_bias.MembraneTimeConstCalibReset(
-            neuron_configs=calib_result.neuron_configs,
-            target=target.tau_mem)
-
-    calib_result.i_bias_leak = calibration.run(
-        connection, algorithm=algorithms.NoisyBinarySearch()
-    ).calibrated_parameters
-    calib_result.neuron_configs = calibration.neuron_configs
+    neuron_calib_parts.calibrate_tau_mem(
+        connection, target.tau_mem, calib_result)
 
     # calibrate reset
     calibration = neuron_potentials.ResetPotentialCalibration(target.reset)
@@ -793,12 +575,6 @@ def calibrate(
     calib_result.v_leak = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
-
-    # re-enable spike threshold
-    for neuron_coord, neuron_config in zip(
-            halco.iter_all(halco.NeuronConfigOnDLS),
-            calib_result.neuron_configs):
-        neuron_config.enable_threshold_comparator = True
 
     # print warning in case of failed neurons
     n_neurons_failed = np.sum(~calib_result.success)
