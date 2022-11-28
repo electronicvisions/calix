@@ -5,6 +5,8 @@ i.e. for multiply-accumulate operation.
 
 from typing import Tuple, Union, Optional
 from dataclasses import dataclass
+from warnings import warn
+
 import numpy as np
 
 from dlens_vx_v3 import sta, hxcomm, halco, hal, lola
@@ -12,6 +14,78 @@ from dlens_vx_v3 import sta, hxcomm, halco, hal, lola
 from calix.common import algorithms, base, cadc, synapse, helpers
 from calix.hagen import neuron, synapse_driver, neuron_helpers, multiplication
 from calix import constants
+
+
+@dataclass
+class HagenSyninCalibrationTarget(base.CalibrationTarget):
+    """
+    Dataclass collecting target parameters for Hagen-mode calibrations.
+    with integration on synaptic input lines.
+
+    :ivar cadc_target: Target parameters for CADC calibration.
+    :ivar synapse_dac_bias: Target synapse DAC bias current.
+        Controls the charge emitted to the synaptic input line by a
+        multiplication.
+    """
+
+    cadc_target: cadc.CADCCalibTarget = cadc.CADCCalibTarget(
+        dynamic_range=base.ParameterRange(150, 340))
+    synapse_dac_bias: int = 800
+
+
+@dataclass
+class HagenSyninCalibrationOptions(base.CalibrationOptions):
+    """
+    Dataclass collecting further options for Hagen-mode calibrations
+    with integration on synaptic input lines.
+
+    :ivar cadc_options: Further options for CADC calibration.
+    :ivar synapse_driver_options: Further options for synapse driver
+        calibration.
+    """
+
+    cadc_options: cadc.CADCCalibOptions = cadc.CADCCalibOptions()
+    synapse_driver_options: synapse_driver.SynapseDriverCalibOptions \
+        = synapse_driver.SynapseDriverCalibOptions()
+
+
+@dataclass
+class HagenCalibrationTarget(base.CalibrationTarget):
+    """
+    Dataclass collecting target parameters for Hagen-mode calibrations
+    with integration on membranes.
+
+    :ivar cadc_target: Target parameters for CADC calibration.
+    :ivar neuron_target: Target parameters for neuron calibration.
+    """
+
+    cadc_target: cadc.CADCCalibTarget = cadc.CADCCalibTarget(
+        dynamic_range=base.ParameterRange(150, 500))
+    neuron_target: neuron.NeuronCalibTarget = neuron.NeuronCalibTarget()
+
+
+@dataclass
+class HagenCalibrationOptions(base.CalibrationOptions):
+    """
+    Dataclass collecting further options for Hagen-mode calibrations with
+    integration on membranes.
+
+    :ivar cadc_options: Further options for CADC calibration.
+    :ivar neuron_options: Further options for neuron calibration.
+    :ivar neuron_disable_leakage: Decide whether the neuron leak bias
+        currents are set to zero after calibration. This is done
+        by default, which disables leakage entirely. Note that even
+        if the leak bias is set to zero, some pseudo-leakage may occur
+        through the synaptic input OTAs.
+    :ivar synapse_driver_options: Further options for synapse driver
+        calibration.
+    """
+
+    cadc_options: cadc.CADCCalibOptions = cadc.CADCCalibOptions()
+    neuron_options: neuron.NeuronCalibOptions = neuron.NeuronCalibOptions()
+    neuron_disable_leakage: bool = True
+    synapse_driver_options: synapse_driver.SynapseDriverCalibOptions \
+        = synapse_driver.SynapseDriverCalibOptions()
 
 
 @dataclass
@@ -120,8 +194,11 @@ class HagenCalibrationResult(base.CalibrationResult):
         self.synapse_driver_result.apply(builder)
 
     def to_hagen_synin_result(
-            self, connection: hxcomm.ConnectionHandle,
-            cadc_kwargs: dict = None, synapse_dac_bias: int = 800
+            self, connection: hxcomm.ConnectionHandle, *,
+            cadc_target: Optional[cadc.CADCCalibTarget] = None,
+            cadc_options: Optional[cadc.CADCCalibOptions] = None,
+            synapse_dac_bias: Optional[int] = None,
+            cadc_kwargs: dict = None
     ) -> HagenSyninCalibrationResult:
         """
         Reconfigure calibration result for integration on synaptic
@@ -133,7 +210,8 @@ class HagenCalibrationResult(base.CalibrationResult):
         integration on synaptic inputs.
 
         :param connection: Connection to the chip to calibrate.
-        :param cadc_kwargs: Arguments for CADC calibration.
+        :param cadc_target: Target parameters for CADC calibration.
+        :param cadc_options: Further options for CADC calibration.
         :param synapse_dac_bias: Target value for the synapse DAC
             bias calibration.
 
@@ -142,16 +220,39 @@ class HagenCalibrationResult(base.CalibrationResult):
         """
 
         # calibrate CADC to smaller range
-        kwargs = {"dynamic_range": base.ParameterRange(150, 340)}
+        if cadc_target is None:
+            cadc_target = HagenSyninCalibrationTarget().cadc_target
+        if cadc_options is None:
+            cadc_options = HagenSyninCalibrationOptions().cadc_options
+
         if cadc_kwargs is not None:
-            kwargs.update(cadc_kwargs)
-        cadc_result = cadc.calibrate(connection, **kwargs)
+            warn(
+                "Providing cadc arguments as a cadc_kwargs dict is "
+                "deprecated. Please now use the target and option classes.",
+                DeprecationWarning, stacklevel=2)
+            try:
+                cadc_target.dynamic_range = cadc_kwargs["dynamic_range"]
+            except KeyError:
+                pass
+            try:
+                cadc_target.read_range = cadc_kwargs["read_range"]
+            except KeyError:
+                pass
+            try:
+                cadc_options.calibrate_offsets = \
+                    cadc_kwargs["calibrate_offsets"]
+            except KeyError:
+                pass
+
+        cadc_result = cadc.calibrate(connection, cadc_target, cadc_options)
 
         # reconnect neuron readout to CADCs
         builder = sta.PlaybackProgramBuilder()
         neuron_helpers.configure_chip(builder)
 
         # set target synapse DAC bias current
+        if synapse_dac_bias is None:
+            synapse_dac_bias = HagenSyninCalibrationTarget().synapse_dac_bias
         builder = helpers.capmem_set_quadrant_cells(
             builder,
             {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: synapse_dac_bias})
@@ -175,6 +276,8 @@ class HagenCalibrationResult(base.CalibrationResult):
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
+              target: Optional[HagenCalibrationTarget] = None,
+              options: Optional[HagenCalibrationOptions] = None, *,
               cadc_kwargs: dict = None,
               neuron_kwargs: dict = None,
               synapse_driver_kwargs: dict = None
@@ -191,22 +294,49 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     by providing the appropriate arguments.
 
     :param connection: Connection to the chip to calibrate.
-    :param cadc_kwargs: Optional parameters for CADC calibration.
-    :param neuron_kwargs: Optional parameters for neuron calibration.
-        The leak bias is set to zero by default, which disables leakage
-        entirely. Manually specify a membrane time constant (example:
-        neuron_kwargs["tau_mem"] = 60) to avoid this. Note that even
-        if the leak bias is set to zero, some pseudo-leakage may occur
-        through the synaptic input OTAs.
-    :param synapse_driver_kwargs: Optional parameters for synapse
-        driver calibration.
+    :param target: Target parameters for calibration, given as an
+        instance of HagenCalibrationTarget.
+    :param options: Further options for calibration, given as an
+        instance of HagenCalibrationOptions.
 
     :return: HagenCalibrationResult, containing cadc, neuron and
         synapse driver results.
     """
 
+    if target is None:
+        target = HagenCalibrationTarget()
+    if options is None:
+        options = HagenCalibrationOptions()
+
+    used_deprecated_parameters = False
+    if cadc_kwargs is not None:
+        target.cadc_target = cadc.CADCCalibTarget(**cadc_kwargs)
+        used_deprecated_parameters = True
+    if neuron_kwargs is not None:
+        target.neuron_target = neuron.NeuronCalibTarget(**neuron_kwargs)
+        used_deprecated_parameters = True
+    if synapse_driver_kwargs is not None:
+        options.synapse_driver_options = \
+            synapse_driver.SynapseDriverCalibOptions(**synapse_driver_kwargs)
+        used_deprecated_parameters = True
+
+    # delete deprecated arguments, to ensure the correct ones are used
+    # in the following code
+    del cadc_kwargs
+    del neuron_kwargs
+    del synapse_driver_kwargs
+
+    if used_deprecated_parameters:
+        warn(
+            "Passing arguments directly to calibrate() functions is "
+            "deprecated. Please now use the target and option classes.",
+            DeprecationWarning, stacklevel=2)
+
+    target.check()
+
     # preparations for synapse driver calib: calibrate CADC to smaller range
-    cadc.calibrate(connection, dynamic_range=base.ParameterRange(150, 340))
+    cadc.calibrate(connection, cadc.CADCCalibTarget(
+        dynamic_range=base.ParameterRange(150, 340)))
     builder = sta.PlaybackProgramBuilder()
     neuron_helpers.configure_chip(builder)
     base.run(connection, builder)
@@ -226,10 +356,8 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # calibrate synapse drivers
     # (uses external DAC for resetting potentials on synaptic input lines)
-    if synapse_driver_kwargs is None:
-        synapse_driver_kwargs = {}
     synapse_driver_result = synapse_driver.calibrate(
-        connection, **synapse_driver_kwargs)
+        connection, options.synapse_driver_options)
 
     # disconnect DAC from pad
     builder = sta.PlaybackProgramBuilder()
@@ -237,19 +365,16 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     base.run(connection, builder)
 
     # calibrate CADCs
-    kwargs = {"dynamic_range": base.ParameterRange(150, 500)}
-    if cadc_kwargs is not None:
-        kwargs.update(cadc_kwargs)
-    cadc_result = cadc.calibrate(connection, **kwargs)
+    cadc_result = cadc.calibrate(
+        connection, target.cadc_target, options.cadc_options)
 
     # calibrate neurons
-    if neuron_kwargs is None:
-        neuron_kwargs = {}
-    neuron_result = neuron.calibrate(connection, **neuron_kwargs)
+    neuron_result = neuron.calibrate(
+        connection, target.neuron_target, options.neuron_options)
 
     # set leak biases to zero
     # We want to have only integration on the neurons, no leakage.
-    if "tau_mem" not in neuron_kwargs:
+    if options.neuron_disable_leakage:
         builder = sta.PlaybackProgramBuilder()
         helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: 0})
@@ -276,9 +401,11 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
 def calibrate_for_synin_integration(
         connection: hxcomm.ConnectionHandle,
+        target: Optional[HagenSyninCalibrationTarget] = None,
+        options: Optional[HagenSyninCalibrationOptions] = None, *,
         cadc_kwargs: dict = None,
         synapse_driver_kwargs: dict = None,
-        synapse_dac_bias: int = 800,
+        synapse_dac_bias: Optional[int] = None,
 ) -> HagenSyninCalibrationResult:
     """
     Calibrate the chip for integration on synaptic input lines.
@@ -286,22 +413,47 @@ def calibrate_for_synin_integration(
     Calibrate CADC, synapse drivers, and synapse DAC bias.
 
     :param connection: Connection to the chip to calibrate.
-    :param cadc_kwargs: Optional parameters for CADC calibration.
-    :param synapse_driver_kwargs: Optional parameters for synapse
-        driver calibration.
-    :param synapse_dac_bias: Synapse DAC bias current that is desired.
-        Controls the charge emitted to the synaptic input line by a
-        multiplication.
+    :param target: Calibration target parameters.
+    :param options: Further options for calibration.
 
     :return: Calibration result for integration on the synaptic input
         lines.
     """
 
-    # calibrate CADCs
-    kwargs = {"dynamic_range": base.ParameterRange(150, 340)}
+    if target is None:
+        target = HagenSyninCalibrationTarget()
+    if options is None:
+        options = HagenSyninCalibrationOptions()
+
+    used_deprecated_parameters = False
     if cadc_kwargs is not None:
-        kwargs.update(cadc_kwargs)
-    cadc_result = cadc.calibrate(connection, **kwargs)
+        target.cadc_target = cadc.CADCCalibTarget(**cadc_kwargs)
+        used_deprecated_parameters = True
+    if synapse_driver_kwargs is not None:
+        options.synapse_driver_options = \
+            synapse_driver.SynapseDriverCalibOptions(**synapse_driver_kwargs)
+        used_deprecated_parameters = True
+    if synapse_dac_bias is not None:
+        target.synapse_dac_bias = synapse_dac_bias
+        used_deprecated_parameters = True
+
+    # delete deprecated arguments, to ensure the correct ones are used
+    # in the following code
+    del cadc_kwargs
+    del synapse_driver_kwargs
+    del synapse_dac_bias
+
+    if used_deprecated_parameters:
+        warn(
+            "Passing arguments directly to calibrate() functions is "
+            "deprecated. Please now use the target and option classes.",
+            DeprecationWarning, stacklevel=2)
+
+    target.check()
+
+    # calibrate CADCs
+    cadc_result = cadc.calibrate(
+        connection, target.cadc_target, options.cadc_options)
 
     # global configuration
     builder = sta.PlaybackProgramBuilder()
@@ -312,7 +464,8 @@ def calibrate_for_synin_integration(
     builder = sta.PlaybackProgramBuilder()
     builder = helpers.capmem_set_quadrant_cells(
         builder,
-        {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: synapse_dac_bias})
+        {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac:
+         target.synapse_dac_bias})
     builder = helpers.wait(builder, constants.capmem_level_off_time)
     base.run(connection, builder)
 
@@ -322,10 +475,8 @@ def calibrate_for_synin_integration(
         connection, algorithm=algorithms.BinarySearch()).calibrated_parameters
 
     # calibrate synapse drivers
-    if synapse_driver_kwargs is None:
-        synapse_driver_kwargs = {}
     synapse_driver_result = synapse_driver.calibrate(
-        connection, **synapse_driver_kwargs)
+        connection, options.synapse_driver_options)
 
     # pack into result class, apply it
     to_be_returned = HagenSyninCalibrationResult(

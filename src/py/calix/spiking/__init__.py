@@ -1,11 +1,38 @@
 from typing import Optional, Union
 from dataclasses import dataclass
+from warnings import warn
 
 from dlens_vx_v3 import sta, hxcomm
 
 from calix.common import base, cadc, helpers
 from calix.spiking import neuron
 from calix import constants
+
+
+@dataclass
+class SpikingCalibrationTarget(base.CalibrationTarget):
+    """
+    Data class containing targets for spiking neuron calibration.
+
+    :ivar cadc_target: Target parameters for CADC calibration.
+    :ivar neuron_target: Target parameters for neuron calibration.
+    """
+
+    cadc_target: cadc.CADCCalibTarget = cadc.CADCCalibTarget()
+    neuron_target: neuron.NeuronCalibTarget = neuron.NeuronCalibTarget()
+
+
+@dataclass
+class SpikingCalibrationOptions(base.CalibrationOptions):
+    """
+    Data class containing further options for spiking calibration.
+
+    :ivar cadc_options: Further options for CADC calibration.
+    :ivar neuron_options: Further options for neuron calibration.
+    """
+
+    cadc_options: cadc.CADCCalibOptions = cadc.CADCCalibOptions()
+    neuron_options: neuron.NeuronCalibOptions = neuron.NeuronCalibOptions()
 
 
 @dataclass
@@ -38,6 +65,8 @@ class SpikingCalibrationResult(base.CalibrationResult):
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
+              target: Optional[SpikingCalibrationTarget] = None,
+              options: Optional[SpikingCalibrationOptions] = None, *,
               cadc_kwargs: Optional[dict] = None,
               neuron_kwargs: Optional[dict] = None
               ) -> SpikingCalibrationResult:
@@ -57,35 +86,58 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     Afterwards, the neuron potentials are calibrated once again.
 
     :param connection: Connection to the chip to calibrate.
-    :param cadc_kwargs: Optional parameters for CADC calibration.
-    :param neuron_kwargs: Optional parameters for neuron calibration.
+    :param target: Target parameters for calibration, given as an
+        instance of SpikingCalibrationTarget.
+    :param options: Further options for calibration, given as an
+        instance of SpikingCalibrationOptions.
 
     :return: SpikingCalibrationResult, containing cadc and neuron results.
     """
 
+    if target is None:
+        target = SpikingCalibrationTarget()
+    if options is None:
+        options = SpikingCalibrationOptions()
+
+    used_deprecated_parameters = False
+    if cadc_kwargs is not None:
+        target.cadc_target = cadc.CADCCalibTarget(**cadc_kwargs)
+        used_deprecated_parameters = True
+    if neuron_kwargs is not None:
+        target.neuron_target = neuron.NeuronCalibTarget(**neuron_kwargs)
+        used_deprecated_parameters = True
+
+    # delete deprecated arguments, to ensure the correct ones are used
+    # in the following code
+    del cadc_kwargs
+    del neuron_kwargs
+
+    if used_deprecated_parameters:
+        warn(
+            "Passing arguments directly to calibrate() functions is "
+            "deprecated. Please now use the target parameter class.",
+            DeprecationWarning, stacklevel=2)
+
+    target.check()
+
     # calibrate CADCs
-    if cadc_kwargs is None:
-        cadc_kwargs = {}
-    cadc_result = cadc.calibrate(connection, **cadc_kwargs)
+    cadc_result = cadc.calibrate(
+        connection, target.cadc_target, options.cadc_options)
 
     # calibrate neurons
-    if neuron_kwargs is None:
-        neuron_kwargs = {}
-    neuron_result = neuron.calibrate(connection, **neuron_kwargs)
+    neuron_result = neuron.calibrate(
+        connection, target.neuron_target, options.neuron_options)
 
     # re-calibrate CADCs
     # The newly set CapMem cells during the neuron calibration introduce
     # crosstalk on the CapMem, which means the previous CADC calibration
     # is no longer precise. We repeat the calib after the neurons are
     # configured to mitigate this crosstalk.
-    cadc_result = cadc.calibrate(connection, **cadc_kwargs)
+    cadc_result = cadc.calibrate(
+        connection, target.cadc_target, options.cadc_options)
 
     # re-calibrate neuron potentials
-    # filter neuron_kwargs for potentials
-    potentials = ["leak", "reset", "threshold"]
-    neuron_potentials = {key: neuron_kwargs[key] for key in potentials
-                         if key in neuron_kwargs}
     neuron.refine_potentials(
-        connection, neuron_result, **neuron_potentials)
+        connection, neuron_result, target.neuron_target)
 
     return SpikingCalibrationResult(cadc_result, neuron_result)

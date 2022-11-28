@@ -61,7 +61,9 @@ class STPCalibrationTest(ConnectionSetup):
     def test_00_preparations(self):
         # calibrate CADC
         cadc.calibrate(
-            self.connection, base.ParameterRange(100, 450))
+            self.connection,
+            cadc.CADCCalibTarget(
+                dynamic_range=base.ParameterRange(100, 450)))
 
         # reconnect neuron readout to CADCs
         builder = sta.PlaybackProgramBuilder()

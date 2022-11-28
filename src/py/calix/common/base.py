@@ -39,6 +39,67 @@ ParameterRange = namedtuple("ParameterRange", ["lower", "upper"])
 
 
 @dataclass
+class CalibrationTarget(ABC):
+    """
+    Data structure for collecting targets for higher-level calibration
+    functions into one logical unit.
+
+    Targets are parameters that directly affect how a circuit is
+    configured. They have a standard range, where the circuits will
+    work well. Exceeding the standard range may work better for some
+    instances (e.g., neurons) than others.
+    """
+
+    def check_types(self):
+        """
+        Check whether the given types and shapes of arrays are
+        suitable.
+        """
+
+        for value in vars(self).values():
+            try:
+                value.check_types()
+            except AttributeError:
+                pass
+
+    def check_values(self):
+        """
+        Check whether the provided target parameters are feasible
+        for calibration.
+        """
+
+        for value in vars(self).values():
+            try:
+                value.check_values()
+            except AttributeError:
+                pass
+
+    def check(self):
+        """
+        Check types and values of parameters.
+        """
+
+        self.check_types()
+        self.check_values()
+
+
+@dataclass
+class CalibrationOptions(ABC):
+    """
+    Data structure for collecting other configuration parameters for
+    higher-level calibration functions.
+
+    These options are not targets in the sense that they are more
+    technical parameters. They may still affect the result, though.
+
+    The available choices (ranges) will be clear from the expected
+    data types. For example, boolean switches can allow to perform
+    the calibration differently, or a priority setting can be applied
+    to some targets, at the cost of accuracy at other targets.
+    """
+
+
+@dataclass
 class CalibrationResult(ABC):
     """
     Data structure for higher-level calibration results, that combine

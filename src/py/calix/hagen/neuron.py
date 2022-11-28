@@ -6,14 +6,127 @@ to run the calibration.
 
 from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass
+from warnings import warn
+
 import numpy as np
 import quantities as pq
+
 from dlens_vx_v3 import sta, halco, hal, hxcomm, lola
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import neuron_helpers, neuron_evaluation, \
     neuron_leak_bias, neuron_synin, neuron_potentials
 from calix import constants
+
+
+@dataclass
+class NeuronCalibTarget(base.CalibrationTarget):
+    """
+    Target parameters for the neuron calibration.
+
+    :ivar target_leak_read: Target CADC read at resting potential
+        of the membrane. Due to the low leak bias currents, the spread
+        of resting potentials may be high even after calibration.
+    :ivar tau_mem: Targeted membrane time constant while calibrating the
+        synaptic inputs.
+        Too short values can not be achieved with this calibration routine.
+        The default value of 60 us should work.
+        If a target_noise is given (default), this setting does not affect
+        the final leak bias currents, as those are determined by
+        reaching the target noise.
+    :ivar tau_syn: Controls the synaptic input time constant.
+        If set to 0 us, the minimum synaptic input time constant will be
+        used, which means different synaptic input time constants per
+        neuron. If a single different Quantity is given, it is used for
+        all synaptic inputs of all neurons, excitatory and inhibitory.
+        If an array of Quantities is given, it can be shaped
+        (2, 512) for the excitatory and inhibitory synaptic input
+        of each neuron. It can also be shaped (2,) for the excitatory
+        and inhibitory synaptic input of all neurons, or shaped (512,)
+        for both inputs per neuron.
+    :ivar i_synin_gm: Target synaptic input OTA bias current.
+        The amplitudes of excitatory inputs using this target current are
+        measured, and the median of all neurons' amplitudes is taken as target
+        for calibration of the synaptic input strengths.
+        The inhibitory synaptic input gets calibrated to match the excitatory.
+        Some 300 LSB are proposed here. Choosing high values yields
+        higher noise and lower time constants on the neurons, choosing
+        low values yields less gain in a multiplication.
+    :ivar target_noise: Noise amplitude in an integration process to
+        aim for when searching the optimum leak OTA bias current,
+        given as the standard deviation of successive reads in CADC LSB.
+        Higher noise settings mean longer membrane time constants but
+        impact reproducibility.
+        Set target_noise to None to skip optimization of noise amplitudes
+        entirely. In this case, the original membrane time constant
+        calibration is used for leak bias currents.
+    """
+
+    target_leak_read: Union[int, np.ndarray] = 120
+    tau_mem: pq.Quantity = 60 * pq.us
+    tau_syn: pq.Quantity = 0.32 * pq.us
+    i_synin_gm: int = 450
+    target_noise: Optional[float] = None
+
+    def check_types(self):
+        """
+        Check whether the correct types are given.
+
+        :raises TypeError: If time constants are not given with a unit
+            from the `quantities` package.
+        """
+
+        super().check_types()
+
+        if not isinstance(self.tau_mem, pq.Quantity):
+            raise TypeError(
+                "Membrane time constant is not given as a "
+                "`quantities.quantity.Quantity`.")
+        if not isinstance(self.tau_syn, pq.Quantity):
+            raise TypeError(
+                "Synaptic time constant is not given as a "
+                "`quantities.quantity.Quantity`.")
+
+    def check_values(self):
+        """
+        Check feasibility of target parameters.
+
+        :raises ValueError: If target parameters are not in a feasible range.
+        """
+
+        super().check_values()
+
+        if np.any([self.tau_mem < 0.1 * pq.us, self.tau_mem > 200. * pq.us]):
+            raise ValueError(
+                "Target membrane time constant is out of feasible range.")
+        if np.any([self.tau_syn < 0 * pq.us, self.tau_syn > 50. * pq.us]):
+            raise ValueError(
+                "Target synaptic time constant is out of feasible range.")
+
+
+@dataclass
+class NeuronCalibOptions(base.CalibrationOptions):
+    """
+    Further options for the neuron calibration.
+
+    :ivar readout_neuron: Coordinate of the neuron to be connected to
+        a readout pad, i.e. can be observed using an oscilloscope.
+        The selected neuron is connected to the upper pad (channel 0),
+        the lower pad (channel 1) always shows the CADC ramp of quadrant 0.
+        The pads are connected via
+        halco.SourceMultiplexerOnReadoutSourceSelection(0) for the neuron
+        and mux 1 for the CADC ramps. When using the internal MADC
+        for recording, these multiplexers can be selected directly.
+        If None is given, the readout is not configured.
+    :ivar initial_configuration: Additional function which is called before
+        starting the calibration. Called with `connection`, such that the
+        hardware is available within the function.
+        If None (default), no additional configuration gets applied.
+    """
+
+    readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
+    initial_configuration: Optional[
+        Callable[[hxcomm.ConnectionHandle], None]] = None
 
 
 @dataclass
@@ -169,13 +282,18 @@ class CalibrationResultInternal:
         return result
 
 
-# pylint: disable=too-many-statements, too-many-locals
+# some of the following pylint-disables can probably be deleted once
+# deprecated parameters are removed (cf. issue 4017).
+# pylint: disable=too-many-statements, too-many-locals, too-many-branches
 def calibrate(
-        connection: hxcomm.ConnectionHandle, *,
-        target_leak_read: Union[int, np.ndarray] = 120,
-        tau_mem: pq.quantity.Quantity = 60 * pq.us,
-        tau_syn: pq.quantity.Quantity = 0.32 * pq.us,
-        i_synin_gm: int = 450, target_noise: Optional[float] = None,
+        connection: hxcomm.ConnectionHandle,
+        target: Optional[NeuronCalibTarget] = None,
+        options: Optional[NeuronCalibOptions] = None, *,
+        target_leak_read: Optional[Union[int, np.ndarray]] = None,
+        tau_mem: Optional[pq.Quantity] = None,
+        tau_syn: Optional[pq.Quantity] = None,
+        i_synin_gm: Optional[int] = None,
+        target_noise: Optional[float] = None,
         readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
         initial_configuration: Optional[
             Callable[[hxcomm.ConnectionHandle], None]] = None
@@ -229,55 +347,10 @@ def calibrate(
       the function `calix.common.cadc.calibrate()`.
 
     :param connection: Connection to the chip to calibrate.
-    :param target_leak_read: Target CADC read at resting potential
-        of the membrane. Due to the low leak bias currents, the spread
-        of resting potentials may be high even after calibration.
-    :param tau_mem: Targeted membrane time constant while calibrating the
-        synaptic inputs.
-        Too short values can not be achieved with this calibration routine.
-        The default value of 60 us should work.
-        If a target_noise is given (default), this setting does not affect
-        the final leak bias currents, as those are determined by
-        reaching the target noise.
-    :param tau_syn: Controls the synaptic input time constant.
-        If set to 0 us, the minimum synaptic input time constant will be
-        used, which means different synaptic input time constants per
-        neuron. If a single different Quantity is given, it is used for
-        all synaptic inputs of all neurons, excitatory and inhibitory.
-        If an array of Quantities is given, it can be shaped
-        (2, 512) for the excitatory and inhibitory synaptic input
-        of each neuron. It can also be shaped (2,) for the excitatory
-        and inhibitory synaptic input of all neurons, or shaped (512,)
-        for both inputs per neuron.
-    :param i_synin_gm: Target synaptic input OTA bias current.
-        The amplitudes of excitatory inputs using this target current are
-        measured, and the median of all neurons' amplitudes is taken as target
-        for calibration of the synaptic input strengths.
-        The inhibitory synaptic input gets calibrated to match the excitatory.
-        Some 300 LSB are proposed here. Choosing high values yields
-        higher noise and lower time constants on the neurons, choosing
-        low values yields less gain in a multiplication.
-    :param target_noise: Noise amplitude in an integration process to
-        aim for when searching the optimum leak OTA bias current,
-        given as the standard deviation of successive reads in CADC LSB.
-        Higher noise settings mean longer membrane time constants but
-        impact reproducibility.
-        Set target_noise to None to skip optimization of noise amplitudes
-        entirely. In this case, the original membrane time constant
-        calibration is used for leak bias currents.
-    :param readout_neuron: Coordinate of the neuron to be connected to
-        a readout pad, i.e. can be observed using an oscilloscope.
-        The selected neuron is connected to the upper pad (channel 0),
-        the lower pad (channel 1) always shows the CADC ramp of quadrant 0.
-        The pads are connected via
-        halco.SourceMultiplexerOnReadoutSourceSelection(0) for the neuron
-        and mux 1 for the CADC ramps. When using the internal MADC
-        for recording, these multiplexers can be selected directly.
-        If None is given, the readout is not configured.
-    :param initial_configuration: Additional function which is called before
-        starting the calibration. Called with `connection`, such that the
-        hardware is available within the function.
-        If None (default), no additional configuration gets applied.
+    :param target: Calibration target, given as an instance of
+        NeuronCalibTarget. Refer there for the individual parameters.
+    :param options: Further calibration options, given as an instance of
+        NeuronCalibOptions. Refer there for the individual parameters.
 
     :return: NeuronCalibResult, containing all calibrated parameters.
 
@@ -287,31 +360,61 @@ def calibrate(
         from the `quantities` package.
     """
 
-    if not isinstance(tau_mem, pq.quantity.Quantity):
-        raise TypeError(
-            "Membrane time constant is not given as a "
-            "`quantities.quantity.Quantity`.")
-    if not isinstance(tau_syn, pq.quantity.Quantity):
-        raise TypeError(
-            "Synaptic time constant is not given as a "
-            "`quantities.quantity.Quantity`.")
+    if target is None:
+        target = NeuronCalibTarget()
+    if options is None:
+        options = NeuronCalibOptions()
 
-    if np.any([tau_mem < 0.1 * pq.us, tau_mem > 200. * pq.us]):
-        raise ValueError(
-            "Target membrane time constant is out of feasible range.")
-    if np.any([tau_syn < 0 * pq.us, tau_syn > 50. * pq.us]):
-        raise ValueError(
-            "Target synaptic time constant is out of feasible range.")
+    used_deprecated_parameters = False
+    if target_leak_read is not None:
+        target.target_leak_read = target_leak_read
+        used_deprecated_parameters = True
+    if tau_mem is not None:
+        target.tau_mem = tau_mem
+        used_deprecated_parameters = True
+    if tau_syn is not None:
+        target.tau_syn = tau_syn
+        used_deprecated_parameters = True
+    if i_synin_gm is not None:
+        target.i_synin_gm = i_synin_gm
+        used_deprecated_parameters = True
+    if target_noise is not None:
+        target.target_noise = target_noise
+        used_deprecated_parameters = True
+    if readout_neuron is not None:
+        options.readout_neuron = readout_neuron
+        used_deprecated_parameters = True
+    if initial_configuration is not None:
+        options.initial_configuration = initial_configuration
+        used_deprecated_parameters = True
+
+    # delete deprecated arguments, to ensure the correct ones are used
+    # in the following code
+    del target_leak_read
+    del tau_mem
+    del tau_syn
+    del i_synin_gm
+    del target_noise
+    del readout_neuron
+    del initial_configuration
+
+    if used_deprecated_parameters:
+        warn(
+            "Passing arguments directly to calibrate() functions is "
+            "deprecated. Please now use the target and option classes.",
+            DeprecationWarning, stacklevel=2)
+
+    target.check()
 
     # Configure chip for calibration
     builder = sta.PlaybackProgramBuilder()
     builder, initial_config = neuron_helpers.configure_chip(
-        builder, readout_neuron=readout_neuron)
+        builder, readout_neuron=options.readout_neuron)
     base.run(connection, builder)
 
     # call optional program for further initial configuration
-    if initial_configuration is not None:
-        initial_configuration(connection)
+    if options.initial_configuration is not None:
+        options.initial_configuration(connection)
 
     # Initialize return object
     calib_result = CalibrationResultInternal()
@@ -342,40 +445,40 @@ def calibrate(
     base.run(connection, builder)
 
     # Calibrate synaptic input time constant using MADC
-    if np.all(tau_syn == 0 * pq.us):
+    if np.all(target.tau_syn == 0 * pq.us):
         pass
-    elif np.ndim(tau_syn) > 0 \
-            and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
+    elif np.ndim(target.tau_syn) > 0 \
+            and target.tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
         calibration = neuron_synin.ExcSynTimeConstantCalibration(
-            target=tau_syn[0])
+            target=target.tau_syn[0])
         calib_result.i_syn_exc_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch()
         ).calibrated_parameters
         calibration = neuron_synin.InhSynTimeConstantCalibration(
-            target=tau_syn[1])
+            target=target.tau_syn[1])
         calib_result.i_syn_inh_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch()
         ).calibrated_parameters
     else:
         calibration = neuron_synin.ExcSynTimeConstantCalibration(
-            target=tau_syn)
+            target=target.tau_syn)
         calib_result.i_syn_exc_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch()
         ).calibrated_parameters
         calibration = neuron_synin.InhSynTimeConstantCalibration(
-            target=tau_syn)
+            target=target.tau_syn)
         calib_result.i_syn_inh_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch(),
         ).calibrated_parameters
 
     # Calibrate leak potential at target leak read
     calibration = neuron_potentials.LeakPotentialCalibration(
-        target_leak_read)
+        target.target_leak_read)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     # Calibrate membrane time constant using reset
     calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
-        target_time_const=tau_mem, target_amplitude=50)
+        target_time_const=target.tau_mem, target_amplitude=50)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_bias_leak = result.calibrated_parameters
@@ -391,12 +494,12 @@ def calibrate(
 
     # Enable and calibrate excitatory synaptic input amplitudes to median
     neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=i_synin_gm)
+        connection, excitatory_biases=target.i_synin_gm)
 
     exc_synin_calibration = neuron_synin.ExcSynBiasCalibration(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
-            i_synin_gm + 250, hal.CapMemCell.Value.max)))
+            target.i_synin_gm + 250, hal.CapMemCell.Value.max)))
     result = exc_synin_calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_exc_gm = result.calibrated_parameters
@@ -405,12 +508,12 @@ def calibrate(
 
     # Disable exc. synaptic input, enable and calibrate inhibitory
     neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=i_synin_gm)
+        connection, excitatory_biases=0, inhibitory_biases=target.i_synin_gm)
 
     calibration = neuron_synin.InhSynBiasCalibration(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
-            i_synin_gm + 250, hal.CapMemCell.Value.max)),
+            target.i_synin_gm + 250, hal.CapMemCell.Value.max)),
         target=exc_synin_calibration.target)
     calibration.n_events = exc_synin_calibration.n_events
     result = calibration.run(
@@ -458,10 +561,10 @@ def calibrate(
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
-    if target_noise:
+    if target.target_noise:
         # Set Leak bias as low as possible with target readout noise
         calibration = neuron_leak_bias.LeakBiasCalibration(
-            target=target_noise, target_leak_read=target_cadc_reads)
+            target=target.target_noise, target_leak_read=target_cadc_reads)
         result = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch())
         calib_result.i_bias_leak = result.calibrated_parameters

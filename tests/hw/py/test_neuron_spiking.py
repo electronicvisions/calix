@@ -183,7 +183,8 @@ class TestNeuronCalib(ConnectionSetup):
         # Increase range between reset and leak, to place threshold
         calix.spiking.neuron.refine_potentials(
             self.connection, self.__class__.calib_result.neuron_result,
-            leak=110, reset=60, threshold=120)
+            calix.spiking.neuron.NeuronCalibTarget(
+                leak=110, reset=60, threshold=120))
 
         # Calibrate threshold for equal firing rates
         calix.spiking.neuron.calibrate_leak_over_threshold(
@@ -215,7 +216,8 @@ class TestNeuronCalib(ConnectionSetup):
         # Initial config: leak below threshold
         calix.spiking.neuron.refine_potentials(
             self.connection, self.__class__.calib_result.neuron_result,
-            leak=110, reset=60, threshold=120)
+            calix.spiking.neuron.NeuronCalibTarget(
+                leak=110, reset=60, threshold=120))
         original_thresholds = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
         for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
             original_thresholds[int(coord.toEnum())] = \
@@ -260,12 +262,11 @@ class TestNeuronCalib(ConnectionSetup):
         Test spike response afterwards.
         """
 
-        neuron_kwargs = {
-            "i_synin_gm": np.ones(
-                halco.NeuronConfigOnDLS.size, dtype=int) * 600,
-        }
+        target = calix.spiking.SpikingCalibrationTarget()
+        target.neuron_target.i_synin_gm = np.ones(
+            halco.NeuronConfigOnDLS.size, dtype=int) * 600
 
-        calix.spiking.calibrate(self.connection, neuron_kwargs=neuron_kwargs)
+        calix.spiking.calibrate(self.connection, target)
 
         self.helper_test_spikes()
 

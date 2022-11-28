@@ -43,7 +43,8 @@ class NeuronThresholdTest(ConnectionSetup):
         # using hagen mode calib: set syn. input bias and tau_syn
         # more suitable for spiking operation
         neuron.calibrate(
-            self.connection, i_synin_gm=300, tau_syn=2 * pq.us)
+            self.connection,
+            neuron.NeuronCalibTarget(i_synin_gm=300, tau_syn=2 * pq.us))
 
     @staticmethod
     def preconfigure(connection: hxcomm.ConnectionHandle,

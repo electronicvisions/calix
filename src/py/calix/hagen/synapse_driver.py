@@ -12,7 +12,10 @@ be calibrated.
 
 from typing import Optional, Dict, Union
 from dataclasses import dataclass
+from warnings import warn
+
 import numpy as np
+
 from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
 
 from calix.common import algorithms, base, helpers
@@ -29,6 +32,20 @@ RANGE_LIMIT = 0.9
 
 # Default STP ramp offset
 DEFAULT_STP_OFFSET = hal.SynapseDriverConfig.Offset.max // 2
+
+
+@dataclass
+class SynapseDriverCalibOptions(base.CalibrationOptions):
+    """
+    Further options for synapse driver calibration.
+
+    :ivar offset_test_activation: Hagen-mode activation where amplitudes
+        between different drivers are aligned using the individual DAC
+        offsets.
+    """
+
+    offset_test_activation: hal.SynapseQuad.Label \
+        = hal.PADIEvent.HagenActivation(3)
 
 
 @dataclass
@@ -721,8 +738,8 @@ class HagenDACOffsetCalibration(base.Calibration):
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
-              offset_test_activation: hal.SynapseQuad.Label
-              = hal.PADIEvent.HagenActivation(3)
+              options: Optional[SynapseDriverCalibOptions] = None,
+              offset_test_activation: Optional[hal.SynapseQuad.Label] = None
               ) -> SynapseDriverCalibResult:
     """
     Calibrate the synapse drivers' STP offsets such that the amplitudes
@@ -746,13 +763,22 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         `calix.hagen.neuron_helpers.configure_chip()` to achieve this.
 
     :param connection: Connection to the chip to run on.
-    :param offset_test_address: Address to align the hagen-mode DAC
-        offsets on. Note that the address is the inverted activation,
-        i.e. 0 yields a large value and 31 a small value.
+    :param options: Calibration options, given as an instance of
+        SynapseDriverCalibOptions.
 
     :return: SynapseDriverCalibResult containing STP ramp currents for
         the CapMem blocks, offsets for the drivers, and a success mask.
     """
+
+    if options is None:
+        options = SynapseDriverCalibOptions()
+
+    if offset_test_activation is not None:
+        options.offset_test_activation = offset_test_activation
+        warn(
+            "Passing arguments directly to calibrate() functions is "
+            "deprecated. Please now use the target and option classes.",
+            DeprecationWarning, stacklevel=2)
 
     # preconfigure chip
     builder = sta.PlaybackProgramBuilder()
@@ -774,7 +800,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # calibrate Hagen-mode DAC offset
     calibration = HagenDACOffsetCalibration()
-    calibration.test_activation = offset_test_activation
+    calibration.test_activation = options.offset_test_activation
     result = calibration.run(connection, algorithm=algorithms.BinarySearch())
     calib_result.hagen_dac_offset = result.calibrated_parameters
     calib_result.success = np.all(

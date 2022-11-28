@@ -5,12 +5,67 @@ Calibrates all CADC channels on Hicann-X for a given dynamic range.
 from typing import Optional, Union
 import os
 from dataclasses import dataclass
+from warnings import warn
+
 import numpy as np
+
 from dlens_vx_v3 import halco, hal, sta, logger, hxcomm
 
 from calix.common import helpers, algorithms, base, \
     cadc_helpers, cadc_evaluation
 from calix import constants
+
+
+@dataclass
+class CADCCalibTarget(base.CalibrationTarget):
+    """
+    Target parameters for the CADC calibration.
+
+    :ivar dynamic_range: CapMem settings (LSB) at the minimum and maximum
+        of the desired dynamic range. By default, the full dynamic range
+        of the CADC is used, which corresponds to some 0.15 to 1.05 V.
+        The voltages are configured as `stp_v_charge_0`, which gets
+        connected to the CADCs via the CapMem debug readout.
+    :ivar read_range: Target CADC reads at the lower and upper end of
+        the dynamic range.
+    """
+
+    dynamic_range: base.ParameterRange = base.ParameterRange(70, 550)
+    read_range: base.ParameterRange = base.ParameterRange(20, 220)
+
+    def check_values(self):
+        """
+        Check whether the given parameters are possible within the
+        CapMem and CADC value ranges.
+        """
+
+        super().check_values()
+
+        if np.any(np.array(self.dynamic_range) < hal.CapMemCell.Value.min):
+            raise ValueError("CADC dynamic_range is below CapMem range.")
+        if np.any(np.array(self.dynamic_range) > hal.CapMemCell.Value.max):
+            raise ValueError("CADC dynamic_range is above CapMem range.")
+        if np.any(np.array(self.read_range) < hal.CADCSampleQuad.Value.min):
+            raise ValueError("CADC read_range is below CADC value range.")
+        if np.any(np.array(self.read_range) > hal.CADCSampleQuad.Value.max):
+            raise ValueError("CADC read_range is above CADC value range.")
+
+
+@dataclass
+class CADCCalibOptions(base.CalibrationOptions):
+    """
+    Further configuration parameters for the CADC calibration, that are
+    not directly calibration targets.
+
+    :ivar calibrate_offsets: Decide whether the individual channel
+        offsets are calibrated. For standard usecases, including
+        neuron and correlation measurements, this should be enabled
+        (default). Only in case the auto-calibrating correlation
+        reset (cf. hal.CommonCorrelationConfig) is used, this
+        should be disabled.
+    """
+
+    calibrate_offsets: bool = True
 
 
 @dataclass
@@ -416,9 +471,11 @@ class ChannelOffsetCalibration(base.Calibration):
 
 def calibrate(
         connection: hxcomm.ConnectionHandle,
-        dynamic_range: base.ParameterRange = base.ParameterRange(70, 550),
-        read_range: base.ParameterRange = base.ParameterRange(20, 220),
-        calibrate_offsets: bool = True
+        target: Optional[CADCCalibTarget] = None,
+        options: Optional[CADCCalibOptions] = None, *,
+        dynamic_range: Optional[base.ParameterRange] = None,
+        read_range: Optional[base.ParameterRange] = None,
+        calibrate_offsets: Optional[bool] = None
 ) -> CADCCalibResult:
     """
     Calibrates all the CADCs (top, bottom, causal, acausal) to work
@@ -447,24 +504,48 @@ def calibrate(
 
     :param connection: Connection to a chip that this calibration will
         run on.
-    :param dynamic_range: CapMem settings (LSB) at the minimum and maximum
-        of the desired dynamic range. By default, the full dynamic range
-        of the CADC is used, which corresponds to some 0.15 to 1.05 V.
-        The voltages are configured as `stp_v_charge_0`, which gets
-        connected to the CADCs via the CapMem debug readout.
-    :param read_range: Target CADC reads at the lower and upper end of
-        the dynamic range.
-    :param calibrate_offsets: Decide whether the individual channel
-        offsets (part 3) are calibrated. For standard usecases,
-        including neuron and correlation measurements, this should
-        be enabled (default). Only in case the auto-calibrating
-        correlation reset (cf. hal.CommonCorrelationConfig) is used,
-        this should be disabled.
+    :param target: Target parameters for calibration, given as an
+        instance of CADCCalibTarget. Refer there for the individual
+        parameters.
+    :param options: Further options for calibration, given as an
+        instance of CADCCalibOptions. Refer there for the individual
+        parameters.
 
     :returns: CADCCalibResult, containing the settings for the CADC ramps
         of each quadrant and the digital offsets and calibration success
         of each channel.
     """
+
+    if target is None:
+        target = CADCCalibTarget()
+    if options is None:
+        options = CADCCalibOptions()
+
+    # pylint: disable=too-many-branches
+    used_deprecated_parameters = False
+    if dynamic_range is not None:
+        target.dynamic_range = dynamic_range
+        used_deprecated_parameters = True
+    if read_range is not None:
+        target.read_range = read_range
+        used_deprecated_parameters = True
+    if calibrate_offsets is not None:
+        options.calibrate_offsets = calibrate_offsets
+        used_deprecated_parameters = True
+
+    # delete deprecated arguments, to ensure the correct ones are used
+    # in the following code
+    del dynamic_range
+    del read_range
+    del calibrate_offsets
+
+    if used_deprecated_parameters:
+        warn(
+            "Passing arguments directly to calibrate() functions is "
+            "deprecated. Please now use the target and option classes.",
+            DeprecationWarning, stacklevel=2)
+
+    target.check()
 
     log = logger.get("calix.common.cadc_calibration.calibrate")
 
@@ -482,26 +563,29 @@ def calibrate(
     calib_result = CADCCalibResult()
 
     # Part 1: Ramp offset
-    calibration = RampOffsetCalibration(dynamic_range_min=dynamic_range.lower)
+    calibration = RampOffsetCalibration(
+        dynamic_range_min=target.dynamic_range.lower)
     result = calibration.run(
-        connection, algorithms.BinarySearch(), target=read_range.lower)
+        connection, algorithms.BinarySearch(), target=target.read_range.lower)
     calib_result.v_ramp_offset = result.calibrated_parameters
     calib_result.success = cadc_helpers.convert_success_masks(result.success)
     log.INFO(f"Calibrated v_ramp_start, values: {calib_result.v_ramp_offset}")
 
     # Part 2: Ramp slope
-    calibration = RampSlopeCalibration(dynamic_range_max=dynamic_range.upper)
+    calibration = RampSlopeCalibration(
+        dynamic_range_max=target.dynamic_range.upper)
     result = calibration.run(
-        connection, algorithms.BinarySearch(), target=read_range.upper)
+        connection, algorithms.BinarySearch(), target=target.read_range.upper)
     calib_result.i_ramp_slope = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success,
         cadc_helpers.convert_success_masks(result.success)], axis=0)
     log.INFO(f"Calibrated i_ramp, values: {calib_result.i_ramp_slope}")
 
-    if calibrate_offsets:
+    if options.calibrate_offsets:
         # Part 3: Channel offsets
-        calibration = ChannelOffsetCalibration(int(np.mean(dynamic_range)))
+        calibration = ChannelOffsetCalibration(
+            int(np.mean(target.dynamic_range)))
         result = calibration.run(
             connection, algorithms.LinearPrediction(
                 probe_parameters=0,
