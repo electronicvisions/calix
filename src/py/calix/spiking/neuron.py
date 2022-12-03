@@ -78,6 +78,24 @@ class NeuronCalibTarget(base.CalibrationTarget):
     readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
     holdoff_time: pq.Quantity = 0 * pq.us
 
+    feasible_ranges = {
+        "leak": base.ParameterRange(50, 160),
+        "reset": base.ParameterRange(50, 160),
+        "threshold": base.ParameterRange(50, 220),
+        "tau_mem": base.ParameterRange(0.5 * pq.us, 60 * pq.us),
+        "tau_syn": base.ParameterRange(0.3 * pq.us, 30 * pq.us),
+        "i_synin_gm": base.ParameterRange(30, 800),
+        "membrane_capacitance": base.ParameterRange(
+            hal.NeuronConfig.MembraneCapacitorSize.min,
+            hal.NeuronConfig.MembraneCapacitorSize.max),
+        "refractory_time": base.ParameterRange(
+            40 * pq.ns, 32 * pq.us),
+        "synapse_dac_bias": base.ParameterRange(
+            30, hal.CapMemCell.Value.max),
+        "holdoff_time": base.ParameterRange(
+            0 * pq.ns, 4 * pq.us)
+    }
+
     @dataclass
     class SyninParameters:
         """

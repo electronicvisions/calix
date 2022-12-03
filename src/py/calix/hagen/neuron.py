@@ -68,6 +68,13 @@ class NeuronCalibTarget(base.CalibrationTarget):
     i_synin_gm: int = 450
     target_noise: Optional[float] = None
 
+    feasible_ranges = {
+        "target_leak_read": base.ParameterRange(100, 140),
+        "tau_syn": base.ParameterRange(0.3 * pq.us, 20 * pq.us),
+        "tau_mem": base.ParameterRange(20 * pq.us, 100 * pq.us),
+        "i_synin_gm": base.ParameterRange(30, 600),
+        "target_noise": base.ParameterRange(1.0, 2.5)}
+
     def check_types(self):
         """
         Check whether the correct types are given.

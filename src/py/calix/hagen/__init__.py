@@ -32,6 +32,11 @@ class HagenSyninCalibrationTarget(base.CalibrationTarget):
         dynamic_range=base.ParameterRange(150, 340))
     synapse_dac_bias: int = 800
 
+    feasible_ranges = {
+        "synapse_dac_bias": base.ParameterRange(
+            30, hal.CapMemCell.Value.max)
+    }
+
 
 @dataclass
 class HagenSyninCalibrationOptions(base.CalibrationOptions):

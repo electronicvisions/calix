@@ -32,6 +32,10 @@ class CADCCalibTarget(base.CalibrationTarget):
 
     dynamic_range: base.ParameterRange = base.ParameterRange(70, 550)
     read_range: base.ParameterRange = base.ParameterRange(20, 220)
+    feasible_ranges = {
+        "dynamic_range": base.ParameterRange(70, 550),
+        "read_range": base.ParameterRange(20, 220)
+    }
 
     def check_values(self):
         """

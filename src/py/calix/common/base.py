@@ -5,7 +5,7 @@ Provides abstract base classes for calibrations and algorithms.
 from __future__ import annotations
 from collections import namedtuple
 import numbers
-from typing import List, Union, Optional
+from typing import List, Union, Optional, ClassVar, Dict
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
@@ -48,7 +48,12 @@ class CalibrationTarget(ABC):
     configured. They have a standard range, where the circuits will
     work well. Exceeding the standard range may work better for some
     instances (e.g., neurons) than others.
+
+    :cvar feasible_ranges: Dict of feasible ranges for each parameter.
+        Warnings will be logged in case they are exceeded.
     """
+
+    feasible_ranges: ClassVar[Dict[str, ParameterRange]] = {}
 
     def check_types(self):
         """
@@ -68,11 +73,28 @@ class CalibrationTarget(ABC):
         for calibration.
         """
 
-        for value in vars(self).values():
+        log = logger.get("calix.common.base.CalibrationTarget")
+
+        for key, value in vars(self).items():
+            if value is None:
+                continue
+
+            # each ivar must be known either in feasible_ranges or must be
+            # another target class, i.e. provide check functions itself.
             try:
+                feasible_range = self.feasible_ranges[key]
+            except KeyError:
                 value.check_values()
-            except AttributeError:
-                pass
+                continue
+
+            if not isinstance(value, np.ndarray):
+                value = np.array(value)
+            if np.any([value < feasible_range.lower,
+                       value > feasible_range.upper]):
+                log.WARN(
+                    f"Parameter {key} was chosen at {value}, which is "
+                    + f"outside the standard range of {feasible_range}. "
+                    + "Please expect imperfect results.")
 
     def check(self):
         """
