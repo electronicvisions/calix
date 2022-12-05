@@ -140,4 +140,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     neuron.refine_potentials(
         connection, neuron_result, target.neuron_target)
 
-    return SpikingCalibrationResult(cadc_result, neuron_result)
+    return SpikingCalibrationResult(
+        target=target, options=options,
+        cadc_result=cadc_result, neuron_result=neuron_result)

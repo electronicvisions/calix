@@ -544,7 +544,7 @@ class _Recorder(Calibration):
     def run(self, connection: hxcomm.ConnectionHandle,
             algorithm: base.Algorithm,
             target: Union[numbers.Integral, np.ndarray, None] = None
-            ) -> base.CalibrationResult:
+            ) -> base.ParameterCalibrationResult:
         """
         Raises an exception since this recorder does not support
         calibration, i.e. being called with an algorithm.

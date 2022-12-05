@@ -128,7 +128,15 @@ class CalibrationResult(ABC):
     multiple parameters into a logal unit.
 
     Used as base type for hagen and spiking calibration results.
+
+    :ivar target: Target parameters that were used to achieve these
+        results.
+    :ivar options: Further options for calibration, that also may
+        affect the results.
     """
+
+    target: Optional[CalibrationTarget]
+    options: Optional[CalibrationOptions]
 
     # The following function should take a union type exposed from
     # haldls as an argument, cf. issue 3995.

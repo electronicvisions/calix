@@ -349,15 +349,20 @@ class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
 
         return atomic_neuron
 
-    def to_neuron_calib_result(self) -> NeuronCalibResult:
+    def to_neuron_calib_result(
+            self, target: NeuronCalibTarget, options: NeuronCalibOptions
+    ) -> NeuronCalibResult:
         """
         Conversion to NeuronCalibResult.
         The numpy arrays get merged into lola AtomicNeurons.
 
+        :param target: Target parameters for calibration.
+        :param options: Further options for calibration.
+
         :return: Equivalent NeuronCalibResult.
         """
 
-        result = super().to_neuron_calib_result()
+        result = super().to_neuron_calib_result(target, options)
 
         # set common correlation config
         # Restore default, which is configured differently in
@@ -802,7 +807,7 @@ def calibrate(
             f"Calibration failed for {n_neurons_failed} neurons: ",
             np.arange(halco.NeuronConfigOnDLS.size)[~calib_result.success])
 
-    result = calib_result.to_neuron_calib_result()
+    result = calib_result.to_neuron_calib_result(target, options)
     builder = sta.PlaybackProgramBuilder()
     result.apply(builder)
     base.run(connection, builder)
@@ -891,6 +896,9 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     ).calibrated_parameters
 
     # set new parameters in calib result
+    result.target.leak = target.leak
+    result.target.reset = target.reset
+    result.target.threshold = target.threshold
     for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
         result.neurons[coord].leak.v_leak = \
             hal.CapMemCell.Value(v_leak[int(coord.toEnum())])

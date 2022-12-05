@@ -93,15 +93,21 @@ class _SynapseDriverResultInternal:
         halco.SynapseDriverOnDLS.size, dtype=int)
     success: np.ndarray = np.ones(halco.SynapseDriverOnDLS.size, dtype=bool)
 
-    def to_synapse_driver_calib_result(self) -> SynapseDriverCalibResult:
+    def to_synapse_driver_calib_result(self,
+                                       options: SynapseDriverCalibOptions
+                                       ) -> SynapseDriverCalibResult:
         """
         Conversion to SynapseDriverCalibResult.
         The numpy arrays get transformed to dicts.
 
+        :ivar options: Further options for calibration.
+
         :return: Equivalent SynapseDriverCalibResult.
         """
 
-        result = SynapseDriverCalibResult({}, {}, {})
+        result = SynapseDriverCalibResult(
+            target=None, options=options,
+            capmem_cells={}, synapse_driver_configs={}, success={})
 
         for capmem_block, ramp_current in zip(
                 halco.iter_all(halco.CapMemBlockOnDLS), self.ramp_current):
@@ -806,4 +812,4 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     calib_result.success = np.all(
         [calib_result.success, result.success], axis=0)
 
-    return calib_result.to_synapse_driver_calib_result()
+    return calib_result.to_synapse_driver_calib_result(options)

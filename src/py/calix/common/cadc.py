@@ -563,8 +563,8 @@ def calibrate(
     # run program for configuration
     base.run(connection, builder)
 
-    # Initialize results to be returned as list
-    calib_result = CADCCalibResult()
+    # Initialize result
+    calib_result = CADCCalibResult(target=target, options=options)
 
     # Part 1: Ramp offset
     calibration = RampOffsetCalibration(

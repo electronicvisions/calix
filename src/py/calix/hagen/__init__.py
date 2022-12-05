@@ -272,7 +272,14 @@ class HagenCalibrationResult(base.CalibrationResult):
 
         # pack into result class, apply
         result = HagenSyninCalibrationResult(
-            cadc_result, self.synapse_driver_result, calibrated_dac_bias)
+            target=HagenSyninCalibrationTarget(
+                cadc_target=cadc_target, synapse_dac_bias=synapse_dac_bias),
+            options=HagenSyninCalibrationOptions(
+                cadc_options=cadc_options,
+                synapse_driver_options=self.options.synapse_driver_options),
+            cadc_result=cadc_result,
+            synapse_driver_result=self.synapse_driver_result,
+            syn_i_bias_dac=calibrated_dac_bias)
         builder = sta.PlaybackProgramBuilder()
         result.apply(builder)
         base.run(connection, builder)
@@ -392,7 +399,9 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # pack into result class
     to_be_returned = HagenCalibrationResult(
-        cadc_result, neuron_result, synapse_driver_result)
+        target=target, options=options,
+        cadc_result=cadc_result, neuron_result=neuron_result,
+        synapse_driver_result=synapse_driver_result)
 
     # apply calibration again:
     # The calibration is re-applied since synapse driver calibration
@@ -485,7 +494,9 @@ def calibrate_for_synin_integration(
 
     # pack into result class, apply it
     to_be_returned = HagenSyninCalibrationResult(
-        cadc_result, synapse_driver_result, calibrated_dac_bias)
+        target=target, options=options,
+        cadc_result=cadc_result, synapse_driver_result=synapse_driver_result,
+        syn_i_bias_dac=calibrated_dac_bias)
     builder = sta.PlaybackProgramBuilder()
     to_be_returned.apply(builder)
     base.run(connection, builder)

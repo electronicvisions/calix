@@ -264,15 +264,22 @@ class CalibrationResultInternal:
 
         return atomic_neuron
 
-    def to_neuron_calib_result(self) -> NeuronCalibResult:
+    def to_neuron_calib_result(self, target: NeuronCalibTarget,
+                               options: NeuronCalibOptions
+                               ) -> NeuronCalibResult:
         """
         Conversion to NeuronCalibResult.
         The numpy arrays get merged into lola AtomicNeurons.
 
+        :param target: Target parameters for calibration.
+        :param options: Further options for calibration.
+
         :return: Equivalent NeuronCalibResult.
         """
 
-        result = NeuronCalibResult({}, {}, {})
+        result = NeuronCalibResult(
+            target=target, options=options,
+            neurons={}, cocos={}, success={})
 
         # set neuron configuration, including CapMem
         for neuron_coord in halco.iter_all(halco.AtomicNeuronOnDLS):
@@ -633,11 +640,12 @@ def calibrate(
     neuron_evaluation.measure_quadrant_results(
         connection, calib_result.success)
 
-    return calib_result.to_neuron_calib_result()
+    return calib_result.to_neuron_calib_result(target, options)
 
 
 def calibrate_baseline(connection: hxcomm.ConnectionHandle,
-                       target_read: int = 128) -> base.CalibrationResult:
+                       target_read: int = 128
+                       ) -> base.ParameterCalibrationResult:
     """
     Calibrate the CADC channel offsets such that the neuron baseline,
     that is reading shortly after a reset without getting synaptic input,
