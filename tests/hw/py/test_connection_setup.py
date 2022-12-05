@@ -25,7 +25,7 @@ class TestConnectionSetup(ConnectionSetup):
     """
 
     def test_run_and_save_all(self):
-        expected_prefixes = ["hagen", "hagen_synin", "spiking"]
+        expected_prefixes = ["hagen", "hagen_synin", "spiking", "spiking2"]
         expected_suffixes = ["calix-native.pkl", "cocolist.pbin",
                              "cocolist.json.gz"]
 

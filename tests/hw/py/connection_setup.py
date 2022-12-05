@@ -33,7 +33,8 @@ class ConnectionSetup(unittest.TestCase):
     available_calibrations = {
         "hagen": calib_generator.HagenCalibration(),
         "hagen_synin": calib_generator.HagenSyninCalibration(),
-        "spiking": calib_generator.SpikingCalibration()}
+        "spiking": calib_generator.SpikingCalibration(),
+        "spiking2": calib_generator.SpikingCalibration2()}
     use_cache = True
 
     @classmethod

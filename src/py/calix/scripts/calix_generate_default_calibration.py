@@ -11,6 +11,8 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import List
 
+import quantities as pq
+
 from dlens_vx_v3 import logger
 from dlens_vx_v3.hxcomm import ConnectionHandle, ManagedConnection
 from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
@@ -162,6 +164,38 @@ class SpikingCalibRecorder(CalibrationRecorder):
         return calix.spiking.calibrate(connection)
 
 
+class SpikingCalibRecorder2(CalibrationRecorder):
+    """
+    Recorder for a second Spiking-Mode calibration.
+
+    In contrast to the default "spiking" calibration, we use smaller
+    synaptic and membrane time constants, but stronger currents per event.
+    Synaptic events should be shaprer in the sense that they are stronger,
+    but decay more quickly. Also, the spike threshold is increased.
+
+    This calibration will, among other uses, be used in the demo
+    notebooks, for the yin-yang example.
+    """
+
+    calibration_type = "spiking2"
+
+    def generate_calib(self,
+                       connection: ConnectionHandle) -> CalibrationResult:
+        builder, _ = ExperimentInit().generate()
+        run(connection, builder.done())
+
+        target = calix.spiking.SpikingCalibrationTarget(
+            neuron_target=calix.spiking.neuron.NeuronCalibTarget(
+                leak=80,
+                reset=80,
+                threshold=150,
+                tau_mem=6 * pq.us,
+                tau_syn=6 * pq.us,
+                i_synin_gm=500,
+                synapse_dac_bias=1000))
+        return calix.spiking.calibrate(connection, target)
+
+
 class CalixFormatDumper(CalibrationDumper):
     """
     Dumper for the calix-internal data format.
@@ -229,6 +263,13 @@ class SpikingCalibration(RecorderAndDumper):
                CocoListJsonFormatDumper()]
 
 
+class SpikingCalibration2(RecorderAndDumper):
+    recorder = SpikingCalibRecorder2()
+    dumpers = [CalixFormatDumper(),
+               CocoListPortableBinaryFormatDumper(),
+               CocoListJsonFormatDumper()]
+
+
 def run_and_save_all(deployment_folder: Path):
     """
     Executes all available default calibrations and saves them to all
@@ -238,7 +279,7 @@ def run_and_save_all(deployment_folder: Path):
     """
     with ManagedConnection() as connection:
         for calib in [HagenCalibration(), HagenSyninCalibration(),
-                      SpikingCalibration()]:
+                      SpikingCalibration(), SpikingCalibration2()]:
             calib.record_and_dump(connection, deployment_folder)
 
 
