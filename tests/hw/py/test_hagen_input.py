@@ -27,7 +27,7 @@ class HagenInputTest(ConnectionSetup):
     Provides methods for measuring the amplitudes sent by synapse drivers
     at the neurons. Tests functionality of hagen mode:
 
-    Calibrate CADCs, neurons, synapse drivers. Send events at
+    Calibrate CADCs and synapse drivers. Send events at
     different addresses and verify the amplitudes change, as the
     hagen mode requires.
 
@@ -118,7 +118,7 @@ class HagenInputTest(ConnectionSetup):
 
     def test_00_calibrate(self):
         """
-        Apply calibration of CADCs, neurons and synapse drivers.
+        Apply calibration of CADCs and synapse drivers.
         """
 
         self.__class__.calib_result = self.apply_calibration("hagen_synin")
@@ -166,6 +166,18 @@ class HagenInputTest(ConnectionSetup):
         base.run(self.connection, builder)
 
         # Assert calibration works again
+        amplitudes = self.measure_amplitudes()
+        self.evaluate_amplitudes(amplitudes)
+
+    def test_04_convert(self):
+        """
+        Convert calib result for integration on neurons to one
+        with integration on synaptic input lines, assert the test works.
+        """
+
+        hagen_result = self.apply_calibration("hagen")
+        hagen_result.to_hagen_synin_result(self.connection)
+
         amplitudes = self.measure_amplitudes()
         self.evaluate_amplitudes(amplitudes)
 
