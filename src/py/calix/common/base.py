@@ -9,7 +9,7 @@ from typing import List, Union, Optional, ClassVar, Dict
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
-from dlens_vx_v3 import halco, hal, sta, logger, hxcomm
+from dlens_vx_v3 import halco, hal, sta, logger, hxcomm, lola
 
 from calix.common.boundary_check import check_range_boundaries
 
@@ -172,6 +172,33 @@ class CalibResult(ABC):
         """
 
         raise NotImplementedError
+
+    def to_chip(
+            self,
+            initial_config: Optional[sta.PlaybackProgramBuilderDumper] = None,
+            chip: Optional[lola.Chip] = None) -> lola.Chip:
+        """
+        Apply the calibration into a lola.chip object.
+
+        :param initial_config: Optional dumper filled with configuration
+            instructions that have been run before creating the
+            calibration.
+        :param chip: Chip object to merge the calibration into.
+            Defaults to a default-constructed `lola.Chip()`.
+
+        :return: Chip object with calibration applied.
+        """
+
+        if initial_config is None:
+            initial_config = sta.PlaybackProgramBuilderDumper()
+
+        self.apply(initial_config)
+        dumperdone = initial_config.done()
+
+        if chip is None:
+            chip = lola.Chip()
+
+        return sta.convert_to_chip(dumperdone, chip)
 
 
 @dataclass

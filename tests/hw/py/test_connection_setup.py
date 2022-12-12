@@ -8,6 +8,7 @@ and serializes default calibrations.
 
 import unittest
 import os
+import pickle
 
 from dlens_vx_v3 import logger
 
@@ -39,6 +40,12 @@ class TestConnectionSetup(ConnectionSetup):
                     os.path.getsize(expected_filename), 0,
                     "File size of expected calibration result "
                     + f"{expected_filename} is zero.")
+
+                # test conversion to lola chip object
+                if expected_suffix == "calix-native.pkl":
+                    with open(expected_filename, "rb") as calibfile:
+                        result = pickle.load(calibfile)
+                    result.to_chip()
 
 
 if __name__ == '__main__':
