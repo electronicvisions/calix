@@ -2,9 +2,8 @@
 Provides an abstract base class for calibrations utilizing the MADC.
 """
 
-from abc import abstractmethod
-from typing import Optional, List, Tuple, Union
-import numbers
+from abc import abstractmethod, ABC
+from typing import Optional, List, Tuple
 import os
 import numpy as np
 import quantities as pq
@@ -14,22 +13,23 @@ from dlens_vx_v3 import hal, sta, halco, hxcomm
 from calix.common import base, exceptions, helpers
 
 
-class Calibration(base.Calibration):
+class Recorder(ABC):
     """
-    Abstract base class for neuron calibrations using the MADC.
+    Abstract base class for experiments/calibrations which use the MADC.
 
-    During prelude, the MADC is enabled and the current readout section
-    config is saved. During calibration, the readout config is changed
-    continuously to measure one neuron's properties after another.
-    The stimuli during measurement have to be implemented
-    as well as the evaluation of samples.
-    Also, the recording timing per neuron can be set.
+    During prepare_recording(), the MADC is enabled and the current
+    readout section config is saved. During recording, the readout
+    config is changed continuously to measure one neuron's properties
+    after another.
+    Furthermore, a stimuli can be injected during the measurement
+    to observe the neurons' responses and the recording timing per
+    neuron can be set.
 
     :ivar original_readout_config: Source selection mux config
-        before start of calibration. Used to restore state after
-        calibration has finished.
+        before start of the experiment. Used to restore state after
+        the experiment has finished.
     :ivar original_neuron_configs: Neuron configs before start of
-        calibration. Used to restore state after calibration.
+        the experiment. Used to restore state after the experiment.
     :ivar sampling_time: Time to record MADC samples for each
         neuron. The requested sampling time must be achievable with
         the maximum number of samples in the MADCConfig - without
@@ -49,16 +49,11 @@ class Calibration(base.Calibration):
         MADC, supplied by the PLL. Defaults to 500 MHz, which is present
         after the default stadls ExperimentInit.
     :ivar madc_config: Static configuration of the MADC. Written during
-        the prelude and used to obtain the sample rate. The number of
-        samples is calculated automatically based on the sampling_time.
+        prepare_recording() and used to obtain the sample rate. The number
+        of samples is calculated automatically based on the sampling_time.
     """
 
-    def __init__(self, parameter_range: base.ParameterRange, inverted: bool,
-                 errors: Optional[List[str]] = None,
-                 n_instances: int = halco.NeuronConfigOnDLS.size):
-        super().__init__(
-            parameter_range=parameter_range,
-            n_instances=n_instances, inverted=inverted, errors=errors)
+    def __init__(self):
         self.original_readout_config: Optional[
             hal.ReadoutSourceSelection] = None
         self.original_neuron_configs: Optional[List[hal.NeuronConfig]] = None
@@ -74,15 +69,15 @@ class Calibration(base.Calibration):
             output=hal.ADPLL().Output.dco)  # default MADC clock
         self.madc_config = hal.MADCConfig()
 
-    def prelude(self, connection: hxcomm.ConnectionHandle):
+    def prepare_recording(self, connection: hxcomm.ConnectionHandle):
         """
-        Prepares chip for calibration.
+        Prepares chip for the experiment.
 
         Configures the MADC and sets necessary bias currents.
         Reads and saves readout config and neuron config to
-        restore original state after calibration.
+        restore original state after the experiment.
 
-        :param connection: Connection to the chip to calibrate.
+        :param connection: Connection to the chip.
         """
 
         builder = sta.PlaybackProgramBuilder()
@@ -317,22 +312,6 @@ class Calibration(base.Calibration):
 
         return builder, switching_time_tickets
 
-    @abstractmethod
-    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
-        """
-        Process the given array of samples and return an array of results.
-
-        The given samples are a list of samples for each neuron.
-        Evaluation will typically involve fitting some parameters.
-        The relevant obtained result is to be returned.
-
-        :param samples: MADC samples received per neuron.
-
-        :return: Array containing results per neuron.
-        """
-
-        raise NotImplementedError
-
     def record_traces(self, connection: hxcomm.ConnectionHandle,
                       builder: sta.PlaybackProgramBuilder
                       ) -> List[np.ndarray]:
@@ -399,24 +378,7 @@ class Calibration(base.Calibration):
 
         return neuron_samples
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
-        """
-        Measure and evaluate the results.
-
-        Calls record_traces() to acquire an MADC trace per neuron,
-        and calls evaluate() to get an array of results from, e.g., fits.
-
-        :param connection: Connection to the chip to calibrate.
-        :param builder: Builder to append measurement program to.
-
-        :return: Numpy array, containing evaluated results.
-        """
-
-        samples = self.record_traces(connection, builder)
-        return self.evaluate(samples)
-
-    def postlude(self, connection: hxcomm.ConnectionHandle):
+    def restore_initial_state(self, connection: hxcomm.ConnectionHandle):
         """
         Restore original readout and neuron configuration.
 
@@ -438,11 +400,85 @@ class Calibration(base.Calibration):
         base.run(connection, builder)
 
 
-class _Recorder(Calibration):
+class Calibration(base.Calibration, Recorder):
+    """
+    Abstract base class for neuron calibrations using the MADC.
+
+    During prelude, the MADC is enabled and the current readout section
+    config is saved. During calibration, the readout config is changed
+    continuously to measure one neuron's properties after another.
+    The stimuli during measurement have to be implemented
+    as well as the evaluation of samples.
+    Also, the recording timing per neuron can be set.
+    """
+
+    def __init__(self, parameter_range: base.ParameterRange, inverted: bool,
+                 errors: Optional[List[str]] = None,
+                 n_instances: int = halco.NeuronConfigOnDLS.size):
+        base.Calibration.__init__(
+            self, parameter_range=parameter_range,
+            n_instances=n_instances, inverted=inverted, errors=errors)
+        Recorder.__init__(self)
+
+    @abstractmethod
+    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+        """
+        Process the given array of samples and return an array of results.
+
+        The given samples are a list of samples for each neuron.
+        Evaluation will typically involve fitting some parameters.
+        The relevant obtained result is to be returned.
+
+        :param samples: MADC samples received per neuron.
+
+        :return: Array containing results per neuron.
+        """
+
+        raise NotImplementedError
+
+    def measure_results(self, connection: hxcomm.ConnectionHandle,
+                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+        """
+        Measure and evaluate the results.
+
+        Calls record_traces() to acquire an MADC trace per neuron,
+        and calls evaluate() to get an array of results from, e.g., fits.
+
+        :param connection: Connection to the chip to calibrate.
+        :param builder: Builder to append measurement program to.
+
+        :return: Numpy array, containing evaluated results.
+        """
+
+        samples = self.record_traces(connection, builder)
+        return self.evaluate(samples)
+
+    def prelude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Prepares chip for the experiment.
+
+        Configures the MADC and sets necessary bias currents.
+        Reads and saves readout config and neuron config to
+        restore original state after the experiment.
+
+        :param connection: Connection to the chip.
+        """
+
+        self.prepare_recording(connection)
+
+    def postlude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Restore original readout and neuron configuration.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        self.restore_initial_state(connection)
+
+
+class MembraneRecorder(Recorder):
     """
     Record, plot and save a trace of each neuron via the MADC.
-
-    This class is reserved for debugging purposes, therefore marked private.
 
     Note that here, the neuron is recorded without any stimuli. You may
     want to derive a class for your experiment setup and configure a
@@ -450,16 +486,12 @@ class _Recorder(Calibration):
 
     Example usage:
     >>> from calix.common import madc_base
-    >>> recorder = madc_base._Recorder()
-    >>> recorder.prelude(connection)
+    >>> recorder = madc_base.MembraneRecorder()
+    >>> recorder.prepare_recording(connection)
     >>> samples = recorder.record_traces(
     ...     connection, builder=sta.PlaybackProgramBuilder())
     >>> recorder.plot_traces(samples)
     """
-
-    def __init__(self):
-        super().__init__(
-            parameter_range=base.ParameterRange(0, 1), inverted=False)
 
     def neuron_config_disabled(self, neuron_coord: halco.NeuronConfigOnDLS
                                ) -> hal.NeuronConfig:
@@ -473,45 +505,6 @@ class _Recorder(Calibration):
         config = self.neuron_config_disabled(neuron_coord)
         config.enable_readout = True
         return config
-
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
-                  neuron_coord: halco.NeuronConfigOnDLS,
-                  stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
-        """
-        Send no stimuli to the observed neuron.
-
-        .. note:: Overwrite this function in order to send arbitrary
-            stimuli during the MADC recording.
-
-        :param builder: Builder to append stimulation instructions to.
-        :param neuron_coord: Coordinate of neuron which is currently recorded.
-        :param stimulation_time: Timer value at beginning of stimulation.
-
-        :return: Builder with stimulation instructions appended.
-        """
-
-        return builder
-
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
-        """
-        Raises an exception since this recorder does not support
-        calibration, i.e. cannot be used to configure parameters.
-        """
-
-        raise exceptions.CalibrationNotSupported(
-            "Recorder is used for debugging, it does not set parameters.")
-
-    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
-        """
-        Raises an exception since this recorder does not support
-        calibration, i.e. does not perform any evaluation of results.
-        """
-
-        raise exceptions.CalibrationNotSupported(
-            "Recorder is used for debugging and does not return results.")
 
     @staticmethod
     def plot_traces(samples: List[np.ndarray]):
@@ -541,16 +534,23 @@ class _Recorder(Calibration):
             plt.savefig(f"trace_neuron{neuron_id}.png", dpi=300)
             plt.close()
 
-    def run(self, connection: hxcomm.ConnectionHandle,
-            algorithm: base.Algorithm,
-            target: Union[numbers.Integral, np.ndarray, None] = None
-            ) -> base.ParameterCalibrationResult:
+    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+                  neuron_coord: halco.NeuronConfigOnDLS,
+                  stimulation_time: hal.Timer.Value
+                  ) -> sta.PlaybackProgramBuilder:
         """
-        Raises an exception since this recorder does not support
-        calibration, i.e. being called with an algorithm.
+        Send no stimuli to the observed neuron.
 
-        :raises CalibrationNotSupported: if called.
+        .. note:: Overwrite this function in order to send arbitrary
+            stimuli during the MADC recording.
+
+        E.g., synaptic inputs could be sent to observe their shape.
+
+        :param builder: Builder to append stimulation instructions to.
+        :param neuron_coord: Coordinate of neuron which is currently recorded.
+        :param stimulation_time: Timer value at beginning of stimulation.
+
+        :return: Builder with stimulation instructions appended.
         """
 
-        raise exceptions.CalibrationNotSupported(
-            "Recorder is used for debugging and does not support calibration.")
+        return builder

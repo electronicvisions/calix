@@ -30,8 +30,8 @@ class TestMADCRecorder(ConnectionSetup):
         n_neurons_to_plot = 4
 
         # recorder is intentionally marked private, as it is a debug feature.
-        recorder = madc_base._Recorder()  # pylint: disable=protected-access
-        recorder.prelude(self.connection)
+        recorder = madc_base.MembraneRecorder()
+        recorder.prepare_recording(self.connection)
         samples = recorder.record_traces(
             self.connection, builder=sta.PlaybackProgramBuilder())
         recorder.plot_traces(samples[:n_neurons_to_plot])
