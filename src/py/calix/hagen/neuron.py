@@ -6,7 +6,6 @@ to run the calibration.
 
 from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass
-from warnings import warn
 
 import numpy as np
 import quantities as pq
@@ -305,21 +304,11 @@ class CalibResultInternal:
         return result
 
 
-# some of the following pylint-disables can probably be deleted once
-# deprecated parameters are removed (cf. issue 4017).
-# pylint: disable=too-many-statements, too-many-locals, too-many-branches
+# pylint: disable=too-many-statements
 def calibrate(
         connection: hxcomm.ConnectionHandle,
         target: Optional[NeuronCalibTarget] = None,
-        options: Optional[NeuronCalibOptions] = None, *,
-        target_leak_read: Optional[Union[int, np.ndarray]] = None,
-        tau_mem: Optional[pq.Quantity] = None,
-        tau_syn: Optional[pq.Quantity] = None,
-        i_synin_gm: Optional[int] = None,
-        target_noise: Optional[float] = None,
-        readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
-        initial_configuration: Optional[
-            Callable[[hxcomm.ConnectionHandle], None]] = None
+        options: Optional[NeuronCalibOptions] = None
 ) -> NeuronCalibResult:
     """
     Set up the neurons for integration.
@@ -387,45 +376,6 @@ def calibrate(
         target = NeuronCalibTarget()
     if options is None:
         options = NeuronCalibOptions()
-
-    used_deprecated_parameters = False
-    if target_leak_read is not None:
-        target.target_leak_read = target_leak_read
-        used_deprecated_parameters = True
-    if tau_mem is not None:
-        target.tau_mem = tau_mem
-        used_deprecated_parameters = True
-    if tau_syn is not None:
-        target.tau_syn = tau_syn
-        used_deprecated_parameters = True
-    if i_synin_gm is not None:
-        target.i_synin_gm = i_synin_gm
-        used_deprecated_parameters = True
-    if target_noise is not None:
-        target.target_noise = target_noise
-        used_deprecated_parameters = True
-    if readout_neuron is not None:
-        options.readout_neuron = readout_neuron
-        used_deprecated_parameters = True
-    if initial_configuration is not None:
-        options.initial_configuration = initial_configuration
-        used_deprecated_parameters = True
-
-    # delete deprecated arguments, to ensure the correct ones are used
-    # in the following code
-    del target_leak_read
-    del tau_mem
-    del tau_syn
-    del i_synin_gm
-    del target_noise
-    del readout_neuron
-    del initial_configuration
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target and option classes.",
-            DeprecationWarning, stacklevel=2)
 
     target.check()
 

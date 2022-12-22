@@ -5,7 +5,6 @@ Provides an interface for calibrating LIF neurons.
 import numbers
 from typing import Optional, Union, List
 from dataclasses import dataclass
-from warnings import warn
 
 import numpy as np
 import quantities as pq
@@ -431,22 +430,10 @@ class _CalibResultInternal(hagen_neuron.CalibResultInternal):
         return result
 
 
-# pylint: disable=too-many-locals, too-many-branches, too-many-statements
 def calibrate(
         connection: hxcomm.ConnectionHandle,
         target: Optional[NeuronCalibTarget] = None,
-        options: Optional[NeuronCalibOptions] = None, *,
-        leak: Optional[Union[int, np.ndarray]] = None,
-        reset: Optional[Union[int, np.ndarray]] = None,
-        threshold: Optional[Union[int, np.ndarray]] = None,
-        tau_mem: Optional[pq.Quantity] = None,
-        tau_syn: Optional[pq.Quantity] = None,
-        i_synin_gm: Optional[Union[int, np.ndarray]] = None,
-        membrane_capacitance: Optional[Union[int, np.ndarray]] = None,
-        refractory_time: Optional[pq.Quantity] = None,
-        synapse_dac_bias: Optional[int] = None,
-        readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
-        holdoff_time: Optional[pq.Quantity] = None
+        options: Optional[NeuronCalibOptions] = None
 ) -> NeuronCalibResult:
     """
     Calibrate neurons for spiking operation in the LIF model.
@@ -475,61 +462,6 @@ def calibrate(
         target = NeuronCalibTarget()
     if options is None:
         options = NeuronCalibOptions()
-
-    used_deprecated_parameters = False
-    if leak is not None:
-        target.leak = leak
-        used_deprecated_parameters = True
-    if reset is not None:
-        target.reset = reset
-        used_deprecated_parameters = True
-    if threshold is not None:
-        target.threshold = threshold
-        used_deprecated_parameters = True
-    if tau_mem is not None:
-        target.tau_mem = tau_mem
-        used_deprecated_parameters = True
-    if tau_syn is not None:
-        target.tau_syn = tau_syn
-        used_deprecated_parameters = True
-    if i_synin_gm is not None:
-        target.i_synin_gm = i_synin_gm
-        used_deprecated_parameters = True
-    if membrane_capacitance is not None:
-        target.membrane_capacitance = membrane_capacitance
-        used_deprecated_parameters = True
-    if refractory_time is not None:
-        target.refractory_time = refractory_time
-        used_deprecated_parameters = True
-    if synapse_dac_bias is not None:
-        target.synapse_dac_bias = synapse_dac_bias
-        used_deprecated_parameters = True
-    if readout_neuron is not None:
-        options.readout_neuron = readout_neuron
-        used_deprecated_parameters = True
-    if holdoff_time is not None:
-        target.holdoff_time = holdoff_time
-        used_deprecated_parameters = True
-
-    # delete deprecated arguments, to ensure the correct ones are used
-    # in the following code
-    del leak
-    del reset
-    del threshold
-    del tau_mem
-    del tau_syn
-    del i_synin_gm
-    del membrane_capacitance
-    del refractory_time
-    del synapse_dac_bias
-    del readout_neuron
-    del holdoff_time
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target and options classes.",
-            DeprecationWarning, stacklevel=2)
 
     # process target
     target.check()
@@ -625,10 +557,7 @@ def calibrate(
 
 def refine_potentials(connection: hxcomm.ConnectionHandle,
                       result: NeuronCalibResult,
-                      target: Optional[NeuronCalibTarget] = None, *,
-                      leak: Optional[Union[int, np.ndarray]] = None,
-                      reset: Optional[Union[int, np.ndarray]] = None,
-                      threshold: Optional[Union[int, np.ndarray]] = None
+                      target: Optional[NeuronCalibTarget] = None
                       ) -> None:
     """
     Re-calibrate the leak, reset and threshold potentials.
@@ -647,27 +576,6 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
 
     if target is None:
         target = NeuronCalibTarget()
-
-    used_deprecated_parameters = False
-    if leak is not None:
-        target.leak = leak
-        used_deprecated_parameters = True
-    if reset is not None:
-        target.reset = reset
-        used_deprecated_parameters = True
-    if threshold is not None:
-        target.threshold = threshold
-        used_deprecated_parameters = True
-
-    del leak
-    del reset
-    del threshold
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target parameter class.",
-            DeprecationWarning, stacklevel=2)
 
     target.check()
 

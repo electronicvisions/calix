@@ -12,7 +12,6 @@ be calibrated.
 
 from typing import Optional, Dict, Union
 from dataclasses import dataclass, field
-from warnings import warn
 
 import numpy as np
 
@@ -744,8 +743,7 @@ class HagenDACOffsetCalib(base.Calib):
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
-              options: Optional[SynapseDriverCalibOptions] = None,
-              offset_test_activation: Optional[hal.SynapseQuad.Label] = None
+              options: Optional[SynapseDriverCalibOptions] = None
               ) -> SynapseDriverCalibResult:
     """
     Calibrate the synapse drivers' STP offsets such that the amplitudes
@@ -778,13 +776,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     if options is None:
         options = SynapseDriverCalibOptions()
-
-    if offset_test_activation is not None:
-        options.offset_test_activation = offset_test_activation
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target and option classes.",
-            DeprecationWarning, stacklevel=2)
 
     # preconfigure chip
     builder = sta.PlaybackProgramBuilder()

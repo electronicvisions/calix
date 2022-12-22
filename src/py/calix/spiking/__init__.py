@@ -82,9 +82,7 @@ class SpikingCalibResult(base.CalibResult):
 
 def calibrate(connection: hxcomm.ConnectionHandle,
               target: Optional[SpikingCalibTarget] = None,
-              options: Optional[SpikingCalibOptions] = None, *,
-              cadc_kwargs: Optional[dict] = None,
-              neuron_kwargs: Optional[dict] = None
+              options: Optional[SpikingCalibOptions] = None
               ) -> SpikingCalibResult:
     """
     Execute a full calibration for spiking mode:
@@ -114,25 +112,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         target = SpikingCalibTarget()
     if options is None:
         options = SpikingCalibOptions()
-
-    used_deprecated_parameters = False
-    if cadc_kwargs is not None:
-        target.cadc_target = cadc.CADCCalibTarget(**cadc_kwargs)
-        used_deprecated_parameters = True
-    if neuron_kwargs is not None:
-        target.neuron_target = neuron.NeuronCalibTarget(**neuron_kwargs)
-        used_deprecated_parameters = True
-
-    # delete deprecated arguments, to ensure the correct ones are used
-    # in the following code
-    del cadc_kwargs
-    del neuron_kwargs
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target parameter class.",
-            DeprecationWarning, stacklevel=2)
 
     target.check()
 

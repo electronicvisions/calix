@@ -5,7 +5,6 @@ Calibrates all CADC channels on Hicann-X for a given dynamic range.
 from typing import Optional, Union
 import os
 from dataclasses import dataclass, field
-from warnings import warn
 
 import numpy as np
 
@@ -479,10 +478,7 @@ class ChannelOffsetCalib(base.Calib):
 def calibrate(
         connection: hxcomm.ConnectionHandle,
         target: Optional[CADCCalibTarget] = None,
-        options: Optional[CADCCalibOptions] = None, *,
-        dynamic_range: Optional[base.ParameterRange] = None,
-        read_range: Optional[base.ParameterRange] = None,
-        calibrate_offsets: Optional[bool] = None
+        options: Optional[CADCCalibOptions] = None
 ) -> CADCCalibResult:
     """
     Calibrates all the CADCs (top, bottom, causal, acausal) to work
@@ -527,30 +523,6 @@ def calibrate(
         target = CADCCalibTarget()
     if options is None:
         options = CADCCalibOptions()
-
-    # pylint: disable=too-many-branches
-    used_deprecated_parameters = False
-    if dynamic_range is not None:
-        target.dynamic_range = dynamic_range
-        used_deprecated_parameters = True
-    if read_range is not None:
-        target.read_range = read_range
-        used_deprecated_parameters = True
-    if calibrate_offsets is not None:
-        options.calibrate_offsets = calibrate_offsets
-        used_deprecated_parameters = True
-
-    # delete deprecated arguments, to ensure the correct ones are used
-    # in the following code
-    del dynamic_range
-    del read_range
-    del calibrate_offsets
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target and option classes.",
-            DeprecationWarning, stacklevel=2)
 
     target.check()
 

@@ -222,7 +222,6 @@ class HagenCalibResult(base.CalibResult):
             cadc_target: Optional[cadc.CADCCalibTarget] = None,
             cadc_options: Optional[cadc.CADCCalibOptions] = None,
             synapse_dac_bias: Optional[int] = None,
-            cadc_kwargs: dict = None
     ) -> HagenSyninCalibResult:
         """
         Reconfigure calibration result for integration on synaptic
@@ -248,26 +247,6 @@ class HagenCalibResult(base.CalibResult):
             cadc_target = HagenSyninCalibTarget().cadc_target
         if cadc_options is None:
             cadc_options = HagenSyninCalibOptions().cadc_options
-
-        if cadc_kwargs is not None:
-            warn(
-                "Providing cadc arguments as a cadc_kwargs dict is "
-                "deprecated. Please now use the target and option classes.",
-                DeprecationWarning, stacklevel=2)
-            try:
-                cadc_target.dynamic_range = cadc_kwargs["dynamic_range"]
-            except KeyError:
-                pass
-            try:
-                cadc_target.read_range = cadc_kwargs["read_range"]
-            except KeyError:
-                pass
-            try:
-                cadc_options.calibrate_offsets = \
-                    cadc_kwargs["calibrate_offsets"]
-            except KeyError:
-                pass
-
         cadc_result = cadc.calibrate(connection, cadc_target, cadc_options)
 
         # reconnect neuron readout to CADCs
@@ -308,10 +287,7 @@ class HagenCalibResult(base.CalibResult):
 
 def calibrate(connection: hxcomm.ConnectionHandle,
               target: Optional[HagenCalibTarget] = None,
-              options: Optional[HagenCalibOptions] = None, *,
-              cadc_kwargs: dict = None,
-              neuron_kwargs: dict = None,
-              synapse_driver_kwargs: dict = None
+              options: Optional[HagenCalibOptions] = None
               ) -> HagenCalibResult:
     """
     Execute a full calibration for hagen mode:
@@ -338,30 +314,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         target = HagenCalibTarget()
     if options is None:
         options = HagenCalibOptions()
-
-    used_deprecated_parameters = False
-    if cadc_kwargs is not None:
-        target.cadc_target = cadc.CADCCalibTarget(**cadc_kwargs)
-        used_deprecated_parameters = True
-    if neuron_kwargs is not None:
-        target.neuron_target = neuron.NeuronCalibTarget(**neuron_kwargs)
-        used_deprecated_parameters = True
-    if synapse_driver_kwargs is not None:
-        options.synapse_driver_options = \
-            synapse_driver.SynapseDriverCalibOptions(**synapse_driver_kwargs)
-        used_deprecated_parameters = True
-
-    # delete deprecated arguments, to ensure the correct ones are used
-    # in the following code
-    del cadc_kwargs
-    del neuron_kwargs
-    del synapse_driver_kwargs
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target and option classes.",
-            DeprecationWarning, stacklevel=2)
 
     target.check()
 
@@ -435,10 +387,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 def calibrate_for_synin_integration(
         connection: hxcomm.ConnectionHandle,
         target: Optional[HagenSyninCalibTarget] = None,
-        options: Optional[HagenSyninCalibOptions] = None, *,
-        cadc_kwargs: dict = None,
-        synapse_driver_kwargs: dict = None,
-        synapse_dac_bias: Optional[int] = None,
+        options: Optional[HagenSyninCalibOptions] = None
 ) -> HagenSyninCalibResult:
     """
     Calibrate the chip for integration on synaptic input lines.
@@ -457,30 +406,6 @@ def calibrate_for_synin_integration(
         target = HagenSyninCalibTarget()
     if options is None:
         options = HagenSyninCalibOptions()
-
-    used_deprecated_parameters = False
-    if cadc_kwargs is not None:
-        target.cadc_target = cadc.CADCCalibTarget(**cadc_kwargs)
-        used_deprecated_parameters = True
-    if synapse_driver_kwargs is not None:
-        options.synapse_driver_options = \
-            synapse_driver.SynapseDriverCalibOptions(**synapse_driver_kwargs)
-        used_deprecated_parameters = True
-    if synapse_dac_bias is not None:
-        target.synapse_dac_bias = synapse_dac_bias
-        used_deprecated_parameters = True
-
-    # delete deprecated arguments, to ensure the correct ones are used
-    # in the following code
-    del cadc_kwargs
-    del synapse_driver_kwargs
-    del synapse_dac_bias
-
-    if used_deprecated_parameters:
-        warn(
-            "Passing arguments directly to calibrate() functions is "
-            "deprecated. Please now use the target and option classes.",
-            DeprecationWarning, stacklevel=2)
 
     target.check()
 
