@@ -485,6 +485,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
         config.enable_readout = True
         return config
 
+    # pylint: disable=too-many-locals
     def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
         """
         Evaluates the obtained MADC samples.
@@ -542,7 +543,18 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
 
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
-            p_0['tau'] = min(max(0.1, p_0['tau']), 100)
+            p_0['tau'] = min(
+                max(constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                    p_0['tau']),
+                constants.tau_mem_range.upper.rescale(pq.us).magnitude)
+
+            boundaries = (
+                [-p_0['offset'],
+                 constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                 p_0['offset'] - 10],
+                [0,
+                 constants.tau_mem_range.upper.rescale(pq.us).magnitude,
+                 p_0['offset'] + 10])
 
             try:
                 popt, _ = curve_fit(
@@ -551,8 +563,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
                     - neuron_samples["chip_time"][0],
                     neuron_samples["value"],
                     p0=[p_0['scale'], p_0['tau'], p_0['offset']],
-                    bounds=([-p_0['offset'], 0.1, p_0['offset'] - 10],
-                            [0, 100, p_0['offset'] + 10]))
+                    bounds=boundaries)
             except RuntimeError as error:
                 raise exceptions.CalibrationNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
@@ -786,6 +797,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         builder.write(neuron_coord, config)
         return builder
 
+    # pylint: disable=too-many-locals
     def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
         """
         Evaluates the obtained MADC samples.
@@ -845,6 +857,11 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
             start = find_exponential_start(neuron_samples)
             neuron_samples = neuron_samples[start:]
 
+            if len(neuron_samples) < 100:
+                raise AssertionError(
+                    "Number of MADC samples to fit membrane time constant is "
+                    + f"too small: {len(neuron_samples)}.")
+
             # estimate start values for fit
             p_0 = {}
             p_0['offset'] = np.mean(neuron_samples["value"][-10:])
@@ -856,12 +873,18 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
 
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
-            p_0['tau'] = min(max(0.1, p_0['tau']), 100)
+            p_0['tau'] = min(
+                max(constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                    p_0['tau']),
+                constants.tau_mem_range.upper.rescale(pq.us).magnitude)
 
-            if len(neuron_samples) < 100:
-                raise AssertionError(
-                    "Number of MADC samples to fit membrane time constant is "
-                    + f"too small: {len(neuron_samples)}.")
+            boundaries = (
+                [0,
+                 constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                 p_0['offset'] - 10],
+                [p_0['scale'] + 10,
+                 constants.tau_mem_range.upper.rescale(pq.us).magnitude,
+                 p_0['offset'] + 10])
 
             try:
                 popt, _ = curve_fit(
@@ -870,8 +893,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
                     - neuron_samples["chip_time"][0],
                     neuron_samples["value"],
                     p0=[p_0['scale'], p_0['tau'], p_0['offset']],
-                    bounds=([0, 0.1, p_0['offset'] - 10],
-                            [p_0['scale'] + 10, 100, p_0['offset'] + 10]))
+                    bounds=boundaries)
             except RuntimeError as error:
                 raise exceptions.CalibrationNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "

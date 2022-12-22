@@ -769,7 +769,10 @@ class SynTimeConstantCalibration(madc_base.Calibration):
                 neuron_data["chip_time"][0]
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
-            tau = min(max(0.1, tau), 100)
+            tau = min(
+                max(constants.tau_syn_range.lower.rescale(pq.us).magnitude,
+                    tau),
+                constants.tau_syn_range.upper.rescale(pq.us).magnitude)
 
             # if the synaptic input line is floating (due to a too low bias
             # current), the recorded trace is constant -> register high time
@@ -778,13 +781,20 @@ class SynTimeConstantCalibration(madc_base.Calibration):
                 neuron_fits.append(np.inf)
                 continue
 
+            boundaries = (
+                [-offset,
+                 constants.tau_syn_range.lower.rescale(pq.us).magnitude,
+                 offset - 10],
+                [0,
+                 constants.tau_syn_range.upper.rescale(pq.us).magnitude,
+                 offset + 10])
+
             try:
                 fit_result = curve_fit(
                     fitfunc,
                     neuron_data["chip_time"] - neuron_data["chip_time"][0],
                     neuron_data["value"], p0=[scale, tau, offset],
-                    bounds=([-offset, 0.1, offset - 10],
-                            [0, 100, offset + 10]))
+                    bounds=boundaries)
                 neuron_fits.append(fit_result[0][1])
             except RuntimeError as error:
                 raise exceptions.CalibrationNotSuccessful(

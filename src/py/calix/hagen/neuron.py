@@ -89,19 +89,28 @@ class NeuronCalibTarget(base.CalibrationTarget):
 
     def check_values(self):
         """
-        Check feasibility of target parameters.
+        Check whether calibration targets are feasible.
 
-        :raises ValueError: If target parameters are not in a feasible range.
+        Log warnings if the parameters are out of the typical range
+        which can be calibrated and raise an error if the time constants
+        exceed the range which can be handled by the calibration routine.
+
+        :raises ValueError: If target parameters are outside the allowed
+            range for hagen neuron calibration.
         """
 
         super().check_values()
 
-        if np.any([self.tau_mem < 0.1 * pq.us, self.tau_mem > 200. * pq.us]):
+        if np.any([self.tau_mem < constants.tau_mem_range.lower,
+                   self.tau_mem > constants.tau_mem_range.upper]):
             raise ValueError(
-                "Target membrane time constant is out of feasible range.")
-        if np.any([self.tau_syn < 0 * pq.us, self.tau_syn > 50. * pq.us]):
+                "Target membrane time constant is out of allowed range "
+                + "in the respective fit function.")
+        if np.any([self.tau_syn < constants.tau_syn_range.lower,
+                   self.tau_syn > constants.tau_syn_range.upper]):
             raise ValueError(
-                "Target synaptic time constant is out of feasible range.")
+                "Target synaptic time constant is out of allowed range "
+                + "in the respective fit function.")
 
 
 @dataclass
