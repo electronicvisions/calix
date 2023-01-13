@@ -206,6 +206,25 @@ class NeuronCalibTarget(base.CalibrationTarget):
             i_synin_gm, calibrate_synin, equalize_synin)
 
 
+NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
+    leak=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.leak,
+    reset=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.reset,
+    threshold=np.ones(
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.threshold,
+    tau_mem=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.tau_mem,
+    tau_syn=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.tau_syn,
+    i_synin_gm=np.ones(
+        halco.SynapticInputOnNeuron.size) * NeuronCalibTarget.i_synin_gm,
+    membrane_capacitance=np.ones(
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.membrane_capacitance,
+    refractory_time=np.ones(
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.refractory_time,
+    synapse_dac_bias=NeuronCalibTarget.synapse_dac_bias,
+    holdoff_time=np.ones(
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.holdoff_time
+)
+
+
 @dataclass
 class NeuronCalibOptions(base.CalibrationOptions):
     """
