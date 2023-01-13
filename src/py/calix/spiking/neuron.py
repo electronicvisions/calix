@@ -75,7 +75,6 @@ class NeuronCalibTarget(base.CalibrationTarget):
     membrane_capacitance: Union[int, np.ndarray] = 63
     refractory_time: pq.quantity.Quantity = 2. * pq.us
     synapse_dac_bias: int = 600
-    readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
     holdoff_time: pq.Quantity = 0 * pq.us
 
     feasible_ranges = {
