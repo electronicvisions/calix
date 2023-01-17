@@ -270,6 +270,19 @@ class TestNeuronCalib(ConnectionSetup):
 
         self.helper_test_spikes()
 
+    def test_04_dense_default(self):
+        """
+        Calibrate with dense default neuron targets.
+        """
+
+        target = calix.spiking.SpikingCalibrationTarget()
+        neuron_target = calix.spiking.neuron.NeuronCalibTarget().DenseDefault
+        target.neuron_target = neuron_target
+
+        calix.spiking.calibrate(self.connection, target)
+
+        self.helper_test_spikes()
+
 
 if __name__ == "__main__":
     unittest.main()

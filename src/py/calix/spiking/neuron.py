@@ -207,16 +207,22 @@ class NeuronCalibTarget(base.CalibrationTarget):
 
 
 NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
-    leak=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.leak,
-    reset=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.reset,
+    leak=np.ones(
+        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget.leak,
+    reset=np.ones(
+        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget.reset,
     threshold=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.threshold,
+        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget.threshold,
     tau_mem=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.tau_mem,
-    tau_syn=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.tau_syn,
+    tau_syn=np.ones((
+        halco.SynapticInputOnNeuron.size,
+        halco.AtomicNeuronOnDLS.size)) * NeuronCalibTarget.tau_syn,
     i_synin_gm=np.ones(
-        halco.SynapticInputOnNeuron.size) * NeuronCalibTarget.i_synin_gm,
+        halco.SynapticInputOnNeuron.size,
+        dtype=int) * NeuronCalibTarget.i_synin_gm,
     membrane_capacitance=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.membrane_capacitance,
+        halco.AtomicNeuronOnDLS.size,
+        dtype=int) * NeuronCalibTarget.membrane_capacitance,
     refractory_time=np.ones(
         halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.refractory_time,
     synapse_dac_bias=NeuronCalibTarget.synapse_dac_bias,
