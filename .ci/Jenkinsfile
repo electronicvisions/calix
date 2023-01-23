@@ -17,7 +17,8 @@ if (executeHwTests) {
 			testOptions      : "--test-execall -j1",
 			testSlurmResource: [partition: "cube",
 			                    wafer: 62,
-			                    "fpga-without-aout": 3],
+			                    "fpga-without-aout": 3,
+			                    time: 120],
 			preTestHook      : { configureHxCubeBitfile() },
 	]
 }
