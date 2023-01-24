@@ -95,7 +95,10 @@ class MultiplyAccumulateTest(ConnectionSetup):
                     self.assertLess(
                         noise, 5,
                         f"Noise of synram {synram_name} vector "
-                        + f"{vector_id} is too large.")
+                        + f"{vector_id} is too large. "
+                        + "Mean amplitudes per run:\n"
+                        + str(np.mean(np.abs(
+                            matrix_results[:, vector_id]), axis=1)))
 
                     # check amplitudes only if entries are at least 3 on
                     # average, amplitudes may still be zero otherwise.
