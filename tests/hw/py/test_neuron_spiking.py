@@ -273,10 +273,37 @@ class TestNeuronCalib(ConnectionSetup):
     def test_04_dense_default(self):
         """
         Calibrate with dense default neuron targets.
+
+        Also, we check whether the dense default target is complete,
+        in the sense that every parameter that is configurable per neuron
+        is an array and shaped accordingly.
         """
 
         target = calix.spiking.SpikingCalibrationTarget()
         neuron_target = calix.spiking.neuron.NeuronCalibTarget().DenseDefault
+
+        # test shape of all contained targets: They must be an array and
+        # one dimension must match the number of neurons.
+        for name, value in vars(neuron_target).items():
+            # Skip check for variables where configuration per neuron
+            # is not feasible:
+            # - synapse_dac_bias is configurable only per quadrant
+            # - i_synin_gm is a single target for all neurons as it is
+            #   already a CapMem parameter.
+            if name in ["synapse_dac_bias", "i_synin_gm"]:
+                continue
+
+            if not isinstance(value, np.ndarray):
+                raise TypeError(
+                    "The spiking neuron calib target dense default "
+                    f"contains a parameter {name} that is not a numpy "
+                    f"array: {value}.")
+            if halco.NeuronConfigOnDLS.size not in value.shape:
+                raise ValueError(
+                    "The spiking neuron calib target dense default "
+                    f"contains a parameter {name} that does not represent "
+                    f"the number of neurons in its shape: {value.shape}.")
+
         target.neuron_target = neuron_target
 
         calix.spiking.calibrate(self.connection, target)
