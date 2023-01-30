@@ -25,6 +25,47 @@ if TYPE_CHECKING:
     from calix.spiking import neuron
 
 
+class SyninParameters:
+    """
+    Collection of parameters for synaptic input calibration.
+
+    Contains decisions that are set automatically based on
+    the shape of targets for the calibration:
+
+    :ivar i_synin_gm: Target bias currents for synaptic input OTAs,
+        with shapes modified to match the needs of the calibration
+        routines.
+    :ivar calibrate_synin: Decide whether synaptic input OTA
+        strengths are calibrated.
+    :ivar equalize_synin: Decide whether excitatory and inhibitory
+      synaptic input strengths are equalized.
+    """
+
+    def __init__(self, target: neuron.NeuronCalibTarget):
+        """
+        :param target: Target parameters for neuron calib.
+        """
+
+        self.i_synin_gm = deepcopy(target.i_synin_gm)
+
+        if not isinstance(self.i_synin_gm, np.ndarray) \
+                and np.ndim(self.i_synin_gm) > 0:
+            self.i_synin_gm = np.array(self.i_synin_gm)
+        if np.ndim(self.i_synin_gm) > 0 \
+                and self.i_synin_gm.shape[-1] == halco.NeuronConfigOnDLS.size:
+            self.calibrate_synin = False
+        else:
+            self.calibrate_synin = True
+        if np.ndim(self.i_synin_gm) > 0 \
+                and self.i_synin_gm.shape[0] \
+                == halco.SynapticInputOnNeuron.size:
+            self.equalize_synin = False
+        else:
+            self.equalize_synin = True
+            self.i_synin_gm = np.array(
+                [self.i_synin_gm] * halco.SynapticInputOnNeuron.size)
+
+
 def calibrate_tau_syn(
         connection: hxcomm.ConnectionHandle,
         tau_syn: np.ndarray,
@@ -228,18 +269,26 @@ def finalize_synin_calib(
 
 def calibrate_synaptic_input(
         connection: hxcomm.ConnectionHandle,
-        synin_parameters: neuron.NeuronCalibTarget.SyninParameters,
+        target: neuron.NeuronCalibTarget,
         calib_result: neuron._CalibrationResultInternal,
         target_cadc_reads: np.ndarray):
     """
     Run calibration of (current-based) synaptic inputs.
 
     :param connection: Connection to chip to run on.
-    :param synin_parameters: Parameters for synaptic input calibration.
+    :param target: Target parameters for neuron calibration.
     :param calib_result: Calibration result to store parameters in.
     :param target_cadc_reads: CADC samples at resting potential, with
         synaptic input disabled.
     """
+
+    synin_parameters = SyninParameters(target)
+
+    # return early if synaptic inputs are not to be calibrated
+    if not synin_parameters.calibrate_synin:
+        calib_result.i_syn_exc_gm = synin_parameters.i_synin_gm[0]
+        calib_result.i_syn_inh_gm = synin_parameters.i_synin_gm[1]
+        return
 
     # Enable and calibrate excitatory synaptic input amplitudes to median
     neuron_helpers.reconfigure_synaptic_input(

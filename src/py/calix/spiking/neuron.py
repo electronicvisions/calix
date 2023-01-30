@@ -6,7 +6,6 @@ import numbers
 from typing import Optional, Union, List
 from dataclasses import dataclass
 from warnings import warn
-from copy import deepcopy
 
 import numpy as np
 import quantities as pq
@@ -95,27 +94,6 @@ class NeuronCalibTarget(base.CalibrationTarget):
             0 * pq.ns, 4 * pq.us)
     }
 
-    @dataclass
-    class SyninParameters:
-        """
-        Collection of parameters for synaptic input calibration.
-
-        Contains boolean decisions that are set automatically based on
-        the shape of given targets:
-
-        :ivar i_synin_gm: Target bias currents for synaptic input OTAs,
-            with shapes modified to match the needs of the calibration
-            routines.
-        :ivar calibrate_synin: Decide whether synaptic input OTA
-            strengths are calibrated.
-        :ivar equalize_synin: Decide whether excitatory and inhibitory
-          synaptic input strengths are equalized.
-        """
-
-        i_synin_gm: np.ndarray
-        calibrate_synin: bool
-        equalize_synin: bool
-
     def check_types(self):
         """
         Check whether parameters have the right types and shapes.
@@ -174,36 +152,6 @@ class NeuronCalibTarget(base.CalibrationTarget):
             raise ValueError(
                 "Target synaptic time constant is out of allowed range "
                 + "in the respective fit function.")
-
-    def prepare_synin(self) -> SyninParameters:
-        """
-        Does preparations for synaptic input calibration.
-
-        :return: SyninParameters class, containing desicions and
-            targets for synaptic input calibration.
-        """
-
-        i_synin_gm = deepcopy(self.i_synin_gm)
-
-        if not isinstance(i_synin_gm, np.ndarray) \
-                and np.ndim(i_synin_gm) > 0:
-            i_synin_gm = np.array(i_synin_gm)
-        if np.ndim(i_synin_gm) > 0 \
-                and i_synin_gm.shape[-1] == halco.NeuronConfigOnDLS.size:
-            calibrate_synin = False
-        else:
-            calibrate_synin = True
-        if np.ndim(i_synin_gm) > 0 \
-                and i_synin_gm.shape[0] \
-                == halco.SynapticInputOnNeuron.size:
-            equalize_synin = False
-        else:
-            equalize_synin = True
-            i_synin_gm = np.array(
-                [i_synin_gm] * halco.SynapticInputOnNeuron.size)
-
-        return self.SyninParameters(
-            i_synin_gm, calibrate_synin, equalize_synin)
 
 
 NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
@@ -523,7 +471,6 @@ def calibrate(
 
     # process target
     target.check()
-    synin_parameters = target.prepare_synin()
 
     # create result object
     calib_result = _CalibrationResultInternal()
@@ -560,12 +507,8 @@ def calibrate(
         connection, options, calib_result)
 
     # calibrate or configure CUBA synaptic input OTA biases
-    if synin_parameters.calibrate_synin:
-        neuron_calib_parts.calibrate_synaptic_input(
-            connection, synin_parameters, calib_result, target_cadc_reads)
-    else:
-        calib_result.i_syn_exc_gm = synin_parameters.i_synin_gm[0]
-        calib_result.i_syn_inh_gm = synin_parameters.i_synin_gm[1]
+    neuron_calib_parts.calibrate_synaptic_input(
+        connection, target, calib_result, target_cadc_reads)
 
     # calibrate syn. input references at final biases
     neuron_calib_parts.calibrate_synin_references(
