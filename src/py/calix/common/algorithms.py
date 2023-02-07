@@ -1,6 +1,6 @@
 """
 Provides algorithms for running calibrations.
-Those algorithms need a Calibration instance which, among other settings,
+Those algorithms need a Calib instance which, among other settings,
 yields instructions for configuring parameters and measuring results.
 """
 
@@ -19,7 +19,7 @@ class BinarySearch(base.Algorithm):
     Perform a binary search within the parameter range of a calibration.
 
     Using the class requires basic settings, which come from an
-    instance of a Calibration class. Therefore it is required to hook
+    instance of a Calib class. Therefore it is required to hook
     the algorithm to a calibration before calling run().
     Calling run(connection, target_result) then performs the calibration.
     The algorithm starts with the usual binary search algorithms and adds
@@ -28,7 +28,7 @@ class BinarySearch(base.Algorithm):
     algorithm. The best-suited parameter tested during the last few steps
     is returned.
 
-    :ivar calibration: Class derived from base class Calibration implementing
+    :ivar calibration: Class derived from base class Calib implementing
         functions for configuring parameters and measuring results as well as
         yielding important parameters for the algorithm to run.
     :ivar n_steps: Number of steps to use during calibration.
@@ -48,7 +48,7 @@ class BinarySearch(base.Algorithm):
         self.step_increments: Optional[np.ndarray] = None
         self.initial_parameters: Optional[np.ndarray] = None
 
-    def hook_to_calibration(self, calibration: base.Calibration):
+    def hook_to_calibration(self, calibration: base.Calib):
         """
         Make an instance of a calibration known to the algorithm, allowing
         to use parameters set there.
@@ -212,7 +212,7 @@ class NoisyBinarySearch(BinarySearch):
             raise ValueError("Noise must be a positive integer.")
         self.noise_amplitude = noise_amplitude
 
-    def hook_to_calibration(self, calibration: base.Calibration):
+    def hook_to_calibration(self, calibration: base.Calib):
         """
         Make an instance of a calibration known to the algorithm, allowing
         to use parameters set there.
@@ -259,7 +259,7 @@ class LinearSearch(base.Algorithm):
     the calibration target is crossed.
 
     Initializing the class requires basic settings, which come from an
-    instance of a Calibration class.
+    instance of a Calib class.
     Calling run(connection, target_result) then performs the calibration.
     The parameters are sweeped until the results crosses the target, or the
     maximum number of steps is exceeded.

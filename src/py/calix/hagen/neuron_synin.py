@@ -20,7 +20,7 @@ from calix.hagen import neuron_helpers
 from calix import constants
 
 
-class SynReferenceCalibration(base.Calibration):
+class SynReferenceCalib(base.Calib):
     """
     Calibrate synaptic reference voltage such that no currents are
     generated from the OTA without input.
@@ -166,7 +166,7 @@ class SynReferenceCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         logger.get(
-            "calix.hagen.neuron_synin.SynReferenceCalibration.postlude"
+            "calix.hagen.neuron_synin.SynReferenceCalib.postlude"
         ).INFO(
             ("Calibrated i_bias_syn_in_{0}_shift, CADC statistics: "
              + "{1:5.2f} +- {2:4.2f}").format(
@@ -175,7 +175,7 @@ class SynReferenceCalibration(base.Calibration):
                  np.std(results[self.result.success])))
 
 
-class ExcSynReferenceCalibration(SynReferenceCalibration):
+class ExcSynReferenceCalib(SynReferenceCalib):
     """
     Class for calibrating the excitatory synaptic input reference potential.
     """
@@ -187,7 +187,7 @@ class ExcSynReferenceCalibration(SynReferenceCalibration):
     _bias_current_keyword = "excitatory_biases"
 
 
-class InhSynReferenceCalibration(SynReferenceCalibration):
+class InhSynReferenceCalib(SynReferenceCalib):
     """
     Class for calibrating the inhibitory synaptic input reference potential.
     """
@@ -199,7 +199,7 @@ class InhSynReferenceCalibration(SynReferenceCalibration):
     _bias_current_keyword = "inhibitory_biases"
 
 
-class SynBiasCalibration(base.Calibration):
+class SynBiasCalib(base.Calib):
     """
     Calibrate the strength of synaptic inputs to match for all neurons.
 
@@ -218,7 +218,7 @@ class SynBiasCalibration(base.Calibration):
       are not too large, so that the amplitudes resulting from a single
       stimulus don't already saturate the usable dynamic range at the CADC.
 
-    :ivar syn_ref_calib: Instance of a SynReferenceCalibration, configured
+    :ivar syn_ref_calib: Instance of a SynReferenceCalib, configured
         with the given target_leak_read. The synaptic input reference
         potentials are recalibrated every time after changing the synaptic
         input OTA bias current.
@@ -260,7 +260,7 @@ class SynBiasCalibration(base.Calibration):
 
     @property
     @abstractmethod
-    def _reference_calib_type(self) -> Type[SynReferenceCalibration]:
+    def _reference_calib_type(self) -> Type[SynReferenceCalib]:
         """
         Type of the sub-calibration to use for recalibrating the synaptic
         input reference potentials.
@@ -318,7 +318,7 @@ class SynBiasCalibration(base.Calibration):
 
         :param connection: Connection to the chip to run on.
 
-        :raises CalibrationNotSuccessful: If obtained target amplitudes
+        :raises CalibNotSuccessful: If obtained target amplitudes
             are still too high after reducing self.n_events.
         """
 
@@ -348,17 +348,17 @@ class SynBiasCalibration(base.Calibration):
                     break
                 self.n_events = int(self.n_events * 0.8)
                 if self.n_events == 0:
-                    raise exceptions.CalibrationNotSuccessful(
+                    raise exceptions.CalibNotSuccessful(
                         "A single event's amplitude exceeds "
                         + "the reliable range: "
                         + f"{self.target} > {reliable_amplitudes}.")
 
             if self.target > reliable_amplitudes:
-                raise exceptions.CalibrationNotSuccessful(
+                raise exceptions.CalibNotSuccessful(
                     "Target neuron amplitudes are too high.")
 
             log = logger.get(
-                "calix.hagen.neuron_synin.SynBiasCalibration.prelude")
+                "calix.hagen.neuron_synin.SynBiasCalib.prelude")
             log.DEBUG(f"Using {self.n_events} events during synin calib.")
             log.DEBUG("Target amplitude for i_bias_syn calibration: "
                       + f"{self.target}")
@@ -502,7 +502,7 @@ class SynBiasCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         log = logger.get("calix.hagen.neuron_synin"
-                         + ".SynBiasCalibration.postlude")
+                         + ".SynBiasCalib.postlude")
         log.INFO(
             ("Calibrated i_bias_synin_{0}_gm, amplitudes: "
              + "{1:5.2f} +- {2:4.2f}").format(
@@ -514,31 +514,31 @@ class SynBiasCalibration(base.Calibration):
             + f"{self.result.calibrated_parameters}")
 
 
-class ExcSynBiasCalibration(SynBiasCalibration):
+class ExcSynBiasCalib(SynBiasCalib):
     """
     Class for calibrating the excitatory synaptic input bias current.
     """
 
-    _reference_calib_type = ExcSynReferenceCalibration
+    _reference_calib_type = ExcSynReferenceCalib
     _row_mode = hal.SynapseDriverConfig.RowMode.excitatory
     _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_gm
     _expected_sign = 1
     _log_abbreviation = "exc"
 
 
-class InhSynBiasCalibration(SynBiasCalibration):
+class InhSynBiasCalib(SynBiasCalib):
     """
     Class for calibrating the inhibitory synaptic input bias current.
     """
 
-    _reference_calib_type = InhSynReferenceCalibration
+    _reference_calib_type = InhSynReferenceCalib
     _row_mode = hal.SynapseDriverConfig.RowMode.inhibitory
     _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_gm
     _expected_sign = -1
     _log_abbreviation = "inh"
 
 
-class SynTimeConstantCalibration(madc_base.Calibration):
+class SynTimeConstantCalib(madc_base.Calib):
     """
     Calibrate synaptic input time constant using the MADC.
 
@@ -797,14 +797,14 @@ class SynTimeConstantCalibration(madc_base.Calibration):
                     bounds=boundaries)
                 neuron_fits.append(fit_result[0][1])
             except RuntimeError as error:
-                raise exceptions.CalibrationNotSuccessful(
+                raise exceptions.CalibNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
                     + str(error))
 
         return np.array(neuron_fits) * pq.us
 
 
-class ExcSynTimeConstantCalibration(SynTimeConstantCalibration):
+class ExcSynTimeConstantCalib(SynTimeConstantCalib):
     """
     Calibrate excitatory synaptic input time constant.
     """
@@ -814,7 +814,7 @@ class ExcSynTimeConstantCalibration(SynTimeConstantCalibration):
     _readout_source = hal.NeuronConfig.ReadoutSource.exc_synin
 
 
-class InhSynTimeConstantCalibration(SynTimeConstantCalibration):
+class InhSynTimeConstantCalib(SynTimeConstantCalib):
     """
     Calibrate inhibitory synaptic input time constant.
     """
@@ -824,7 +824,7 @@ class InhSynTimeConstantCalibration(SynTimeConstantCalibration):
     _readout_source = hal.NeuronConfig.ReadoutSource.inh_synin
 
 
-class SynReferenceCalibMADC(madc_base.Calibration):
+class SynReferenceCalibMADC(madc_base.Calib):
     """
     Calibrate synaptic input reference potentials using the MADC.
 

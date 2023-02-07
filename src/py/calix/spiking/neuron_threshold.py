@@ -10,7 +10,7 @@ from calix import constants
 from calix.common.boundary_check import check_range_boundaries
 
 
-class _SpikeCounterCalibration(base.Calibration):
+class _SpikeCounterCalib(base.Calib):
     """
     Base class for threshold calibrations that will use the spike
     counters in order to determine the spike rate of all neurons.
@@ -110,7 +110,7 @@ class _SpikeCounterCalibration(base.Calibration):
         return results
 
 
-class NeuronThresholdCalibration(_SpikeCounterCalibration):
+class NeuronThresholdCalib(_SpikeCounterCalib):
     """
     Calibrate the spike threshold of all neurons to be slightly above the
     resting potential, such that even small inputs can trigger spikes.
@@ -204,7 +204,7 @@ class NeuronThresholdCalibration(_SpikeCounterCalibration):
              + str(self.parameter_range.upper)])
         self.result.calibrated_parameters = result.parameters
         log = logger.get(
-            "calix.spiking.neuron_threshold.NeuronThresholdCalibration"
+            "calix.spiking.neuron_threshold.NeuronThresholdCalib"
             + ".postlude")
         for error in result.messages:
             log.WARN(error)
@@ -232,7 +232,7 @@ class NeuronThresholdCalibration(_SpikeCounterCalibration):
                     + "can be increased, sacrificing ease of causal spiking.")
 
 
-class LeakOverThresholdCalib(_SpikeCounterCalibration):
+class LeakOverThresholdCalib(_SpikeCounterCalib):
     """
     Calibrate the neurons' spike threshold such that the given
     spike rate is achieved in a leak over threshold setup,
@@ -439,7 +439,7 @@ class LeakOverThresholdCalib(_SpikeCounterCalibration):
         return results
 
 
-class ThresholdCalibMADC(madc_base.Calibration):
+class ThresholdCalibMADC(madc_base.Calib):
     """
     Calibrate the neurons' spike threshold potential using the MADC.
 
@@ -618,7 +618,7 @@ class ThresholdCalibMADC(madc_base.Calibration):
         base.run(connection, builder)
 
 
-class ThresholdCalibCADC(base.Calibration):
+class ThresholdCalibCADC(base.Calib):
     """
     Calibrate the neurons' spike threshold potential using the CADC.
 

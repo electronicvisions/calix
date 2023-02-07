@@ -32,7 +32,7 @@ class MultiplyAccumulateTest(ConnectionSetup):
     """
 
     log = logger.get("calix.tests.hw.py.MultiplyAccumulateTest")
-    calib_result: Optional[calix.hagen.HagenSyninCalibrationResult] = None
+    calib_result: Optional[calix.hagen.HagenSyninCalibResult] = None
     vectors: np.ndarray
     matrices: np.ndarray
 

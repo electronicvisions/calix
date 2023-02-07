@@ -17,7 +17,7 @@ from calix import constants
 
 
 @dataclass
-class CADCCalibTarget(base.CalibrationTarget):
+class CADCCalibTarget(base.CalibTarget):
     """
     Target parameters for the CADC calibration.
 
@@ -56,7 +56,7 @@ class CADCCalibTarget(base.CalibrationTarget):
 
 
 @dataclass
-class CADCCalibOptions(base.CalibrationOptions):
+class CADCCalibOptions(base.CalibOptions):
     """
     Further configuration parameters for the CADC calibration, that are
     not directly calibration targets.
@@ -73,7 +73,7 @@ class CADCCalibOptions(base.CalibrationOptions):
 
 
 @dataclass
-class CADCCalibResult(base.CalibrationResult):
+class CADCCalibResult(base.CalibResult):
     """
     Result object for the CADC calibration.
 
@@ -132,7 +132,7 @@ class CADCCalibResult(base.CalibrationResult):
             builder.write(coord, config)
 
 
-class RampOffsetCalibration(base.Calibration):
+class RampOffsetCalib(base.Calib):
     """
     CADC Calibration Part 1: Calibrate the ramp reset/start voltage.
 
@@ -235,7 +235,7 @@ class RampOffsetCalibration(base.Calibration):
         return quadrant_results
 
 
-class RampSlopeCalibration(base.Calibration):
+class RampSlopeCalib(base.Calib):
     """
     CADC Calibration part 2: Calibrate the steepness of the ramp,
     i.e. the current onto the ramp capacitor.
@@ -330,7 +330,7 @@ class RampSlopeCalibration(base.Calibration):
         return quadrant_results
 
 
-class ChannelOffsetCalibration(base.Calibration):
+class ChannelOffsetCalib(base.Calib):
     """
     CADC Calibration part 3: Calibrating digital offsets of individual
     channels. This is done by setting an intermediate voltage at the
@@ -380,7 +380,7 @@ class ChannelOffsetCalibration(base.Calibration):
         :param reads: Array of CADC Samples for both synrams obtained at
             a constant common voltage.
 
-        :return: Calibration target for individual CADC channel offsets.
+        :return: Calib target for individual CADC channel offsets.
         """
 
         read_target = int(np.median(reads))
@@ -389,7 +389,7 @@ class ChannelOffsetCalibration(base.Calibration):
         middle_of_cadc_range = int(hal.CADCSampleQuad.Value.end / 2)
         if abs(read_target - middle_of_cadc_range) > allowed_deviation:
             log = logger.get(
-                "calix.common.cadc.ChannelOffsetCalibration.find_target_read")
+                "calix.common.cadc.ChannelOffsetCalib.find_target_read")
             log.WARN(f"Median read has been {read_target} "
                      + f"while a value around {middle_of_cadc_range} is "
                      + "expected." + os.linesep
@@ -567,7 +567,7 @@ def calibrate(
     calib_result = CADCCalibResult(target=target, options=options)
 
     # Part 1: Ramp offset
-    calibration = RampOffsetCalibration(
+    calibration = RampOffsetCalib(
         dynamic_range_min=target.dynamic_range.lower)
     result = calibration.run(
         connection, algorithms.BinarySearch(), target=target.read_range.lower)
@@ -576,7 +576,7 @@ def calibrate(
     log.INFO(f"Calibrated v_ramp_start, values: {calib_result.v_ramp_offset}")
 
     # Part 2: Ramp slope
-    calibration = RampSlopeCalibration(
+    calibration = RampSlopeCalib(
         dynamic_range_max=target.dynamic_range.upper)
     result = calibration.run(
         connection, algorithms.BinarySearch(), target=target.read_range.upper)
@@ -588,7 +588,7 @@ def calibrate(
 
     if options.calibrate_offsets:
         # Part 3: Channel offsets
-        calibration = ChannelOffsetCalibration(
+        calibration = ChannelOffsetCalib(
             int(np.mean(target.dynamic_range)))
         result = calibration.run(
             connection, algorithms.LinearPrediction(

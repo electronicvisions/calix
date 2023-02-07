@@ -10,7 +10,7 @@ import quantities as pq
 from dlens_vx_v3 import sta, hxcomm
 
 import calix.spiking
-from calix.spiking import SpikingCalibrationResult
+from calix.spiking import SpikingCalibResult
 
 
 ###############################################################################

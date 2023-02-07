@@ -32,7 +32,7 @@ class TestNeuronCalib(ConnectionSetup):
     """
 
     log = logger.get("calix.tests.hw.test_neuron_spiking")
-    calib_result: Optional[calix.spiking.SpikingCalibrationResult] = None
+    calib_result: Optional[calix.spiking.SpikingCalibResult] = None
     target_equal_rates = 100 * pq.kHz
 
     @classmethod
@@ -262,7 +262,7 @@ class TestNeuronCalib(ConnectionSetup):
         Test spike response afterwards.
         """
 
-        target = calix.spiking.SpikingCalibrationTarget()
+        target = calix.spiking.SpikingCalibTarget()
         target.neuron_target.i_synin_gm = np.ones(
             halco.NeuronConfigOnDLS.size, dtype=int) * 600
 
@@ -279,7 +279,7 @@ class TestNeuronCalib(ConnectionSetup):
         is an array and shaped accordingly.
         """
 
-        target = calix.spiking.SpikingCalibrationTarget()
+        target = calix.spiking.SpikingCalibTarget()
         neuron_target = calix.spiking.neuron.NeuronCalibTarget().DenseDefault
 
         # test shape of all contained targets: They must be an array and

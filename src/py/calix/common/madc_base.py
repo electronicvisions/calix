@@ -425,7 +425,7 @@ class Recorder(ABC):
         base.run(connection, builder)
 
 
-class Calibration(base.Calibration, Recorder):
+class Calib(base.Calib, Recorder):
     """
     Abstract base class for neuron calibrations using the MADC.
 
@@ -440,7 +440,7 @@ class Calibration(base.Calibration, Recorder):
     def __init__(self, parameter_range: base.ParameterRange, inverted: bool,
                  errors: Optional[List[str]] = None,
                  n_instances: int = halco.NeuronConfigOnDLS.size):
-        base.Calibration.__init__(
+        base.Calib.__init__(
             self, parameter_range=parameter_range,
             n_instances=n_instances, inverted=inverted, errors=errors)
         Recorder.__init__(self)

@@ -69,22 +69,22 @@ class SyninParameters:
 def calibrate_tau_syn(
         connection: hxcomm.ConnectionHandle,
         tau_syn: np.ndarray,
-        calib_result: neuron._CalibrationResultInternal):
+        calib_result: neuron._CalibResultInternal):
     """
     Calibrate synaptic input time constant to given target.
 
     :param connection: Connection to chip to run on.
     :param tau_syn: Target synaptic input time constant.
-    :param calib_result: Calibration result to store parameters in.
+    :param calib_result: Calib result to store parameters in.
     """
 
     if np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+        calibration = neuron_synin.ExcSynTimeConstantCalib(
             neuron_configs=calib_result.neuron_configs,
             target=tau_syn[0])
     else:
-        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+        calibration = neuron_synin.ExcSynTimeConstantCalib(
             neuron_configs=calib_result.neuron_configs,
             target=tau_syn)
     result = calibration.run(
@@ -95,11 +95,11 @@ def calibrate_tau_syn(
 
     if np.ndim(tau_syn) > 0 \
             and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.InhSynTimeConstantCalibration(
+        calibration = neuron_synin.InhSynTimeConstantCalib(
             neuron_configs=calib_result.neuron_configs,
             target=tau_syn[1])
     else:
-        calibration = neuron_synin.InhSynTimeConstantCalibration(
+        calibration = neuron_synin.InhSynTimeConstantCalib(
             neuron_configs=calib_result.neuron_configs,
             target=tau_syn)
     result = calibration.run(
@@ -112,7 +112,7 @@ def calibrate_tau_syn(
 def calibrate_synapse_dac_bias(
         connection: hxcomm.ConnectionHandle,
         synapse_dac_bias: int,
-        calib_result: neuron._CalibrationResultInternal):
+        calib_result: neuron._CalibResultInternal):
     """
     Calibrate the synapse DAC bias.
 
@@ -122,7 +122,7 @@ def calibrate_synapse_dac_bias(
 
     :param connection: Connection to chip to run on.
     :param synapse_dac_bias: Target CapMem value for calibration.
-    :param calib_result: Calibration result.
+    :param calib_result: Calib result.
     """
 
     # set synapse DAC bias current
@@ -146,7 +146,7 @@ def calibrate_synapse_dac_bias(
 def prepare_for_synin_calib(
         connection: hxcomm.ConnectionHandle,
         options: neuron.NeuronCalibOptions,
-        calib_result: neuron._CalibrationResultInternal
+        calib_result: neuron._CalibResultInternal
 ) -> np.ndarray:
     """
     Preconfigure the chip for synaptic input calibration.
@@ -161,7 +161,7 @@ def prepare_for_synin_calib(
 
     :param connection: Connection to chip to run on.
     :param options: Further options for calibration.
-    :param calib_result: Calibration result to store parameters in.
+    :param calib_result: Calib result to store parameters in.
 
     :return: Array of target CADC reads at resting potential, to be
         used as reference point during synaptic input calib.
@@ -190,7 +190,7 @@ def prepare_for_synin_calib(
         connection, excitatory_biases=0, inhibitory_biases=0)
 
     # calibrate leak near middle of CADC range
-    calibration = neuron_potentials.LeakPotentialCalibration(120)
+    calibration = neuron_potentials.LeakPotentialCalib(120)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     # ensure syn. input high resistance mode is off
@@ -214,13 +214,13 @@ def prepare_for_synin_calib(
     # single event could charge the membrane too much at high synaptic time
     # constants. The real synaptic time constant is reapplied later.
     small_tau_syn = 1.5 * pq.us
-    calibration = neuron_synin.ExcSynTimeConstantCalibration(
+    calibration = neuron_synin.ExcSynTimeConstantCalib(
         neuron_configs=neuron_configs_synin_calib,
         target=small_tau_syn)
     calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
 
-    calibration = neuron_synin.InhSynTimeConstantCalibration(
+    calibration = neuron_synin.InhSynTimeConstantCalib(
         neuron_configs=neuron_configs_synin_calib,
         target=small_tau_syn)
     calibration.run(
@@ -233,7 +233,7 @@ def prepare_for_synin_calib(
         connection, algorithm=algorithms.NoisyBinarySearch())
 
     # re-calibrate leak potential after touching leak bias
-    calibration = neuron_potentials.LeakPotentialCalibration(120)
+    calibration = neuron_potentials.LeakPotentialCalib(120)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
     target_cadc_reads = neuron_helpers.cadc_read_neuron_potentials(
         connection)
@@ -243,7 +243,7 @@ def prepare_for_synin_calib(
 
 def finalize_synin_calib(
         connection: hxcomm.ConnectionHandle,
-        calib_result: neuron._CalibrationResultInternal):
+        calib_result: neuron._CalibResultInternal):
     """
     Un-set some of the hagen-mode specific parameters that were set
     in `prepare_for_synin_calib`.
@@ -253,7 +253,7 @@ def finalize_synin_calib(
     time constant here, as it will be calibrated only afterwards.
 
     :param connection: Connection to chip to run on.
-    :param calib_result: Calibration result to store parameters in.
+    :param calib_result: Calib result to store parameters in.
     """
 
     # re-apply synaptic input time constant
@@ -270,14 +270,14 @@ def finalize_synin_calib(
 def calibrate_synaptic_input(
         connection: hxcomm.ConnectionHandle,
         target: neuron.NeuronCalibTarget,
-        calib_result: neuron._CalibrationResultInternal,
+        calib_result: neuron._CalibResultInternal,
         target_cadc_reads: np.ndarray):
     """
     Run calibration of (current-based) synaptic inputs.
 
     :param connection: Connection to chip to run on.
     :param target: Target parameters for neuron calibration.
-    :param calib_result: Calibration result to store parameters in.
+    :param calib_result: Calib result to store parameters in.
     :param target_cadc_reads: CADC samples at resting potential, with
         synaptic input disabled.
     """
@@ -294,7 +294,7 @@ def calibrate_synaptic_input(
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=synin_parameters.i_synin_gm[0])
 
-    exc_synin_calibration = neuron_synin.ExcSynBiasCalibration(
+    exc_synin_calibration = neuron_synin.ExcSynBiasCalib(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(hal.CapMemCell.Value.min, min(
             # the upper boundary is restricted to avoid starting in a
@@ -313,7 +313,7 @@ def calibrate_synaptic_input(
         connection, excitatory_biases=0,
         inhibitory_biases=synin_parameters.i_synin_gm[1])
 
-    calibration = neuron_synin.InhSynBiasCalibration(
+    calibration = neuron_synin.InhSynBiasCalib(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
             # the upper boundary is restricted to avoid starting in a
@@ -337,7 +337,7 @@ def calibrate_synaptic_input(
 def calibrate_synin_references(
         connection: hxcomm.ConnectionHandle,
         target_cadc_reads: np.ndarray,
-        calib_result: neuron._CalibrationResultInternal):
+        calib_result: neuron._CalibResultInternal):
     """
     Calibrate synaptic input OTA reference potentials such that
     the given target CADC reads are reached with synaptic inputs
@@ -351,7 +351,7 @@ def calibrate_synin_references(
 
     neuron_helpers.reconfigure_synaptic_input(
         connection, inhibitory_biases=calib_result.i_syn_inh_gm)
-    calibration = neuron_synin.InhSynReferenceCalibration(
+    calibration = neuron_synin.InhSynReferenceCalib(
         target=target_cadc_reads)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
@@ -361,7 +361,7 @@ def calibrate_synin_references(
 
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=calib_result.i_syn_exc_gm)
-    calibration = neuron_synin.ExcSynReferenceCalibration(
+    calibration = neuron_synin.ExcSynReferenceCalib(
         target=target_cadc_reads)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
@@ -373,7 +373,7 @@ def calibrate_synin_references(
 def calibrate_tau_mem(
         connection: hxcomm.ConnectionHandle,
         tau_mem: pq.Quantity,
-        calib_result: neuron._CalibrationResultInternal):
+        calib_result: neuron._CalibResultInternal):
     """
     Calibrate membrane time constant to given target.
 
@@ -410,7 +410,7 @@ def calibrate_tau_mem(
 
 def disable_synin_and_threshold(
         connection: hxcomm.ConnectionHandle,
-        calib_result: neuron._CalibrationResultInternal):
+        calib_result: neuron._CalibResultInternal):
     """
     Configure neurons with synaptic input OTAs and spike threshold
     disabled.

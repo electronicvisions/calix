@@ -39,7 +39,7 @@ ParameterRange = namedtuple("ParameterRange", ["lower", "upper"])
 
 
 @dataclass
-class CalibrationTarget(ABC):
+class CalibTarget(ABC):
     """
     Data structure for collecting targets for higher-level calibration
     functions into one logical unit.
@@ -73,7 +73,7 @@ class CalibrationTarget(ABC):
         for calibration.
         """
 
-        log = logger.get("calix.common.base.CalibrationTarget")
+        log = logger.get("calix.common.base.CalibTarget")
 
         for key, value in vars(self).items():
             if value is None:
@@ -106,7 +106,7 @@ class CalibrationTarget(ABC):
 
 
 @dataclass
-class CalibrationOptions(ABC):
+class CalibOptions(ABC):
     """
     Data structure for collecting other configuration parameters for
     higher-level calibration functions.
@@ -122,7 +122,7 @@ class CalibrationOptions(ABC):
 
 
 @dataclass
-class CalibrationResult(ABC):
+class CalibResult(ABC):
     """
     Data structure for higher-level calibration results, that combine
     multiple parameters into a logal unit.
@@ -135,8 +135,8 @@ class CalibrationResult(ABC):
         affect the results.
     """
 
-    target: Optional[CalibrationTarget]
-    options: Optional[CalibrationOptions]
+    target: Optional[CalibTarget]
+    options: Optional[CalibOptions]
 
     # The following function should take a union type exposed from
     # haldls as an argument, cf. issue 3995.
@@ -156,7 +156,7 @@ class CalibrationResult(ABC):
 
 
 @dataclass
-class ParameterCalibrationResult:
+class ParameterCalibResult:
     """
     Data structure for calibration results of single parameters.
 
@@ -168,7 +168,7 @@ class ParameterCalibrationResult:
     success: np.ndarray
 
 
-class Calibration(ABC):
+class Calib(ABC):
     """
     Base class for calibration applications.
 
@@ -206,7 +206,7 @@ class Calibration(ABC):
         self.n_instances = n_instances
         self.errors = errors
         self.target: Union[numbers.Integral, np.ndarray, None] = None
-        self.result: Optional[ParameterCalibrationResult] = None
+        self.result: Optional[ParameterCalibResult] = None
 
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
@@ -278,7 +278,7 @@ class Calibration(ABC):
     def run(self, connection: hxcomm.ConnectionHandle,
             algorithm: Algorithm,
             target: Union[numbers.Integral, np.ndarray, None] = None
-            ) -> ParameterCalibrationResult:
+            ) -> ParameterCalibResult:
         """
         Use the provided algorithm to find optimal parameters.
 
@@ -296,7 +296,7 @@ class Calibration(ABC):
         :raises TypeError: If neither the target parameter or the attribute
             self.target are defined.
 
-        :return: ParameterCalibrationResult, containing the optimal
+        :return: ParameterCalibResult, containing the optimal
             parameters.
         """
 
@@ -305,7 +305,7 @@ class Calibration(ABC):
 
         if target is None:
             if self.target is None:
-                raise TypeError("Calibration target is not defined.")
+                raise TypeError("Calib target is not defined.")
         else:
             self.target = target
 
@@ -325,13 +325,13 @@ class Calibration(ABC):
                 calibrated_parameters, self.parameter_range, self.errors)
 
             for error in result.messages:
-                logger.get("calix.common.base.Calibration.run").WARN(error)
+                logger.get("calix.common.base.Calib.run").WARN(error)
 
         else:
             result = check_range_boundaries(
                 calibrated_parameters, self.parameter_range)
 
-        self.result = ParameterCalibrationResult(
+        self.result = ParameterCalibResult(
             result.parameters, ~result.error_mask)
 
         # Call postlude
@@ -345,7 +345,7 @@ class Algorithm(ABC):
     Base class for calibration Algorithms.
     From here, algorithms are derived, which implement a run() method.
 
-    :ivar calibration: Calibration instance that contains important parameters
+    :ivar calibration: Calib instance that contains important parameters
         and functions for the Algorithm to run.
     """
 
@@ -353,9 +353,9 @@ class Algorithm(ABC):
     # become more expressive. See issue 3954.
 
     def __init__(self):
-        self.calibration: Optional[Calibration] = None
+        self.calibration: Optional[Calib] = None
 
-    def hook_to_calibration(self, calibration: Calibration):
+    def hook_to_calibration(self, calibration: Calib):
         """
         Make an instance of a calibration known to the algorithm, allowing
         to use parameters set there.

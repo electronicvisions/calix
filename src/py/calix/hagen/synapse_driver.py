@@ -35,7 +35,7 @@ DEFAULT_STP_OFFSET = hal.SynapseDriverConfig.Offset.max // 2
 
 
 @dataclass
-class SynapseDriverCalibOptions(base.CalibrationOptions):
+class SynapseDriverCalibOptions(base.CalibOptions):
     """
     Further options for synapse driver calibration.
 
@@ -49,7 +49,7 @@ class SynapseDriverCalibOptions(base.CalibrationOptions):
 
 
 @dataclass
-class SynapseDriverCalibResult(base.CalibrationResult):
+class SynapseDriverCalibResult(base.CalibResult):
     """
     Result object of a synapse driver calibration.
 
@@ -414,7 +414,7 @@ class SynapseDriverMeasurement:
         return results
 
 
-class STPRampCalibration(base.Calibration):
+class STPRampCalib(base.Calib):
     """
     Search synapse driver STP ramp currents such that the mean amplitudes
     of drivers on different CapMem blocks are the same.
@@ -457,10 +457,10 @@ class STPRampCalibration(base.Calibration):
             errors=["STP ramp current for quadrants {0} has reached {1}"] * 2)
         self.test_activation = hal.PADIEvent.HagenActivation(2)
         self.n_parallel_measurements = 8
-        self.offset_calib = HagenDACOffsetCalibration()
+        self.offset_calib = HagenDACOffsetCalib()
         self.offset_calib.n_parallel_measurements = 8
         self.log = logger.get(
-            "calix.hagen.synapse_driver.STPRampCalibration")
+            "calix.hagen.synapse_driver.STPRampCalib")
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -577,7 +577,7 @@ class STPRampCalibration(base.Calibration):
             + f"{self.result.calibrated_parameters}")
 
 
-class HagenDACOffsetCalibration(base.Calibration):
+class HagenDACOffsetCalib(base.Calib):
     """
     Search Hagen-mode DAC offset settings such that drivers
     yield the same pulse lengths.
@@ -616,7 +616,7 @@ class HagenDACOffsetCalibration(base.Calibration):
         self.n_parallel_measurements = 1
         self.maximum_amplitudes: Optional[np.ndarray] = None
         self.log = logger.get(
-            "calix.hagen.synapse_driver.HagenDACOffsetCalibration")
+            "calix.hagen.synapse_driver.HagenDACOffsetCalib")
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
                              parameters: np.ndarray
@@ -769,7 +769,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         `calix.hagen.neuron_helpers.configure_chip()` to achieve this.
 
     :param connection: Connection to the chip to run on.
-    :param options: Calibration options, given as an instance of
+    :param options: Calib options, given as an instance of
         SynapseDriverCalibOptions.
 
     :return: SynapseDriverCalibResult containing STP ramp currents for
@@ -795,7 +795,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     calib_result = _SynapseDriverResultInternal()
 
     # Calibrate STP ramps
-    calibration = STPRampCalibration()
+    calibration = STPRampCalib()
     result = calibration.run(connection, algorithm=algorithms.BinarySearch())
     calib_result.ramp_current = result.calibrated_parameters
 
@@ -805,7 +805,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
             result.success[int(coord.toCapMemBlockOnDLS().toEnum())]
 
     # calibrate Hagen-mode DAC offset
-    calibration = HagenDACOffsetCalibration()
+    calibration = HagenDACOffsetCalib()
     calibration.test_activation = options.offset_test_activation
     result = calibration.run(connection, algorithm=algorithms.BinarySearch())
     calib_result.hagen_dac_offset = result.calibrated_parameters

@@ -22,11 +22,11 @@ from calix import constants
 
 
 @dataclass
-class NeuronCalibTarget(base.CalibrationTarget):
+class NeuronCalibTarget(base.CalibTarget):
     """
     Target parameters for the neuron calibration.
 
-    Calibration target parameters:
+    Calib target parameters:
     :ivar leak: Target CADC read at leak (resting) potential.
     :ivar reset: Target CADC read at reset potential.
     :ivar threshold: Target CADC read near spike threshold.
@@ -180,7 +180,7 @@ NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
 
 
 @dataclass
-class NeuronCalibOptions(base.CalibrationOptions):
+class NeuronCalibOptions(base.CalibOptions):
     """
     Further configuration parameters for neuron calibration.
 
@@ -198,7 +198,7 @@ class NeuronCalibOptions(base.CalibrationOptions):
 
 
 @dataclass
-class _CalibrationResultInternal(hagen_neuron.CalibrationResultInternal):
+class _CalibResultInternal(hagen_neuron.CalibResultInternal):
     """
     Class providing array-like access to calibrated parameters.
     Used internally during calibration.
@@ -399,7 +399,7 @@ def calibrate(
       the function `calix.common.cadc.calibrate()`.
 
     :param connection: Connection to the chip to calibrate.
-    :param target: Calibration target, given as an instance of
+    :param target: Calib target, given as an instance of
         NeuronCalibTarget. Refer there for the individual parameters.
     :param options: Further options for neuron calibration.
 
@@ -473,7 +473,7 @@ def calibrate(
     target.check()
 
     # create result object
-    calib_result = _CalibrationResultInternal()
+    calib_result = _CalibResultInternal()
     calib_result.set_neuron_configs_default(
         target.membrane_capacitance, target.tau_syn, options.readout_neuron)
 
@@ -521,14 +521,14 @@ def calibrate(
     neuron_calib_parts.disable_synin_and_threshold(connection, calib_result)
 
     # calibrate leak
-    calibration = neuron_potentials.LeakPotentialCalibration(target.leak)
+    calibration = neuron_potentials.LeakPotentialCalib(target.leak)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     neuron_calib_parts.calibrate_tau_mem(
         connection, target.tau_mem, calib_result)
 
     # calibrate reset
-    calibration = neuron_potentials.ResetPotentialCalibration(target.reset)
+    calibration = neuron_potentials.ResetPotentialCalib(target.reset)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.v_reset = result.calibrated_parameters
@@ -536,7 +536,7 @@ def calibrate(
         calib_result.success, result.success], axis=0)
 
     # calibrate leak
-    calibration = neuron_potentials.LeakPotentialCalibration(target.leak)
+    calibration = neuron_potentials.LeakPotentialCalib(target.leak)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.v_leak = result.calibrated_parameters
@@ -547,7 +547,7 @@ def calibrate(
     n_neurons_failed = np.sum(~calib_result.success)
     if n_neurons_failed > 0:
         logger.get("calix.spiking.neuron.calibrate").WARN(
-            f"Calibration failed for {n_neurons_failed} neurons: ",
+            f"Calib failed for {n_neurons_failed} neurons: ",
             np.arange(halco.NeuronConfigOnDLS.size)[~calib_result.success])
 
     result = calib_result.to_neuron_calib_result(target, options)
@@ -576,7 +576,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     :param connection: Connection to the chip to re-calibrate.
     :param result: Result of the previous neuron calibration.
         The potentials will be overwritten by the refinement.
-    :param target: Calibration target parameters. Only the potentials
+    :param target: Calib target parameters. Only the potentials
         (leak, reset, threshold) will be used and re-calibrated.
     """
 
@@ -627,13 +627,13 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     base.run(connection, builder)
 
     # calibrate reset
-    calibration = neuron_potentials.ResetPotentialCalibration(target.reset)
+    calibration = neuron_potentials.ResetPotentialCalib(target.reset)
     v_reset = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch()
     ).calibrated_parameters
 
     # calibrate leak
-    calibration = neuron_potentials.LeakPotentialCalibration(target.leak)
+    calibration = neuron_potentials.LeakPotentialCalib(target.leak)
     v_leak = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch()
     ).calibrated_parameters

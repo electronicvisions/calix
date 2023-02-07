@@ -11,7 +11,7 @@ from connection_setup import ConnectionSetup
 
 from calix.common import algorithms, base, cadc
 from calix.hagen import neuron_helpers
-from calix.multicomp.neuron_icc_bias import CalibrateICCMADC
+from calix.multicomp.neuron_icc_bias import ICCMADCCalib
 
 
 log = logger.get("calix")
@@ -95,7 +95,7 @@ class TestICCCalib(ConnectionSetup):
         builder, _ = neuron_helpers.configure_chip(builder)
         base.run(self.connection, builder)
 
-        calibration = CalibrateICCMADC(target=5. * pq.us)
+        calibration = ICCMADCCalib(target=5. * pq.us)
 
         # calibrate the inter-compartment conductance
         calib_res = calibration.run(

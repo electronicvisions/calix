@@ -61,7 +61,7 @@ class STPMultiplication(multiplication.Multiplication):
         base.run(connection, builder)
 
 
-class STPOffsetCalibration(base.Calibration):
+class STPOffsetCalib(base.Calib):
     """
     Calibrate synapse driver STP ramp offsets for usage in
     spiking mode.
@@ -183,7 +183,7 @@ class STPOffsetCalibration(base.Calibration):
                 block_results[int(coord.toCapMemBlockOnDLS().toEnum())]
 
         logger.get(
-            "calix.spiking.synapse_driver.STPOffsetCalibration.prelude"
+            "calix.spiking.synapse_driver.STPOffsetCalib.prelude"
         ).DEBUG(
             "Deviation of synapse driver amplitudes before offset calib: "
             + f"{np.std(results):4.2f}")
@@ -198,7 +198,7 @@ class STPOffsetCalibration(base.Calibration):
         builder = sta.PlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         logger.get(
-            "calix.spiking.synapse_driver.STPOffsetCalibration.postlude"
+            "calix.spiking.synapse_driver.STPOffsetCalib.postlude"
         ).INFO(
             "Deviation of synapse driver amplitudes after offset calib: "
             + f"{np.std(results):4.2f}")

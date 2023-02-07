@@ -10,7 +10,7 @@ from calix.common import algorithms, base, exceptions, madc_base, helpers
 from calix.hagen import neuron_helpers, neuron_potentials, neuron_leak_bias
 
 
-class CalibrateICCMADC(madc_base.Calibration):
+class ICCMADCCalib(madc_base.Calib):
     """
     Calibrate the inter-compartment conductance time constant of all neurons to
     the provided target value.
@@ -61,7 +61,7 @@ class CalibrateICCMADC(madc_base.Calibration):
                      [80, 110], int(halco.NeuronConfigOnDLS.size / 2)),
                  neuron_configs: Optional[List[hal.NeuronConfig]] = None):
         """
-        :param target: Calibration target for the inter-compartment
+        :param target: Calib target for the inter-compartment
             conductance. Note that we measure the total time constant
             tau_total. Please refer to the class doc-string for further
             reading.
@@ -139,7 +139,7 @@ class CalibrateICCMADC(madc_base.Calibration):
 
         # calibrate leak potential alternating
         builder = sta.PlaybackProgramBuilder()
-        leak_calib = neuron_potentials.LeakPotentialCalibration(v_leak)
+        leak_calib = neuron_potentials.LeakPotentialCalib(v_leak)
         leak_calib.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
         # enable leak bias division
@@ -211,7 +211,7 @@ class CalibrateICCMADC(madc_base.Calibration):
         multiplication_and_division = np.logical_and(enable_multiplication,
                                                      enable_division)
         if multiplication_and_division.any():
-            raise exceptions.CalibrationNotSuccessful(
+            raise exceptions.CalibNotSuccessful(
                 "Prelude decided to enable both i_bias_nmda multiplication and"
                 + " division at the same time for neurons "
                 + f"{np.where(multiplication_and_division)}")
@@ -403,7 +403,7 @@ class CalibrateICCMADC(madc_base.Calibration):
                             [p_0['offset'], 100, p_0['offset'] + 10,
                              p_0['x_offset'] + 3]))
             except RuntimeError as error:
-                raise exceptions.CalibrationNotSuccessful(
+                raise exceptions.CalibNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
                     + str(error))
             neuron_fits.append(popt[1])  # store time constant of exponential

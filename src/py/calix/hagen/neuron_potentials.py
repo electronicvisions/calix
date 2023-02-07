@@ -12,7 +12,7 @@ from calix.hagen import neuron_helpers
 from calix import constants
 
 
-class LeakPotentialCalibration(base.Calibration):
+class LeakPotentialCalib(base.Calib):
     """
     Calibrate the neurons' leak potentials to match specified CADC reads.
 
@@ -57,7 +57,7 @@ class LeakPotentialCalibration(base.Calibration):
             self.measure_results(connection, builder)))
         logger.get(
             "calix.hagen.neuron_potentials"
-            + ".LeakPotentialCalibration.prelude"
+            + ".LeakPotentialCalib.prelude"
         ).DEBUG(f"Read target for v_leak calibration: {self.target}")
 
     def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
@@ -111,13 +111,13 @@ class LeakPotentialCalibration(base.Calibration):
         reads = self.measure_results(connection, builder)
         logger.get(
             "calix.hagen.neuron_potentials"
-            + ".LeakPotentialCalibration.postlude"
+            + ".LeakPotentialCalib.postlude"
         ).INFO("Calibrated v_leak, CADC statistics: "
                + f"{np.mean(reads[self.result.success]):5.2f} +- "
                + f"{np.std(reads[self.result.success]):4.2f}")
 
 
-class ResetPotentialCalibration(base.Calibration):
+class ResetPotentialCalib(base.Calib):
     """
     Calibrate the neurons' reset target voltage such that it matches
     the leak potential.
@@ -154,7 +154,7 @@ class ResetPotentialCalibration(base.Calibration):
     def __init__(self, target: Union[int, np.ndarray] = None,
                  highnoise: bool = False):
         """
-        Initialize the ResetPotentialCalibration class.
+        Initialize the ResetPotentialCalib class.
 
         :param target: Target CADC reads during reset. If not given,
             they are measured during prelude. If given, the highnoise
@@ -301,7 +301,7 @@ class ResetPotentialCalibration(base.Calibration):
 
         logger.get(
             "calix.hagen.neuron_potentials"
-            + ".ResetPotentialCalibration.postlude"
+            + ".ResetPotentialCalib.postlude"
         ).INFO("Calibrated v_reset, CADC statistics: "
                + f"{np.mean(results[self.result.success]):5.2f} +- "
                + f"{np.std(results[self.result.success]):4.2f}")
@@ -319,7 +319,7 @@ class ResetPotentialCalibration(base.Calibration):
         base.run(connection, builder)
 
 
-class BaselineCalibration(cadc.ChannelOffsetCalibration):
+class BaselineCalib(cadc.ChannelOffsetCalib):
     """
     Calibrate all CADC channels offsets such that the neurons read a given
     value shortly after reset.
@@ -344,7 +344,7 @@ class BaselineCalibration(cadc.ChannelOffsetCalibration):
 
     def postlude(self, connection: hxcomm.ConnectionHandle):
         log = logger.get("calix.hagen.neuron_potentials."
-                         + "BaselineCalibration.postlude")
+                         + "BaselineCalib.postlude")
         results = neuron_helpers.cadc_read_neuron_potentials(connection)
         log.INFO("Calibrated neuron baseline, CADC reads:",
                  f"{np.mean(results):5.2f} +- {np.std(results):3.2f}")

@@ -148,12 +148,12 @@ class NeuronThresholdTest(ConnectionSetup):
         """
 
         # calibrate spike threshold to be shortly above leak
-        calibration = neuron_threshold.NeuronThresholdCalibration()
+        calibration = neuron_threshold.NeuronThresholdCalib()
         calibration.run(
             self.connection, algorithm=algorithms.NoisyBinarySearch())
 
         # Calibrate reset potential to be equal to leak
-        calibration = neuron_potentials.ResetPotentialCalibration(
+        calibration = neuron_potentials.ResetPotentialCalib(
             highnoise=True)
         calibration.run(
             self.connection, algorithm=algorithms.NoisyBinarySearch())

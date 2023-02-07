@@ -40,7 +40,7 @@ class _AlgorithmsGeneral(ConnectionSetup):
 
         return base.ParameterRange(0, cls.n_instances - 1)
 
-    class TestCalib(base.Calibration, unittest.TestCase):
+    class TestCalib(base.Calib, unittest.TestCase):
         """
         Calibration to test non-inverted algorithms.
         Returns the configured parameters as measured results.

@@ -8,7 +8,7 @@ The class MembraneTimeConstCalibCADC measures the membrane
 time constant and calibrates to set these equal.
 This is done before the calibration of synaptic input amplitudes.
 
-The class LeakBiasCalibration is targeted at setting the leak OTA bias
+The class LeakBiasCalib is targeted at setting the leak OTA bias
 current as low as possible while keeping the noise under control.
 This is called after the synaptic inputs are calibrated.
 """
@@ -26,7 +26,7 @@ from calix.hagen import neuron_potentials, neuron_helpers
 from calix import constants
 
 
-class MembraneTimeConstCalibCADC(base.Calibration):
+class MembraneTimeConstCalibCADC(base.Calib):
     """
     Find the leak conductivity by resetting the neuron's membrane to a
     potential significantly below the leak potential.
@@ -60,7 +60,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
         in CADC reads.
     :ivar target_time_const: Target membrane time constant.
     :ivar target_leak_read: Target CADC read at leak potential.
-    :ivar leak_calibration: LeakPotentialCalibration class instance used for
+    :ivar leak_calibration: LeakPotentialCalib class instance used for
         recalibration of leak potential after changing the bias current.
 
     :raises ValueError: if target_time_constant is not a single value.
@@ -73,7 +73,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
             n_instances=halco.NeuronConfigOnDLS.size, inverted=False)
         self.target_amplitude = target_amplitude
         self.leak_calibration: Optional[
-            neuron_potentials.LeakPotentialCalibration] = None
+            neuron_potentials.LeakPotentialCalib] = None
         self.target_leak_read: Optional[int] = None
 
         if target_time_const.size != 1:
@@ -89,7 +89,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
 
         :param connection: Connection to the chip to run on.
 
-        :raises CalibrationNotSuccessful: If the target CADC read at
+        :raises CalibNotSuccessful: If the target CADC read at
             reset potential is below the reliable range of the CADC
             for more than 5% of the neurons.
         """
@@ -102,7 +102,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
             neuron_helpers.cadc_read_neuron_potentials(connection)
 
         # Create instance of leak potential calibration
-        self.leak_calibration = neuron_potentials.LeakPotentialCalibration(
+        self.leak_calibration = neuron_potentials.LeakPotentialCalib(
             target=self.target_leak_read)
 
         # Calibrate reset potential to leak - amplitude
@@ -114,7 +114,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
                 + str(np.nonzero(too_low_mask)[0]) + ": "
                 + str(target_reset_read[too_low_mask]))
         if np.sum(too_low_mask) > int(halco.NeuronConfigOnDLS.size * 0.05):
-            raise exceptions.CalibrationNotSuccessful(
+            raise exceptions.CalibNotSuccessful(
                 f"Reset CADC read was obtained at {target_reset_read}, which "
                 + "is lower than the reliable range of the "
                 + "CADCs for many neurons: "
@@ -124,7 +124,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
                 + "amplitude.")
         target_reset_read[too_low_mask] = constants.cadc_reliable_range.lower
 
-        calibration = neuron_potentials.ResetPotentialCalibration(
+        calibration = neuron_potentials.ResetPotentialCalib(
             target=target_reset_read)
         calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
@@ -286,7 +286,7 @@ class MembraneTimeConstCalibCADC(base.Calibration):
                   + f"{self.result.calibrated_parameters}")
 
 
-class MembraneTimeConstCalibReset(madc_base.Calibration):
+class MembraneTimeConstCalibReset(madc_base.Calib):
     """
     Measure neuron reset with the MADC to calibrate the membrane time constant.
 
@@ -565,7 +565,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
                     p0=[p_0['scale'], p_0['tau'], p_0['offset']],
                     bounds=boundaries)
             except RuntimeError as error:
-                raise exceptions.CalibrationNotSuccessful(
+                raise exceptions.CalibNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
                     + str(error))
             neuron_fits.append(popt[1])  # store time constant of exponential
@@ -573,7 +573,7 @@ class MembraneTimeConstCalibReset(madc_base.Calibration):
         return np.array(neuron_fits) * pq.us
 
 
-class MembraneTimeConstCalibOffset(madc_base.Calibration):
+class MembraneTimeConstCalibOffset(madc_base.Calib):
     """
     Measure response to step current with MADC to calibrate the membrane time
     constant.
@@ -895,7 +895,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
                     p0=[p_0['scale'], p_0['tau'], p_0['offset']],
                     bounds=boundaries)
             except RuntimeError as error:
-                raise exceptions.CalibrationNotSuccessful(
+                raise exceptions.CalibNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
                     + str(error))
             neuron_fits.append(popt[1])  # store time constant of exponential
@@ -903,7 +903,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calibration):
         return np.array(neuron_fits) * pq.us
 
 
-class LeakBiasCalibration(base.Calibration):
+class LeakBiasCalib(base.Calib):
     """
     Set leak bias currents as low as possible while preventing the
     membrane voltage from floating and preventing too high membrane noise.
@@ -1082,7 +1082,7 @@ class LeakBiasCalibration(base.Calibration):
         :param connection: Connection to the chip to run on.
         """
 
-        log = logger.get("calix.hagen.neuron_leak_bias.LeakBiasCalibration")
+        log = logger.get("calix.hagen.neuron_leak_bias.LeakBiasCalib")
 
         # Measure noise again
         builder = sta.PlaybackProgramBuilder()

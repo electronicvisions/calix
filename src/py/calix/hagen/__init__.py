@@ -17,7 +17,7 @@ from calix import constants
 
 
 @dataclass
-class HagenSyninCalibrationTarget(base.CalibrationTarget):
+class HagenSyninCalibTarget(base.CalibTarget):
     """
     Dataclass collecting target parameters for Hagen-mode calibrations.
     with integration on synaptic input lines.
@@ -39,7 +39,7 @@ class HagenSyninCalibrationTarget(base.CalibrationTarget):
 
 
 @dataclass
-class HagenSyninCalibrationOptions(base.CalibrationOptions):
+class HagenSyninCalibOptions(base.CalibOptions):
     """
     Dataclass collecting further options for Hagen-mode calibrations
     with integration on synaptic input lines.
@@ -55,7 +55,7 @@ class HagenSyninCalibrationOptions(base.CalibrationOptions):
 
 
 @dataclass
-class HagenCalibrationTarget(base.CalibrationTarget):
+class HagenCalibTarget(base.CalibTarget):
     """
     Dataclass collecting target parameters for Hagen-mode calibrations
     with integration on membranes.
@@ -70,7 +70,7 @@ class HagenCalibrationTarget(base.CalibrationTarget):
 
 
 @dataclass
-class HagenCalibrationOptions(base.CalibrationOptions):
+class HagenCalibOptions(base.CalibOptions):
     """
     Dataclass collecting further options for Hagen-mode calibrations with
     integration on membranes.
@@ -94,9 +94,9 @@ class HagenCalibrationOptions(base.CalibrationOptions):
 
 
 @dataclass
-class HagenSyninCalibrationResult(base.CalibrationResult):
+class HagenSyninCalibResult(base.CalibResult):
     """
-    Calibration results needed for hagen mode integration on the
+    Calib results needed for hagen mode integration on the
     synaptic inputs.
 
     Contains synapse driver calibration, CADC calibration and calibrated
@@ -167,7 +167,7 @@ class HagenSyninCalibrationResult(base.CalibrationResult):
 
 
 @dataclass
-class HagenCalibrationResult(base.CalibrationResult):
+class HagenCalibResult(base.CalibResult):
     """
     Data class containing results of cadc, neuron and synapse driver
     calibration, all what is necessary for operation in hagen mode
@@ -204,7 +204,7 @@ class HagenCalibrationResult(base.CalibrationResult):
             cadc_options: Optional[cadc.CADCCalibOptions] = None,
             synapse_dac_bias: Optional[int] = None,
             cadc_kwargs: dict = None
-    ) -> HagenSyninCalibrationResult:
+    ) -> HagenSyninCalibResult:
         """
         Reconfigure calibration result for integration on synaptic
         input lines. The new result is applied to the chip.
@@ -226,9 +226,9 @@ class HagenCalibrationResult(base.CalibrationResult):
 
         # calibrate CADC to smaller range
         if cadc_target is None:
-            cadc_target = HagenSyninCalibrationTarget().cadc_target
+            cadc_target = HagenSyninCalibTarget().cadc_target
         if cadc_options is None:
-            cadc_options = HagenSyninCalibrationOptions().cadc_options
+            cadc_options = HagenSyninCalibOptions().cadc_options
 
         if cadc_kwargs is not None:
             warn(
@@ -257,7 +257,7 @@ class HagenCalibrationResult(base.CalibrationResult):
 
         # set target synapse DAC bias current
         if synapse_dac_bias is None:
-            synapse_dac_bias = HagenSyninCalibrationTarget().synapse_dac_bias
+            synapse_dac_bias = HagenSyninCalibTarget().synapse_dac_bias
         builder = helpers.capmem_set_quadrant_cells(
             builder,
             {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: synapse_dac_bias})
@@ -271,10 +271,10 @@ class HagenCalibrationResult(base.CalibrationResult):
         ).calibrated_parameters
 
         # pack into result class, apply
-        result = HagenSyninCalibrationResult(
-            target=HagenSyninCalibrationTarget(
+        result = HagenSyninCalibResult(
+            target=HagenSyninCalibTarget(
                 cadc_target=cadc_target, synapse_dac_bias=synapse_dac_bias),
-            options=HagenSyninCalibrationOptions(
+            options=HagenSyninCalibOptions(
                 cadc_options=cadc_options,
                 synapse_driver_options=self.options.synapse_driver_options),
             cadc_result=cadc_result,
@@ -288,12 +288,12 @@ class HagenCalibrationResult(base.CalibrationResult):
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
-              target: Optional[HagenCalibrationTarget] = None,
-              options: Optional[HagenCalibrationOptions] = None, *,
+              target: Optional[HagenCalibTarget] = None,
+              options: Optional[HagenCalibOptions] = None, *,
               cadc_kwargs: dict = None,
               neuron_kwargs: dict = None,
               synapse_driver_kwargs: dict = None
-              ) -> HagenCalibrationResult:
+              ) -> HagenCalibResult:
     """
     Execute a full calibration for hagen mode:
     Calibrate CADCs to a suitable dynamic range.
@@ -307,18 +307,18 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     :param connection: Connection to the chip to calibrate.
     :param target: Target parameters for calibration, given as an
-        instance of HagenCalibrationTarget.
+        instance of HagenCalibTarget.
     :param options: Further options for calibration, given as an
-        instance of HagenCalibrationOptions.
+        instance of HagenCalibOptions.
 
-    :return: HagenCalibrationResult, containing cadc, neuron and
+    :return: HagenCalibResult, containing cadc, neuron and
         synapse driver results.
     """
 
     if target is None:
-        target = HagenCalibrationTarget()
+        target = HagenCalibTarget()
     if options is None:
-        options = HagenCalibrationOptions()
+        options = HagenCalibOptions()
 
     used_deprecated_parameters = False
     if cadc_kwargs is not None:
@@ -398,7 +398,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
                 hal.CapMemCell.Value(0)
 
     # pack into result class
-    to_be_returned = HagenCalibrationResult(
+    to_be_returned = HagenCalibResult(
         target=target, options=options,
         cadc_result=cadc_result, neuron_result=neuron_result,
         synapse_driver_result=synapse_driver_result)
@@ -415,29 +415,29 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
 def calibrate_for_synin_integration(
         connection: hxcomm.ConnectionHandle,
-        target: Optional[HagenSyninCalibrationTarget] = None,
-        options: Optional[HagenSyninCalibrationOptions] = None, *,
+        target: Optional[HagenSyninCalibTarget] = None,
+        options: Optional[HagenSyninCalibOptions] = None, *,
         cadc_kwargs: dict = None,
         synapse_driver_kwargs: dict = None,
         synapse_dac_bias: Optional[int] = None,
-) -> HagenSyninCalibrationResult:
+) -> HagenSyninCalibResult:
     """
     Calibrate the chip for integration on synaptic input lines.
 
     Calibrate CADC, synapse drivers, and synapse DAC bias.
 
     :param connection: Connection to the chip to calibrate.
-    :param target: Calibration target parameters.
+    :param target: Calib target parameters.
     :param options: Further options for calibration.
 
-    :return: Calibration result for integration on the synaptic input
+    :return: Calib result for integration on the synaptic input
         lines.
     """
 
     if target is None:
-        target = HagenSyninCalibrationTarget()
+        target = HagenSyninCalibTarget()
     if options is None:
-        options = HagenSyninCalibrationOptions()
+        options = HagenSyninCalibOptions()
 
     used_deprecated_parameters = False
     if cadc_kwargs is not None:
@@ -493,7 +493,7 @@ def calibrate_for_synin_integration(
         connection, options.synapse_driver_options)
 
     # pack into result class, apply it
-    to_be_returned = HagenSyninCalibrationResult(
+    to_be_returned = HagenSyninCalibResult(
         target=target, options=options,
         cadc_result=cadc_result, synapse_driver_result=synapse_driver_result,
         syn_i_bias_dac=calibrated_dac_bias)

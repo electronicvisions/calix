@@ -20,14 +20,14 @@ from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
 
 import calix.hagen
 import calix.spiking
-from calix.common.base import CalibrationResult
+from calix.common.base import CalibResult
 
 
 log = logger.get("calix")
 logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
-class CalibrationRecorder(metaclass=ABCMeta):
+class CalibRecorder(metaclass=ABCMeta):
     """
     Recorder for various calibration results, to be implemented for HAGEN,
     Spiking etc.
@@ -43,16 +43,16 @@ class CalibrationRecorder(metaclass=ABCMeta):
 
     @abstractmethod
     def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibrationResult:
+                       connection: ConnectionHandle) -> CalibResult:
         """
         Execute calibration routines and create a result object.
         :param connection: Connection used for acquiring calibration data.
-        :return: Calibration result data
+        :return: Calib result data
         """
         raise NotImplementedError
 
 
-class CalibrationDumper(metaclass=ABCMeta):
+class CalibDumper(metaclass=ABCMeta):
     """
     Dumper for calibration data into various formats, e.g. calix internal,
     write instructions etc.
@@ -75,11 +75,11 @@ class CalibrationDumper(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def dump_calibration(self, calibration_result: CalibrationResult,
+    def dump_calibration(self, calibration_result: CalibResult,
                          target_file: Path):
         """
         Read a calibration result and serialize it to a given file.
-        :param calibration_result: Calibration result to be serialized.
+        :param calibration_result: Calib result to be serialized.
         :param target_file: Path to the file the result is written to.
         """
         raise NotImplementedError
@@ -92,7 +92,7 @@ class RecorderAndDumper(metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def recorder(self) -> CalibrationRecorder:
+    def recorder(self) -> CalibRecorder:
         """
         Recorder used for acquiring the calibration data
         """
@@ -100,7 +100,7 @@ class RecorderAndDumper(metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def dumpers(self) -> List[CalibrationDumper]:
+    def dumpers(self) -> List[CalibDumper]:
         """
         List of Dumpers used for serializing the calibration data. All will
         serialize the data that has been acquired in a single calibration run.
@@ -124,20 +124,20 @@ class RecorderAndDumper(metaclass=ABCMeta):
             dumper.dump_calibration(result, target_file)
 
 
-class HagenCalibRecorder(CalibrationRecorder):
+class HagenCalibRecorder(CalibRecorder):
     """
     Recorder for a canonical Hagen-Mode calibration.
     """
     calibration_type = "hagen"
 
     def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibrationResult:
+                       connection: ConnectionHandle) -> CalibResult:
         builder, _ = ExperimentInit().generate()
         run(connection, builder.done())
         return calix.hagen.calibrate(connection)
 
 
-class HagenSyninCalibRecorder(CalibrationRecorder):
+class HagenSyninCalibRecorder(CalibRecorder):
     """
     Recorder for a Hagen-Mode calibration with integration on the
     synaptic input lines, as opposed to neuron membranes.
@@ -145,26 +145,26 @@ class HagenSyninCalibRecorder(CalibrationRecorder):
     calibration_type = "hagen_synin"
 
     def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibrationResult:
+                       connection: ConnectionHandle) -> CalibResult:
         builder, _ = ExperimentInit().generate()
         run(connection, builder.done())
         return calix.hagen.calibrate_for_synin_integration(connection)
 
 
-class SpikingCalibRecorder(CalibrationRecorder):
+class SpikingCalibRecorder(CalibRecorder):
     """
     Recorder for a default Spiking-Mode calibration.
     """
     calibration_type = "spiking"
 
     def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibrationResult:
+                       connection: ConnectionHandle) -> CalibResult:
         builder, _ = ExperimentInit().generate()
         run(connection, builder.done())
         return calix.spiking.calibrate(connection)
 
 
-class SpikingCalibRecorder2(CalibrationRecorder):
+class SpikingCalibRecorder2(CalibRecorder):
     """
     Recorder for a second Spiking-Mode calibration.
 
@@ -180,11 +180,11 @@ class SpikingCalibRecorder2(CalibrationRecorder):
     calibration_type = "spiking2"
 
     def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibrationResult:
+                       connection: ConnectionHandle) -> CalibResult:
         builder, _ = ExperimentInit().generate()
         run(connection, builder.done())
 
-        target = calix.spiking.SpikingCalibrationTarget(
+        target = calix.spiking.SpikingCalibTarget(
             neuron_target=calix.spiking.neuron.NeuronCalibTarget(
                 leak=80,
                 reset=80,
@@ -196,27 +196,27 @@ class SpikingCalibRecorder2(CalibrationRecorder):
         return calix.spiking.calibrate(connection, target)
 
 
-class CalixFormatDumper(CalibrationDumper):
+class CalixFormatDumper(CalibDumper):
     """
     Dumper for the calix-internal data format.
     """
     format_name = "calix-native"
     format_extension = ".pkl"
 
-    def dump_calibration(self, calibration_result: CalibrationResult,
+    def dump_calibration(self, calibration_result: CalibResult,
                          target_file: Path):
         with target_file.open(mode="wb") as target:
             pickle.dump(calibration_result, target)
 
 
-class CocoListPortableBinaryFormatDumper(CalibrationDumper):
+class CocoListPortableBinaryFormatDumper(CalibDumper):
     """
     Dumper for the Coordinate-Container-List data in portable binary format.
     """
     format_name = "cocolist"
     format_extension = ".pbin"
 
-    def dump_calibration(self, calibration_result: CalibrationResult,
+    def dump_calibration(self, calibration_result: CalibResult,
                          target_file: Path):
         builder = PlaybackProgramBuilderDumper()
         calibration_result.apply(builder)
@@ -225,7 +225,7 @@ class CocoListPortableBinaryFormatDumper(CalibrationDumper):
             target.write(to_portablebinary(builder.done()))
 
 
-class CocoListJsonFormatDumper(CalibrationDumper):
+class CocoListJsonFormatDumper(CalibDumper):
     """
     Dumper for the Coordinate-Container-List data in json format
     with gzip compression.
@@ -233,7 +233,7 @@ class CocoListJsonFormatDumper(CalibrationDumper):
     format_name = "cocolist"
     format_extension = ".json.gz"
 
-    def dump_calibration(self, calibration_result: CalibrationResult,
+    def dump_calibration(self, calibration_result: CalibResult,
                          target_file: Path):
         builder = PlaybackProgramBuilderDumper()
         calibration_result.apply(builder)
@@ -242,28 +242,28 @@ class CocoListJsonFormatDumper(CalibrationDumper):
             target.write(to_json(builder.done()))
 
 
-class HagenCalibration(RecorderAndDumper):
+class HagenCalib(RecorderAndDumper):
     recorder = HagenCalibRecorder()
     dumpers = [CalixFormatDumper(),
                CocoListPortableBinaryFormatDumper(),
                CocoListJsonFormatDumper()]
 
 
-class HagenSyninCalibration(RecorderAndDumper):
+class HagenSyninCalib(RecorderAndDumper):
     recorder = HagenSyninCalibRecorder()
     dumpers = [CalixFormatDumper(),
                CocoListPortableBinaryFormatDumper(),
                CocoListJsonFormatDumper()]
 
 
-class SpikingCalibration(RecorderAndDumper):
+class SpikingCalib(RecorderAndDumper):
     recorder = SpikingCalibRecorder()
     dumpers = [CalixFormatDumper(),
                CocoListPortableBinaryFormatDumper(),
                CocoListJsonFormatDumper()]
 
 
-class SpikingCalibration2(RecorderAndDumper):
+class SpikingCalib2(RecorderAndDumper):
     recorder = SpikingCalibRecorder2()
     dumpers = [CalixFormatDumper(),
                CocoListPortableBinaryFormatDumper(),
@@ -278,8 +278,8 @@ def run_and_save_all(deployment_folder: Path):
     :param deployment_folder: Path calibration results are deployed to.
     """
     with ManagedConnection() as connection:
-        for calib in [HagenCalibration(), HagenSyninCalibration(),
-                      SpikingCalibration(), SpikingCalibration2()]:
+        for calib in [HagenCalib(), HagenSyninCalib(),
+                      SpikingCalib(), SpikingCalib2()]:
             calib.record_and_dump(connection, deployment_folder)
 
 

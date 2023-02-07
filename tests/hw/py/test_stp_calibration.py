@@ -17,7 +17,7 @@ log = logger.get("calix")
 logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
-class STPCalibrationTest(ConnectionSetup):
+class STPCalibTest(ConnectionSetup):
     """
     Test STP calibration (for spiking mode).
 
@@ -89,7 +89,7 @@ class STPCalibrationTest(ConnectionSetup):
         """
 
         # Configure things for baseline read
-        calib = synapse_driver.STPOffsetCalibration()
+        calib = synapse_driver.STPOffsetCalib()
         calib.prelude(self.connection)
 
         # Baseline read

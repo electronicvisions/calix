@@ -1,10 +1,10 @@
-class CalibrationError(Exception):
+class CalibError(Exception):
     """
-    Base class for Exceptions raised from Calibrations.
+    Base class for Exceptions raised from Calibs.
     """
 
 
-class CalibrationNotSuccessful(CalibrationError):
+class CalibNotSuccessful(CalibError):
     """
     Raised if a calibration fails to run successfully.
 
@@ -13,14 +13,14 @@ class CalibrationNotSuccessful(CalibrationError):
     """
 
 
-class CalibrationNotSupported(CalibrationError):
+class CalibNotSupported(CalibError):
     """
     Raised if a calibration is not possible with the given algorithm
     or calibration routine.
     """
 
 
-class TooFewSamplesError(CalibrationError):
+class TooFewSamplesError(CalibError):
     """
     The number of received MADC samples is significantly lower than
     expected. This is likely an FPGA-related problem. A longer wait

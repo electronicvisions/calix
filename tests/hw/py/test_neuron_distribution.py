@@ -32,7 +32,7 @@ class TestNeuronDistribution(ConnectionSetup):
     """
 
     log = logger.get("calix.tests.hw.test_neuron_distribution")
-    calib_result: Optional[calix.spiking.SpikingCalibrationResult] = None
+    calib_result: Optional[calix.spiking.SpikingCalibResult] = None
     neuron_configs: List[hal.NeuronConfig] = []
     results: Dict[str, np.ndarray] = {}
 
@@ -90,10 +90,10 @@ class TestNeuronDistribution(ConnectionSetup):
             deviation that is allowed after calibration as a maximum.
         """
 
-        calib_result: Optional[calix.spiking.SpikingCalibrationResult] = None
+        calib_result: Optional[calix.spiking.SpikingCalibResult] = None
         log = logger.get("calix.tests.hw.test_neuron_distribution")
 
-        def __init__(self, name: str, calibration: base.Calibration,
+        def __init__(self, name: str, calibration: base.Calib,
                      uncalibrated_value: int, *,
                      proportion_to_cut: float = 0.05,
                      assertion_limit: float = 0.3):
@@ -188,7 +188,7 @@ class TestNeuronDistribution(ConnectionSetup):
         """
 
         # initialize with random target
-        calibration = neuron_potentials.LeakPotentialCalibration(target=100)
+        calibration = neuron_potentials.LeakPotentialCalib(target=100)
 
         # extract calibrated parameters from calibration result
         parameters = np.empty(halco.AtomicNeuronOnDLS.size, dtype=int)
@@ -208,7 +208,7 @@ class TestNeuronDistribution(ConnectionSetup):
         """
 
         # initialize with random target
-        calibration = neuron_potentials.ResetPotentialCalibration(target=90)
+        calibration = neuron_potentials.ResetPotentialCalib(target=90)
 
         # extract calibrated parameters from calibration result
         parameters = np.empty(halco.AtomicNeuronOnDLS.size, dtype=int)
@@ -302,7 +302,7 @@ class TestNeuronDistribution(ConnectionSetup):
         time constants.
         """
 
-        calibration = neuron_synin.ExcSynTimeConstantCalibration(
+        calibration = neuron_synin.ExcSynTimeConstantCalib(
             neuron_configs=self.__class__.neuron_configs)
 
         # extract calibrated parameters from calibration result
@@ -323,7 +323,7 @@ class TestNeuronDistribution(ConnectionSetup):
         time constants.
         """
 
-        calibration = neuron_synin.InhSynTimeConstantCalibration(
+        calibration = neuron_synin.InhSynTimeConstantCalib(
             neuron_configs=self.__class__.neuron_configs)
 
         # extract calibrated parameters from calibration result

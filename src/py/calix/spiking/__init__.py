@@ -10,7 +10,7 @@ from calix import constants
 
 
 @dataclass
-class SpikingCalibrationTarget(base.CalibrationTarget):
+class SpikingCalibTarget(base.CalibTarget):
     """
     Data class containing targets for spiking neuron calibration.
 
@@ -23,7 +23,7 @@ class SpikingCalibrationTarget(base.CalibrationTarget):
 
 
 @dataclass
-class SpikingCalibrationOptions(base.CalibrationOptions):
+class SpikingCalibOptions(base.CalibOptions):
     """
     Data class containing further options for spiking calibration.
 
@@ -36,7 +36,7 @@ class SpikingCalibrationOptions(base.CalibrationOptions):
 
 
 @dataclass
-class SpikingCalibrationResult(base.CalibrationResult):
+class SpikingCalibResult(base.CalibResult):
     """
     Data class containing results of cadc and neuron
     calibration, all what is necessary for operation in spiking mode.
@@ -65,11 +65,11 @@ class SpikingCalibrationResult(base.CalibrationResult):
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
-              target: Optional[SpikingCalibrationTarget] = None,
-              options: Optional[SpikingCalibrationOptions] = None, *,
+              target: Optional[SpikingCalibTarget] = None,
+              options: Optional[SpikingCalibOptions] = None, *,
               cadc_kwargs: Optional[dict] = None,
               neuron_kwargs: Optional[dict] = None
-              ) -> SpikingCalibrationResult:
+              ) -> SpikingCalibResult:
     """
     Execute a full calibration for spiking mode:
     Calibrate CADCs to a suitable dynamic range.
@@ -87,17 +87,17 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     :param connection: Connection to the chip to calibrate.
     :param target: Target parameters for calibration, given as an
-        instance of SpikingCalibrationTarget.
+        instance of SpikingCalibTarget.
     :param options: Further options for calibration, given as an
-        instance of SpikingCalibrationOptions.
+        instance of SpikingCalibOptions.
 
-    :return: SpikingCalibrationResult, containing cadc and neuron results.
+    :return: SpikingCalibResult, containing cadc and neuron results.
     """
 
     if target is None:
-        target = SpikingCalibrationTarget()
+        target = SpikingCalibTarget()
     if options is None:
-        options = SpikingCalibrationOptions()
+        options = SpikingCalibOptions()
 
     used_deprecated_parameters = False
     if cadc_kwargs is not None:
@@ -140,6 +140,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     neuron.refine_potentials(
         connection, neuron_result, target.neuron_target)
 
-    return SpikingCalibrationResult(
+    return SpikingCalibResult(
         target=target, options=options,
         cadc_result=cadc_result, neuron_result=neuron_result)

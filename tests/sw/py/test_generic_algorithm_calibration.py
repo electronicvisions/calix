@@ -8,25 +8,25 @@ from mock_connection_setup import ConnectionSetup
 
 import calix
 from calix.common import exceptions
-from calix.common.base import Algorithm, Calibration
+from calix.common.base import Algorithm, Calib
 
 
 log = logger.get("calix")
 logger.set_loglevel(log, logger.LogLevel.DEBUG)
 
 
-class GenericCalibrationTest(ConnectionSetup):
+class GenericCalibTest(ConnectionSetup):
     @classmethod
     def generate_cases(cls):
         """
         Generate test cases for all combinations of implementations of
         :class:`calix.hagen.base.Algorithm` and
-        :class:`calix.hagen.base.Calibration` and run them.
+        :class:`calix.hagen.base.Calib` and run them.
         """
         for algorithm in cls.implementations(Algorithm):
             assert issubclass(algorithm, Algorithm)
-            for calibration in cls.implementations(Calibration):
-                assert issubclass(calibration, Calibration)
+            for calibration in cls.implementations(Calib):
+                assert issubclass(calibration, Calib)
                 test_method = cls.generate_single(algorithm, calibration)
                 test_method.__name__ = f"test_" \
                                        f"{calibration.__name__}_" \
@@ -36,7 +36,7 @@ class GenericCalibrationTest(ConnectionSetup):
 
     @staticmethod
     def generate_single(algorithm_type: Type[Algorithm],
-                        calibration_type: Type[Calibration]) -> Callable:
+                        calibration_type: Type[Calib]) -> Callable:
         """
         Generate a test function for running a calibration of given type with
         an algorithm of given type.
@@ -46,7 +46,7 @@ class GenericCalibrationTest(ConnectionSetup):
         :return: Function testing a single run of
         """
 
-        def test_func(self: GenericCalibrationTest):
+        def test_func(self: GenericCalibTest):
             try:
                 calibration = calibration_type()
             except TypeError as error:
@@ -67,12 +67,12 @@ class GenericCalibrationTest(ConnectionSetup):
                 self.skipTest(f"{algorithm_type.__name__} cannot be "
                               + f"used with {calibration_type.__name__}: "
                               + f"{error}")
-            except exceptions.CalibrationNotSuccessful as error:
-                self.skipTest("Calibration was not successful, which is "
+            except exceptions.CalibNotSuccessful as error:
+                self.skipTest("Calib was not successful, which is "
                               + "to be expected in this test.")
-            except exceptions.CalibrationNotSupported as error:
+            except exceptions.CalibNotSupported as error:
                 self.skipTest(
-                    f"Calibration is deliberately not supported: {error}")
+                    f"Calib is deliberately not supported: {error}")
             except exceptions.TooFewSamplesError as error:
                 self.skipTest(
                     "Too few MADC samples were received, which is "
@@ -109,7 +109,7 @@ class GenericCalibrationTest(ConnectionSetup):
 for submodule in pkgutil.walk_packages(calix.__path__, f"{calix.__name__}."):
     __import__(submodule.name)
 
-GenericCalibrationTest.generate_cases()
+GenericCalibTest.generate_cases()
 
 if __name__ == '__main__':
     unittest.main()

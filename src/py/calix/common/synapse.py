@@ -8,7 +8,7 @@ from calix.hagen import neuron_helpers
 from calix import constants
 
 
-class DACBiasCalibMADC(madc_base.Calibration):
+class DACBiasCalibMADC(madc_base.Calib):
     """
     Calibrates synapse DAC bias currents such that the amplitudes
     received at all neurons match those of the weakest quadrant.
@@ -188,7 +188,7 @@ class DACBiasCalibMADC(madc_base.Calibration):
                   + f"{self.result.calibrated_parameters}")
 
 
-class DACBiasCalibCADC(base.Calibration):
+class DACBiasCalibCADC(base.Calib):
     """
     Calibrates synapse DAC bias currents such that the amplitudes
     received at all neurons match those of the weakest quadrant.
@@ -233,7 +233,7 @@ class DACBiasCalibCADC(base.Calibration):
 
         :param connection: Connection to the chip to calibrate.
 
-        :raises CalibrationNotSuccessful: If amplitudes can not be brought
+        :raises CalibNotSuccessful: If amplitudes can not be brought
             into a reliable range by adjusting the number of enabled
             synapse rows.
         :raises AssertionError: If the number of enabled synapse rows is
@@ -319,7 +319,7 @@ class DACBiasCalibCADC(base.Calibration):
                     + f"n_rows_enabled: {n_rows_enabled}, "
                     + f"target: {self.target}")
         if not target_range.start < self.target < target_range.stop:
-            raise exceptions.CalibrationNotSuccessful(
+            raise exceptions.CalibNotSuccessful(
                 "Optimal number of enabled synapse rows not found "
                 + "during prelude of Synapse DAC bias calibration. "
                 + f"Last parameters: n_synapse_rows: {n_rows_enabled}, "

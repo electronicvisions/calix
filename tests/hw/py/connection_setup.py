@@ -31,10 +31,10 @@ class ConnectionSetup(unittest.TestCase):
     connection = None
     target_directory = Path("./calibs")
     available_calibrations = {
-        "hagen": calib_generator.HagenCalibration(),
-        "hagen_synin": calib_generator.HagenSyninCalibration(),
-        "spiking": calib_generator.SpikingCalibration(),
-        "spiking2": calib_generator.SpikingCalibration2()}
+        "hagen": calib_generator.HagenCalib(),
+        "hagen_synin": calib_generator.HagenSyninCalib(),
+        "spiking": calib_generator.SpikingCalib(),
+        "spiking2": calib_generator.SpikingCalib2()}
     use_cache = True
 
     @classmethod
@@ -49,7 +49,7 @@ class ConnectionSetup(unittest.TestCase):
         base.run(cls.connection, builder)
 
     @classmethod
-    def apply_calibration(cls, identifier: str) -> base.CalibrationResult:
+    def apply_calibration(cls, identifier: str) -> base.CalibResult:
         """
         Search for requested calibration, load and apply it.
 

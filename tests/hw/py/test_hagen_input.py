@@ -42,7 +42,7 @@ class HagenInputTest(ConnectionSetup):
     vector_activations = np.arange(1, hal.PADIEvent.HagenActivation.size)
 
     log = logger.get("calix.tests.hw.test_hagen_inputs")
-    calib_result: Optional[calix.hagen.HagenCalibrationResult] = None
+    calib_result: Optional[calix.hagen.HagenCalibResult] = None
     measurement = synapse_driver.SynapseDriverMeasurement(
         n_parallel_measurements=8)
 
