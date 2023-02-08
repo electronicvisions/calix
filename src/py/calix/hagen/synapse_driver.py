@@ -11,7 +11,7 @@ be calibrated.
 """
 
 from typing import Optional, Dict, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from warnings import warn
 
 import numpy as np
@@ -45,7 +45,7 @@ class SynapseDriverCalibOptions(base.CalibOptions):
     """
 
     offset_test_activation: hal.SynapseQuad.Label \
-        = hal.PADIEvent.HagenActivation(3)
+        = field(default_factory=lambda: hal.PADIEvent.HagenActivation(3))
 
 
 @dataclass

@@ -4,7 +4,7 @@ i.e. for multiply-accumulate operation.
 """
 
 from typing import Tuple, Union, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from warnings import warn
 
 import numpy as np
@@ -28,8 +28,9 @@ class HagenSyninCalibTarget(base.CalibTarget):
         multiplication.
     """
 
-    cadc_target: cadc.CADCCalibTarget = cadc.CADCCalibTarget(
-        dynamic_range=base.ParameterRange(150, 340))
+    cadc_target: cadc.CADCCalibTarget = field(
+        default_factory=lambda: cadc.CADCCalibTarget(
+            dynamic_range=base.ParameterRange(150, 340)))
     synapse_dac_bias: int = 800
 
     feasible_ranges = {
@@ -49,9 +50,10 @@ class HagenSyninCalibOptions(base.CalibOptions):
         calibration.
     """
 
-    cadc_options: cadc.CADCCalibOptions = cadc.CADCCalibOptions()
+    cadc_options: cadc.CADCCalibOptions = field(
+        default_factory=cadc.CADCCalibOptions)
     synapse_driver_options: synapse_driver.SynapseDriverCalibOptions \
-        = synapse_driver.SynapseDriverCalibOptions()
+        = field(default_factory=synapse_driver.SynapseDriverCalibOptions)
 
 
 @dataclass
@@ -64,9 +66,11 @@ class HagenCalibTarget(base.CalibTarget):
     :ivar neuron_target: Target parameters for neuron calibration.
     """
 
-    cadc_target: cadc.CADCCalibTarget = cadc.CADCCalibTarget(
-        dynamic_range=base.ParameterRange(150, 500))
-    neuron_target: neuron.NeuronCalibTarget = neuron.NeuronCalibTarget()
+    cadc_target: cadc.CADCCalibTarget = field(
+        default_factory=lambda: cadc.CADCCalibTarget(
+            dynamic_range=base.ParameterRange(150, 500)))
+    neuron_target: neuron.NeuronCalibTarget = field(
+        default_factory=neuron.NeuronCalibTarget)
 
 
 @dataclass
@@ -86,11 +90,13 @@ class HagenCalibOptions(base.CalibOptions):
         calibration.
     """
 
-    cadc_options: cadc.CADCCalibOptions = cadc.CADCCalibOptions()
-    neuron_options: neuron.NeuronCalibOptions = neuron.NeuronCalibOptions()
+    cadc_options: cadc.CADCCalibOptions = field(
+        default_factory=cadc.CADCCalibOptions)
+    neuron_options: neuron.NeuronCalibOptions = field(
+        default_factory=neuron.NeuronCalibOptions)
     neuron_disable_leakage: bool = True
     synapse_driver_options: synapse_driver.SynapseDriverCalibOptions \
-        = synapse_driver.SynapseDriverCalibOptions()
+        = field(default_factory=synapse_driver.SynapseDriverCalibOptions)
 
 
 @dataclass

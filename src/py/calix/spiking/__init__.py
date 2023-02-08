@@ -1,5 +1,5 @@
 from typing import Optional, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from warnings import warn
 
 from dlens_vx_v3 import sta, hxcomm
@@ -18,8 +18,10 @@ class SpikingCalibTarget(base.CalibTarget):
     :ivar neuron_target: Target parameters for neuron calibration.
     """
 
-    cadc_target: cadc.CADCCalibTarget = cadc.CADCCalibTarget()
-    neuron_target: neuron.NeuronCalibTarget = neuron.NeuronCalibTarget()
+    cadc_target: cadc.CADCCalibTarget = field(
+        default_factory=cadc.CADCCalibTarget)
+    neuron_target: neuron.NeuronCalibTarget = field(
+        default_factory=neuron.NeuronCalibTarget)
 
 
 @dataclass
@@ -31,8 +33,10 @@ class SpikingCalibOptions(base.CalibOptions):
     :ivar neuron_options: Further options for neuron calibration.
     """
 
-    cadc_options: cadc.CADCCalibOptions = cadc.CADCCalibOptions()
-    neuron_options: neuron.NeuronCalibOptions = neuron.NeuronCalibOptions()
+    cadc_options: cadc.CADCCalibOptions = field(
+        default_factory=cadc.CADCCalibOptions)
+    neuron_options: neuron.NeuronCalibOptions = field(
+        default_factory=neuron.NeuronCalibOptions)
 
 
 @dataclass

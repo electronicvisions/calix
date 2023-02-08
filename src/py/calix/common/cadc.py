@@ -4,7 +4,7 @@ Calibrates all CADC channels on Hicann-X for a given dynamic range.
 
 from typing import Optional, Union
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from warnings import warn
 
 import numpy as np
@@ -87,12 +87,15 @@ class CADCCalibResult(base.CalibResult):
     being flagged False.
     """
 
-    v_ramp_offset: np.ndarray = np.empty(
-        halco.NeuronConfigBlockOnDLS.size, dtype=int)
-    i_ramp_slope: np.ndarray = np.empty(
-        halco.NeuronConfigBlockOnDLS.size, dtype=int)
-    channel_offset: np.ndarray = np.zeros(
-        halco.CADCChannelConfigOnDLS.size, dtype=int)
+    v_ramp_offset: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigBlockOnDLS.size, dtype=int))
+    i_ramp_slope: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigBlockOnDLS.size, dtype=int))
+    channel_offset: np.ndarray = field(
+        default_factory=lambda: np.zeros(
+            halco.CADCChannelConfigOnDLS.size, dtype=int))
     success: Optional[np.ndarray] = None
 
     def apply(self, builder: Union[sta.PlaybackProgramBuilder,
