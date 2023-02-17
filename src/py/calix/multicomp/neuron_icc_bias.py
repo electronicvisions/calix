@@ -359,50 +359,38 @@ class ICCMADCCalib(madc_base.Calib):
 
         neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
-            # The first samples may be the last samples of the previous neuron
-            # dicard them as well as the last few samples
-            madc_sample_rate = self.madc_config.calculate_sample_rate(
-                self.madc_input_frequency)
-            start = int((self._wait_before_stimulation.rescale(pq.s) / 4)
-                        * madc_sample_rate)
-            stop = int(int(self.madc_config.number_of_samples) * 0.95)
-            neuron_samples = neuron_data[start:stop]
-
-            # set time with reference to the first
-            neuron_samples['chip_time'] = neuron_samples['chip_time'] \
-                - neuron_data['chip_time'][0]
+            # time is measured continuously while recording different neurons
+            # -> reference time to first recorded sample
+            neuron_data['chip_time'] -= neuron_data['chip_time'][0]
 
             # estimate start values for fit
             p_0 = {}
-            p_0['offset'] = np.mean(neuron_samples["value"][-100:])
-            start_decay = np.argmax(
-                neuron_samples['chip_time']
-                > self._wait_before_stimulation.rescale(pq.us))
-            p_0['scale'] = np.mean(neuron_samples["value"][:start_decay]) - \
-                p_0['offset']
+            p_0['offset'] = np.mean(neuron_data["value"][-10:])
+            p_0['scale'] = neuron_data["value"][0] - p_0['offset']
             p_0['x_offset'] = self._wait_before_stimulation.rescale(pq.us).\
                 magnitude
 
+            bounds = {'scale': np.array([-np.inf, np.inf]),
+                      'tau': np.array([0.1, 100]),
+                      'offset': p_0['offset'] + np.array([-10, 10]),
+                      'x_offset': p_0['x_offset'] + np.array([-3, 3])}
+
             index_tau = np.argmax(np.abs(
-                neuron_samples["value"] - p_0['offset'])
+                neuron_data["value"] - p_0['offset'])
                 < np.abs(p_0['scale']) / np.e)
-            # absolute value is used to make initial guess of tau robust
-            # against small amplitudes which may occur at large time constants
-            # when the resistance is large
-            p_0['tau'] = np.abs(
-                neuron_samples["chip_time"][index_tau] - p_0['x_offset'])
+            p_0['tau'] = neuron_data["chip_time"][index_tau] - p_0['x_offset']
+            p_0['tau'] = min(bounds['tau'][1],
+                             max(bounds['tau'][0], p_0['tau']))
 
             try:
                 popt, _ = curve_fit(
                     fitfunc,
-                    neuron_samples["chip_time"],
-                    neuron_samples["value"],
+                    neuron_data["chip_time"],
+                    neuron_data["value"],
                     p0=[p_0['scale'], p_0['tau'], p_0['offset'],
                         p_0['x_offset']],
-                    bounds=([-p_0['offset'], 0.1, p_0['offset'] - 10,
-                             p_0['x_offset'] - 3],
-                            [p_0['offset'], 100, p_0['offset'] + 10,
-                             p_0['x_offset'] + 3]))
+                    bounds=np.array([bounds['scale'], bounds['tau'],
+                                     bounds['offset'], bounds['x_offset']]).T)
             except RuntimeError as error:
                 raise exceptions.CalibNotSuccessful(
                     f"Fitting to MADC samples failed for neuron {neuron_id}. "
