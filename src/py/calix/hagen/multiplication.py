@@ -47,7 +47,7 @@ class Multiplication:
     synram_selection_bit = 13
 
     def __init__(self, synram: halco.SynramOnDLS = halco.SynramOnDLS(), *,
-                 num_sends: int = 1, wait_period: int = 1,
+                 num_sends: int = 1, wait_period: int = 4,
                  signed_mode: bool = True):
         self._synram_coord = synram
         self.num_sends = num_sends
