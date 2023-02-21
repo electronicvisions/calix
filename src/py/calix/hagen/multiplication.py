@@ -431,7 +431,7 @@ class Multiplication:
 
                     # wait only if needed:
                     if self.wait_period > 1:
-                        vector_builder.wait_until(
+                        vector_builder.block_until(
                             halco.TimerOnDLS(), hal.Timer.Value(
                                 int(self.wait_period * entry_counter)))
                     entry_counter += 1

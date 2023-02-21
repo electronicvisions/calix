@@ -290,7 +290,7 @@ class ICCMADCCalib(madc_base.Calib):
             neighboring_id)), neighboring_config)
 
         # Disconnect compartments after wait
-        builder.wait_until(
+        builder.block_until(
             halco.TimerOnDLS(),
             int(stimulation_wait) + int(self.sampling_time.rescale(pq.us))
             * int(hal.Timer.Value.fpga_clock_cycles_per_us))
