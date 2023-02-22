@@ -7,8 +7,7 @@ from dlens_vx_v3 import logger
 from mock_connection_setup import ConnectionSetup
 
 import calix
-from calix.common import exceptions
-from calix.common.base import Algorithm, Calib
+from calix.common import exceptions, base
 
 
 log = logger.get("calix")
@@ -20,13 +19,13 @@ class GenericCalibTest(ConnectionSetup):
     def generate_cases(cls):
         """
         Generate test cases for all combinations of implementations of
-        :class:`calix.hagen.base.Algorithm` and
-        :class:`calix.hagen.base.Calib` and run them.
+        :class:`calix.common.base.Algorithm` and
+        :class:`calix.common.base.Calib` and run them.
         """
-        for algorithm in cls.implementations(Algorithm):
-            assert issubclass(algorithm, Algorithm)
-            for calibration in cls.implementations(Calib):
-                assert issubclass(calibration, Calib)
+        for algorithm in cls.implementations(base.Algorithm):
+            assert issubclass(algorithm, base.Algorithm)
+            for calibration in cls.implementations(base.Calib):
+                assert issubclass(calibration, base.Calib)
                 test_method = cls.generate_single(algorithm, calibration)
                 test_method.__name__ = f"test_" \
                                        f"{calibration.__name__}_" \
@@ -35,8 +34,8 @@ class GenericCalibTest(ConnectionSetup):
                 setattr(cls, test_method.__name__, test_method)
 
     @staticmethod
-    def generate_single(algorithm_type: Type[Algorithm],
-                        calibration_type: Type[Calib]) -> Callable:
+    def generate_single(algorithm_type: Type[base.Algorithm],
+                        calibration_type: Type[base.Calib]) -> Callable:
         """
         Generate a test function for running a calibration of given type with
         an algorithm of given type.
@@ -53,6 +52,13 @@ class GenericCalibTest(ConnectionSetup):
                 self.skipTest(f"{calibration_type.__name__} cannot be "
                               f"default-constructed: {error}")
                 raise
+
+            # Restrict parameter range of calibration in order to save runtime
+            # We don't expect sensible results anyway, we only want to
+            # ensure the calibration/algorithm combination works.
+            calibration.parameter_range = base.ParameterRange(
+                calibration.parameter_range.lower,
+                calibration.parameter_range.lower + 1)
 
             try:
                 algorithm = algorithm_type()
