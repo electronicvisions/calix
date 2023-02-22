@@ -371,6 +371,12 @@ class LinearSearch(base.Algorithm):
             else:
                 running[initial_deviations != high_mask] = False
 
+            # stop in case parameters have exceeded parameter range
+            running[parameters > self.calibration.parameter_range.upper] = \
+                False
+            running[parameters < self.calibration.parameter_range.lower] = \
+                False
+
         # Find best parameter in array of last 2 steps
         parameters = last_parameters[
             np.argmin(last_deviations, axis=0),
