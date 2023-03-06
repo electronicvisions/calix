@@ -11,7 +11,7 @@ import quantities as pq
 
 from dlens_vx_v3 import sta, halco, hal, hxcomm, lola, logger
 
-from calix.common import algorithms, base, helpers
+from calix.common import algorithms, base
 from calix.hagen import neuron_helpers, neuron_potentials, \
     neuron_dataclasses
 from calix.hagen.neuron_dataclasses import NeuronCalibResult
@@ -251,8 +251,6 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
         halco.NeuronConfigOnDLS.size, dtype=int)
     e_syn_inh_rev: np.ndarray = np.zeros(
         halco.NeuronConfigOnDLS.size, dtype=int)
-    syn_bias_dac: np.ndarray = np.empty(
-        halco.NeuronConfigBlockOnDLS.size, dtype=int)
     clock_settings: Optional[refractory_period.Settings] = None
     neuron_configs: Optional[List[hal.NeuronConfig]] = None
     use_synin_small_capacitance: bool = False
@@ -405,11 +403,6 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
         config = hal.CommonCorrelationConfig()
         for coord in halco.iter_all(halco.CommonCorrelationConfigOnDLS):
             dumper.write(coord, config)
-
-        # set synapse DAC bias current
-        dumper = helpers.capmem_set_quadrant_cells(
-            dumper,
-            {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: self.syn_bias_dac})
 
         cocolist = dumper.done().tolist()
         for coord, config in cocolist:

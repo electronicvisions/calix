@@ -23,6 +23,7 @@ from calix import constants
 
 if TYPE_CHECKING:
     from calix.spiking import neuron
+    import calix.hagen.neuron
 
 
 class SyninParameters:
@@ -168,7 +169,7 @@ def calibrate_tau_syn(
 def calibrate_synapse_dac_bias(
         connection: hxcomm.ConnectionHandle,
         synapse_dac_bias: int,
-        calib_result: neuron._CalibResultInternal):
+        calib_result: calix.hagen.neuron.CalibResultInternal):
     """
     Calibrate the synapse DAC bias.
 

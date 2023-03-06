@@ -16,6 +16,7 @@ from calix.hagen import neuron_helpers, neuron_evaluation, \
     neuron_leak_bias, neuron_synin, neuron_potentials
 from calix.hagen.neuron_dataclasses import NeuronCalibTarget, \
     NeuronCalibOptions, NeuronCalibResult, CalibResultInternal
+from calix.spiking import neuron_calib_parts
 
 
 # pylint: disable=too-many-statements
@@ -115,6 +116,9 @@ def calibrate(
     # disable synaptic inputs initially
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=0, inhibitory_biases=0)
+
+    neuron_calib_parts.calibrate_synapse_dac_bias(
+        connection, target.synapse_dac_bias, calib_result)
 
     # select small capacitance mode for syn. input lines
     tickets = []

@@ -56,6 +56,10 @@ class NeuronCalibTarget(base.CalibTarget):
         Set target_noise to None to skip optimization of noise amplitudes
         entirely. In this case, the original membrane time constant
         calibration is used for leak bias currents.
+    :ivar synapse_dac_bias: Synapse DAC bias current that is desired.
+        Can be lowered in order to reduce the amplitude of a spike
+        at the input of the synaptic input OTA. This can be useful
+        to avoid saturation when using larger synaptic time constants.
     """
 
     target_leak_read: Union[int, np.ndarray] = 120
@@ -63,13 +67,16 @@ class NeuronCalibTarget(base.CalibTarget):
     tau_syn: pq.Quantity = 0.32 * pq.us
     i_synin_gm: int = 450
     target_noise: Optional[float] = None
+    synapse_dac_bias: int = hal.CapMemCell.Value.max
 
     feasible_ranges = {
         "target_leak_read": base.ParameterRange(100, 140),
         "tau_syn": base.ParameterRange(0.3 * pq.us, 20 * pq.us),
         "tau_mem": base.ParameterRange(20 * pq.us, 100 * pq.us),
         "i_synin_gm": base.ParameterRange(30, 600),
-        "target_noise": base.ParameterRange(1.0, 2.5)}
+        "target_noise": base.ParameterRange(1.0, 2.5),
+        "synapse_dac_bias": base.ParameterRange(
+            30, hal.CapMemCell.Value.max)}
 
     def check_types(self):
         """
@@ -213,6 +220,8 @@ class CalibResultInternal:
         halco.NeuronConfigOnDLS.size, dtype=int)
     i_syn_inh_tau: np.ndarray = np.empty(
         halco.NeuronConfigOnDLS.size, dtype=int)
+    syn_bias_dac: np.ndarray = np.empty(
+        halco.CapMemBlockOnDLS.size, dtype=int)
     success: np.ndarray = np.ones(halco.NeuronConfigOnDLS.size, dtype=bool)
     use_synin_small_capacitance: bool = True
 
@@ -288,6 +297,11 @@ class CalibResultInternal:
         dumper = sta.PlaybackProgramBuilderDumper()
         dumper = neuron_helpers.configure_integration(dumper)
         dumper = neuron_helpers.set_global_capmem_config(dumper)
+
+        # set synapse DAC bias current
+        dumper = helpers.capmem_set_quadrant_cells(
+            dumper,
+            {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: self.syn_bias_dac})
 
         cocolist = dumper.done().tolist()
 
