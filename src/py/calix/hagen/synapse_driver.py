@@ -155,9 +155,9 @@ def preconfigure_capmem(builder: sta.PlaybackProgramBuilder
     builder = helpers.capmem_set_quadrant_cells(builder, parameters)
 
     builder.write(halco.CapMemCellOnDLS.hagen_ibias_dac_top,
-                  hal.CapMemCell(920))
+                  hal.CapMemCell(820))
     builder.write(halco.CapMemCellOnDLS.hagen_ibias_dac_bottom,
-                  hal.CapMemCell(920))
+                  hal.CapMemCell(820))
 
     return builder
 
