@@ -12,9 +12,9 @@ import quantities as pq
 from dlens_vx_v3 import sta, halco, hal, hxcomm, lola, logger
 
 from calix.common import algorithms, base, helpers
-from calix.hagen import neuron_helpers, neuron_potentials
-import calix.hagen.neuron as hagen_neuron
-from calix.hagen.neuron import NeuronCalibResult
+from calix.hagen import neuron_helpers, neuron_potentials, \
+    neuron_dataclasses
+from calix.hagen.neuron_dataclasses import NeuronCalibResult
 from calix.spiking import neuron_threshold, refractory_period, \
     neuron_calib_parts
 from calix import constants
@@ -235,7 +235,7 @@ class NeuronCalibOptions(base.CalibOptions):
 
 
 @dataclass
-class _CalibResultInternal(hagen_neuron.CalibResultInternal):
+class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
     """
     Class providing array-like access to calibrated parameters.
     Used internally during calibration.
