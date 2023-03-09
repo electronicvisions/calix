@@ -266,7 +266,9 @@ class TestNeuronCalib(ConnectionSetup):
         target.neuron_target.i_synin_gm = np.ones(
             halco.NeuronConfigOnDLS.size, dtype=int) * 600
 
-        calix.spiking.calibrate(self.connection, target)
+        calix.calibrate(target,
+                        cache_paths=[],  # don't cache in tests
+                        connection=self.connection)
 
         self.helper_test_spikes()
 
@@ -306,7 +308,9 @@ class TestNeuronCalib(ConnectionSetup):
 
         target.neuron_target = neuron_target
 
-        calix.spiking.calibrate(self.connection, target)
+        calix.calibrate(target,
+                        cache_paths=[],  # don't cache in tests
+                        connection=self.connection)
 
         self.helper_test_spikes()
 

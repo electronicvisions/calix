@@ -61,13 +61,14 @@ class TestNeuronCalib(ConnectionSetup):
         e_coba_reversal[0, self.__class__.n_neurons_in_coba_mode:] = np.inf
         e_coba_reversal[1, self.__class__.n_neurons_in_coba_mode:] = -np.inf
 
-        self.__class__.calib_result = calix.spiking.calibrate(
-            self.connection,
+        self.__class__.calib_result = calix.calibrate(
             calix.spiking.SpikingCalibTarget(
                 neuron_target=calix.spiking.neuron.NeuronCalibTarget(
                     i_synin_gm=np.array([180, 250]),
                     e_coba_reference=np.array([150, np.nan]),
-                    e_coba_reversal=e_coba_reversal)))
+                    e_coba_reversal=e_coba_reversal)),
+            cache_paths=[],  # don't cache in tests
+            connection=self.connection)
 
         self.__class__.exc_baselines, self.__class__.exc_amplitudes = \
             self.measure_amplitudes(excitatory=True)

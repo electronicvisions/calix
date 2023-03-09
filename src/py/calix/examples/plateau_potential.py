@@ -10,7 +10,8 @@ import quantities as pq
 from dlens_vx_v3 import sta, hxcomm
 
 import calix.spiking
-from calix.spiking import SpikingCalibResult
+from calix.spiking import SpikingCalibTarget
+from calix.spiking.neuron import NeuronCalibTarget
 
 
 ###############################################################################
@@ -64,10 +65,12 @@ def plateau_potential_decay(*,
 # On BSS-2 plateau potentials are emulated by the refractory mechanism.
 # Instead of choosing a reset near the leak potential it is chosen above the
 # threshold:
-neuron_args = {'leak': 50,
-               'threshold': 80,
-               'reset': 100,
-               'tau_mem': 10 * pq.us}
+neuron_params = NeuronCalibTarget(
+    leak=50,
+    threshold=80,
+    reset=100,
+    tau_mem=10 * pq.us,
+)
 
 # At the end of the plateau potential the neuron has to have enough time to
 # relax back below threshold in order to not trigger an additional spike.
@@ -78,25 +81,22 @@ neuron_args = {'leak': 50,
 # We now chose a holdoff period such that the membrane has enough time to
 # relax back below the threshold potential. We add a factor >1 to account for
 # possible excitatory synaptic input:
-neuron_args['holdoff_time'] = 1.5 * plateau_potential_decay(
-    v_leak=neuron_args['leak'],
-    v_reset=neuron_args['reset'],
-    v_thres=neuron_args['threshold'],
-    tau_mem=neuron_args['tau_mem'])
+neuron_params.holdoff_time = 1.5 * plateau_potential_decay(
+    v_leak=neuron_params.leak,
+    v_reset=neuron_params.reset,
+    v_thres=neuron_params.threshold,
+    tau_mem=neuron_params.tau_mem)
 
 # We choose the refractory time such that we have a reset period of 20 us. This
 # will be the length of or plateau potential.
-neuron_args['refractory_time'] = 20 * pq.us + neuron_args['holdoff_time']
+neuron_params.refractory_time = 20 * pq.us + neuron_params.holdoff_time
 
 ###############################################################################
 # Perform the calibration
 ###############################################################################
-with hxcomm.ManagedConnection() as connection:
-    builder, _ = sta.ExperimentInit().generate()
-    sta.run(connection, builder.done())
-
-    calibration_result = calix.spiking.calibrate(connection,
-                                                 neuron_kwargs=neuron_args)
+calibration_result = calix.calibrate(
+    SpikingCalibTarget(neuron_target=neuron_params)
+)
 
 ###############################################################################
 # Save calibration as portable binary

@@ -15,13 +15,14 @@ import quantities as pq
 
 from dlens_vx_v3 import logger
 from dlens_vx_v3.hxcomm import ConnectionHandle, ManagedConnection
-from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, ExperimentInit, \
-    run, to_json, to_portablebinary
+from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, to_json, \
+    to_portablebinary
 
 import calix.hagen
 import calix.spiking
-from calix.common.base import CalibResult
-
+from calix.common.base import CalibResult, CalibTarget
+from calix.hagen import HagenCalibTarget, HagenSyninCalibTarget
+from calix.spiking import SpikingCalibTarget
 
 log = logger.get("calix")
 logger.set_loglevel(log, logger.LogLevel.DEBUG)
@@ -41,13 +42,11 @@ class CalibRecorder(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    @property
     @abstractmethod
-    def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibResult:
+    def calibration_target(self) -> CalibTarget:
         """
-        Execute calibration routines and create a result object.
-        :param connection: Connection used for acquiring calibration data.
-        :return: Calib result data
+        Calibration target to be calibrated for.
         """
         raise NotImplementedError
 
@@ -115,7 +114,9 @@ class RecorderAndDumper(metaclass=ABCMeta):
         :param deployment_folder: Folder the file with serialized results is
                                   created in.
         """
-        result = self.recorder.generate_calib(connection)
+        result = calix.calibrate(self.recorder.calibration_target,
+                                 cache_paths=[],  # don't cache
+                                 connection=connection)
 
         for dumper in self.dumpers:
             filename = f"{self.recorder.calibration_type}_" \
@@ -129,12 +130,7 @@ class HagenCalibRecorder(CalibRecorder):
     Recorder for a canonical Hagen-Mode calibration.
     """
     calibration_type = "hagen"
-
-    def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibResult:
-        builder, _ = ExperimentInit().generate()
-        run(connection, builder.done())
-        return calix.hagen.calibrate(connection)
+    calibration_target = HagenCalibTarget()
 
 
 class HagenSyninCalibRecorder(CalibRecorder):
@@ -143,12 +139,7 @@ class HagenSyninCalibRecorder(CalibRecorder):
     synaptic input lines, as opposed to neuron membranes.
     """
     calibration_type = "hagen_synin"
-
-    def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibResult:
-        builder, _ = ExperimentInit().generate()
-        run(connection, builder.done())
-        return calix.hagen.calibrate_for_synin_integration(connection)
+    calibration_target = HagenSyninCalibTarget()
 
 
 class SpikingCalibRecorder(CalibRecorder):
@@ -156,12 +147,7 @@ class SpikingCalibRecorder(CalibRecorder):
     Recorder for a default Spiking-Mode calibration.
     """
     calibration_type = "spiking"
-
-    def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibResult:
-        builder, _ = ExperimentInit().generate()
-        run(connection, builder.done())
-        return calix.spiking.calibrate(connection)
+    calibration_target = SpikingCalibTarget()
 
 
 class SpikingCalibRecorder2(CalibRecorder):
@@ -178,22 +164,16 @@ class SpikingCalibRecorder2(CalibRecorder):
     """
 
     calibration_type = "spiking2"
-
-    def generate_calib(self,
-                       connection: ConnectionHandle) -> CalibResult:
-        builder, _ = ExperimentInit().generate()
-        run(connection, builder.done())
-
-        target = calix.spiking.SpikingCalibTarget(
-            neuron_target=calix.spiking.neuron.NeuronCalibTarget(
-                leak=80,
-                reset=80,
-                threshold=150,
-                tau_mem=6 * pq.us,
-                tau_syn=6 * pq.us,
-                i_synin_gm=500,
-                synapse_dac_bias=1000))
-        return calix.spiking.calibrate(connection, target)
+    calibration_target = SpikingCalibTarget(
+        neuron_target=calix.spiking.neuron.NeuronCalibTarget(
+            leak=80,
+            reset=80,
+            threshold=150,
+            tau_mem=6 * pq.us,
+            tau_syn=6 * pq.us,
+            i_synin_gm=500,
+            synapse_dac_bias=1000)
+    )
 
 
 class CalixFormatDumper(CalibDumper):
