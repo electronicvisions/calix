@@ -87,6 +87,10 @@ def calibrate(
         conn_manager = hxcomm.ManagedConnection()
         connection = conn_manager.__enter__()
 
+    if len(cache_paths) == 0:
+        log.info("List of calib cache paths is empty, cache disabled.")
+        return _calibrate(connection, target, options)
+
     # The key into the cache is defined by the parameters target, options.
     # As the data-holding parameters are mutable, we define a custom hashing
     # function

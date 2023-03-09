@@ -2,6 +2,7 @@ from pathlib import Path
 import time
 import unittest
 import tempfile
+from typing import ClassVar
 
 from dlens_vx_v3 import logger
 import calix.spiking
@@ -9,6 +10,7 @@ from calix import calibrate
 
 
 class TestCalibCache(unittest.TestCase):
+    tmp_dir: ClassVar[tempfile.TemporaryDirectory]
 
     @classmethod
     def setUpClass(cls):
@@ -36,6 +38,20 @@ class TestCalibCache(unittest.TestCase):
             cache_paths=[Path(self.tmp_dir.name)]
         )
         self.assertTrue(time.time() - after_calib < 10)
+
+    def test_cache_disabled(self):
+        log = logger.get("calix.calibrate")
+        logger.set_loglevel(log, logger.LogLevel.INFO)
+
+        for _ in range(2):
+            start = time.time()
+            calibrate(
+                calix.spiking.SpikingCalibTarget(),
+                calix.spiking.SpikingCalibOptions(),
+                cache_paths=[]
+            )
+            after_calib = time.time()
+            self.assertTrue(after_calib - start > 100)
 
 
 if __name__ == "__main__":
