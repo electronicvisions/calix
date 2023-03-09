@@ -6,8 +6,6 @@ from hashlib import sha256
 import os
 from typing import List, Optional
 from dlens_vx_v3 import hxcomm, sta, logger
-import calix.hagen
-import calix.spiking
 from calix.common import base
 
 _DEFAULT_GLOBAL_CACHE: Path = Path("/wang",
@@ -25,38 +23,16 @@ else:
 
 def _calibrate(
     connection,
-    target: base.CalibTarget,
+    target: base.TopLevelCalibTarget,
     options: Optional[base.CalibOptions] = None,
 ) -> base.CalibResult:
-    # TODO: find more elegant way than mass if else statements
-    if isinstance(target, calix.spiking.SpikingCalibTarget):
-        if options is None:
-            options = calix.spiking.SpikingCalibOptions()
-        elif not isinstance(options, calix.spiking.SpikingCalibOptions):
-            raise TypeError("Provided target and option types do not match")
-        calib_func = calix.spiking.calibrate
-    elif isinstance(target, calix.hagen.HagenCalibTarget):
-        if options is None:
-            options = calix.hagen.HagenCalibOptions()
-        elif not isinstance(options, calix.hagen.HagenCalibOptions):
-            raise TypeError("Provided target and option types do not match")
-        calib_func = calix.hagen.calibrate
-    elif isinstance(target, calix.hagen.HagenSyninCalibTarget):
-        if options is None:
-            options = calix.hagen.HagenSyninCalibOptions()
-        elif not isinstance(options, calix.hagen.HagenSyninCalibOptions):
-            raise TypeError("Provided target and option types do not match")
-        calib_func = calix.hagen.calibrate_for_synin_integration
-    else:
-        raise NotImplementedError(f"Target of type {target} not supported")
-
     builder, _ = sta.generate(sta.ExperimentInit())
     sta.run(connection, builder.done())
-    return calib_func(connection, target, options)
+    return target.calibrate(connection, options)
 
 
 def calibrate(
-    target: base.CalibTarget,
+    target: base.TopLevelCalibTarget,
     options: Optional[base.CalibOptions] = None,
     cache_paths: Optional[List[Path]] = None,
     cache_read_only: Optional[bool] = False,

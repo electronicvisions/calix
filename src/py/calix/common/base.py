@@ -105,6 +105,25 @@ class CalibTarget(ABC):
         self.check_values()
 
 
+class TopLevelCalibTarget(CalibTarget):
+    """
+    :class:`CalibTarget` that can be calibrated for as part of the public
+    calix API via :func:`calix.calibrate`.
+    """
+    @abstractmethod
+    def calibrate(self,
+                  connection: hxcomm.ConnectionHandle,
+                  options: Optional[CalibOptions] = None) -> CalibResult:
+        """
+        Execute a calibration for this target.
+
+        :param connection: Connection to be used
+        :param options: Calibration options
+        :return: Calibration result
+        """
+        raise NotImplementedError
+
+
 @dataclass
 class CalibOptions(ABC):
     """

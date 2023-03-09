@@ -1,57 +1,55 @@
+from __future__ import annotations
+
 from pathlib import Path
-import time
 import unittest
 import tempfile
-from typing import ClassVar
+from dataclasses import dataclass
 
 from dlens_vx_v3 import logger
-import calix.spiking
 from calix import calibrate
+from calix.common.base import CalibResult, TopLevelCalibTarget
+
+
+class MockTarget(TopLevelCalibTarget):
+    def calibrate(self, *_args, **_kwargs) -> MockResult:
+        return MockResult(calibration_has_run=True, options=None, target=None)
+
+
+@dataclass
+class MockResult(CalibResult):
+    calibration_has_run: bool = False
+
+    def apply(self, *_args, **_kwargs):
+        pass
+
+    def __getstate__(self):
+        return None  # don't pickle my state
 
 
 class TestCalibCache(unittest.TestCase):
-    tmp_dir: ClassVar[tempfile.TemporaryDirectory]
-
-    @classmethod
-    def setUpClass(cls):
-        # pylint: disable=consider-using-with
-        cls.tmp_dir = tempfile.TemporaryDirectory()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.tmp_dir.cleanup()
-
-    def test_spiking(self):
+    def test_cache_enabled(self):
         log = logger.get("calix.calibrate")
         logger.set_loglevel(log, logger.LogLevel.INFO)
-        start = time.time()
-        calibrate(
-            calix.spiking.SpikingCalibTarget(),
-            calix.spiking.SpikingCalibOptions(),
-            cache_paths=[Path(self.tmp_dir.name)]
-        )
-        after_calib = time.time()
-        self.assertTrue(after_calib - start > 100)
-        calibrate(
-            calix.spiking.SpikingCalibTarget(),
-            calix.spiking.SpikingCalibOptions(),
-            cache_paths=[Path(self.tmp_dir.name)]
-        )
-        self.assertTrue(time.time() - after_calib < 10)
+
+        result: CalibResult
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = calibrate(MockTarget(), cache_paths=[Path(temp_dir)])
+            assert isinstance(result, MockResult)
+            self.assertTrue(result.calibration_has_run)
+
+            result = calibrate(MockTarget(), cache_paths=[Path(temp_dir)])
+            assert isinstance(result, MockResult)
+            self.assertFalse(result.calibration_has_run)
 
     def test_cache_disabled(self):
         log = logger.get("calix.calibrate")
         logger.set_loglevel(log, logger.LogLevel.INFO)
 
+        result: CalibResult
         for _ in range(2):
-            start = time.time()
-            calibrate(
-                calix.spiking.SpikingCalibTarget(),
-                calix.spiking.SpikingCalibOptions(),
-                cache_paths=[]
-            )
-            after_calib = time.time()
-            self.assertTrue(after_calib - start > 100)
+            result = calibrate(MockTarget(), cache_paths=[])
+            assert isinstance(result, MockResult)
+            self.assertTrue(result.calibration_has_run)
 
 
 if __name__ == "__main__":

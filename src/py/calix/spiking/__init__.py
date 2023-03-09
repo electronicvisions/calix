@@ -1,16 +1,17 @@
+from __future__ import annotations
+
 from typing import Optional, Union
 from dataclasses import dataclass, field
 from warnings import warn
 
 from dlens_vx_v3 import sta, hxcomm
 
-from calix.common import base, cadc, helpers
+from calix.common import base, cadc
 from calix.spiking import neuron
-from calix import constants
 
 
 @dataclass
-class SpikingCalibTarget(base.CalibTarget):
+class SpikingCalibTarget(base.TopLevelCalibTarget):
     """
     Data class containing targets for spiking neuron calibration.
 
@@ -22,6 +23,12 @@ class SpikingCalibTarget(base.CalibTarget):
         default_factory=cadc.CADCCalibTarget)
     neuron_target: neuron.NeuronCalibTarget = field(
         default_factory=neuron.NeuronCalibTarget)
+
+    def calibrate(self,
+                  connection: hxcomm.ConnectionHandle,
+                  options: Optional[SpikingCalibOptions] = None
+                  ) -> SpikingCalibResult:
+        return calibrate(connection, self, options)
 
 
 @dataclass

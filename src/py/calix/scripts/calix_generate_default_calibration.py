@@ -20,7 +20,7 @@ from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, to_json, \
 
 import calix.hagen
 import calix.spiking
-from calix.common.base import CalibResult, CalibTarget
+from calix.common.base import CalibResult, TopLevelCalibTarget
 from calix.hagen import HagenCalibTarget, HagenSyninCalibTarget
 from calix.spiking import SpikingCalibTarget
 
@@ -44,7 +44,7 @@ class CalibRecorder(metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def calibration_target(self) -> CalibTarget:
+    def calibration_target(self) -> TopLevelCalibTarget:
         """
         Calibration target to be calibrated for.
         """

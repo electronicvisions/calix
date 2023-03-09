@@ -2,6 +2,7 @@
 Module for calibrating the HICANN-X chips for usage in hagen mode,
 i.e. for multiply-accumulate operation.
 """
+from __future__ import annotations
 
 from typing import Tuple, Union, Optional
 from dataclasses import dataclass, field
@@ -17,7 +18,7 @@ from calix import constants
 
 
 @dataclass
-class HagenSyninCalibTarget(base.CalibTarget):
+class HagenSyninCalibTarget(base.TopLevelCalibTarget):
     """
     Dataclass collecting target parameters for Hagen-mode calibrations.
     with integration on synaptic input lines.
@@ -38,6 +39,12 @@ class HagenSyninCalibTarget(base.CalibTarget):
             30, hal.CapMemCell.Value.max)
     }
 
+    def calibrate(self,
+                  connection: hxcomm.ConnectionHandle,
+                  options: Optional[HagenSyninCalibOptions] = None
+                  ) -> HagenSyninCalibResult:
+        return calibrate_for_synin_integration(connection, self, options)
+
 
 @dataclass
 class HagenSyninCalibOptions(base.CalibOptions):
@@ -57,7 +64,7 @@ class HagenSyninCalibOptions(base.CalibOptions):
 
 
 @dataclass
-class HagenCalibTarget(base.CalibTarget):
+class HagenCalibTarget(base.TopLevelCalibTarget):
     """
     Dataclass collecting target parameters for Hagen-mode calibrations
     with integration on membranes.
@@ -71,6 +78,12 @@ class HagenCalibTarget(base.CalibTarget):
             dynamic_range=base.ParameterRange(150, 500)))
     neuron_target: neuron.NeuronCalibTarget = field(
         default_factory=neuron.NeuronCalibTarget)
+
+    def calibrate(self,
+                  connection: hxcomm.ConnectionHandle,
+                  options: Optional[HagenCalibOptions] = None
+                  ) -> HagenCalibResult:
+        return calibrate(connection, self, options)
 
 
 @dataclass
