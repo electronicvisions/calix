@@ -10,6 +10,18 @@ import calix.hagen
 import calix.spiking
 from calix.common import base
 
+_DEFAULT_GLOBAL_CACHE: Path = Path("/wang",
+                                   "data",
+                                   "calibration",
+                                   "hicann-dls-sr-hx",
+                                   "cache")
+
+_DEFAULT_LOCAL_CACHE: Path
+if os.getenv("XDG_CACHE_HOME") is not None:
+    _DEFAULT_LOCAL_CACHE = Path(os.getenv("XDG_CACHE_HOME")).joinpath("calix")
+else:
+    _DEFAULT_LOCAL_CACHE = Path.home().joinpath(".cache", "calix")
+
 
 def _calibrate(
     connection,
@@ -67,13 +79,7 @@ def calibrate(
     :return: Calibration result
     """
     if cache_paths is None:
-        if os.getenv("XDG_CACHE_HOME") is not None:
-            localcache = Path(os.getenv("XDG_CACHE_HOME")).joinpath("calix")
-        else:
-            localcache = Path.home().joinpath(".cache/calix")
-
-        cache_paths = [Path("/wang/data/calibration/hicann-dls-sr-hx/cache"),
-                       localcache]
+        cache_paths = [_DEFAULT_GLOBAL_CACHE, _DEFAULT_LOCAL_CACHE]
 
     log = logger.get("calix.calibrate")
 
