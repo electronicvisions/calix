@@ -9,6 +9,8 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v3 import hal, sta, halco
 
+import pyccalix
+
 
 def wait_for_us(builder: sta.PlaybackProgramBuilder, waiting_time: float
                 ) -> sta.PlaybackProgramBuilder:
@@ -148,16 +150,8 @@ def capmem_set_neuron_cells(
             config[capmem_row] = parameters
 
         # Append write instructions to builder
-        for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
-            coord = halco.CapMemCellOnDLS(
-                cell=halco.CapMemCellOnCapMemBlock(
-                    x=(neuron_coord.toNeuronConfigOnNeuronConfigBlock()
-                       .toCapMemColumnOnCapMemBlock()),
-                    y=capmem_row),
-                block=(neuron_coord.toNeuronConfigBlockOnDLS()
-                       .toCapMemBlockOnDLS()))
-            cell_config = hal.CapMemCell(hal.CapMemCell.Value(
-                parameters[int(neuron_coord)]))
-            builder.write(coord, cell_config)
+        pyccalix.helpers.write_capmem_row(builder,
+                                          capmem_row,
+                                          config[capmem_row])
 
     return builder

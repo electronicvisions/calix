@@ -41,6 +41,9 @@ def build(bld):
         source=bld.path.ant_glob("src/cc/ccalix/**/*.cpp"),
         use=[
             "ccalix_includes",
+            "stadls_vx_v3",
+            "halco_hicann_dls_vx_v3",
+            "haldls_vx_v3",
         ])
 
     bld(target="pyccalix",
@@ -48,6 +51,7 @@ def build(bld):
         source="include/ccalix/ccalix.h",
         use=[
             "ccalix",
+            "pyhalco_hicann_dls_vx_v3",
         ],
         genpybind_tags="ccalix",
         genpybind_num_files=1,
