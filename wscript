@@ -15,6 +15,8 @@ def options(opt):
     opt.load('pylint')
     opt.load('pycodestyle')
     opt.load('doxygen')
+    opt.load("compiler_cxx")
+    opt.load("genpybind")
 
 
 def configure(cfg):
@@ -24,15 +26,38 @@ def configure(cfg):
     cfg.load('pylint')
     cfg.load('pycodestyle')
     cfg.load('doxygen')
+    cfg.load("compiler_cxx")
+    cfg.load("genpybind")
 
 
 def build(bld):
     bld.env.DLSvx_HARDWARE_AVAILABLE = "cube" == os.environ.get("SLURM_JOB_PARTITION")
 
+    bld(name="ccalix_includes",
+        export_includes="include")
+
+    bld(target="ccalix",
+        features="cxx cxxshlib pyembed",
+        source=bld.path.ant_glob("src/cc/ccalix/**/*.cpp"),
+        use=[
+            "ccalix_includes",
+        ])
+
+    bld(target="pyccalix",
+        features="genpybind cxx cxxshlib pyext pyembed",
+        source="include/ccalix/ccalix.h",
+        use=[
+            "ccalix",
+        ],
+        genpybind_tags="ccalix",
+        genpybind_num_files=1,
+        install_path="${PREFIX}/lib",
+        linkflags="-Wl,-z,defs")
+
     bld(name='calix_pylib',
         features='py pylint pycodestyle',
         source=bld.path.ant_glob('src/py/**/*.py'),
-        use='dlens_vx_v3',
+        use='dlens_vx_v3 pyccalix',
         install_path='${PREFIX}/lib',
         install_from='src/py',
         relative_trick=True,
