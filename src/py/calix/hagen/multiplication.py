@@ -10,6 +10,8 @@ import quantities as pq
 
 from dlens_vx_v3 import lola, halco, hal, sta, logger, hxcomm
 
+import pyccalix
+
 from calix.common import base, helpers
 from calix.hagen import neuron_helpers
 from calix import constants
@@ -291,41 +293,6 @@ class Multiplication:
 
         return synapses
 
-    def prepare_event(
-            self, address: hal.SynapseQuad.Label,
-            target_driver: halco.SynapseDriverOnSynapseDriverBlock
-    ) -> hal.SpikePack1ToChip:
-        """
-        Return a spike pack to chip, containing an event reaching
-        the desired synapse driver on the synram in use.
-
-        :param address: Address that is sent to the driver. The
-            MSB reaches the synapses, the lower 5 bit encode the desired
-            activation.
-        :param target_driver: Coordinate of the targeted driver.
-
-        :return: Spike packet to chip.
-        """
-
-        label = halco.SpikeLabel()
-
-        # select target PADI bus
-        label.spl1_address = int(
-            target_driver.toPADIBusOnPADIBusBlock().toEnum())
-
-        # select target synram
-        label.neuron_label = (int(
-            self._synram_coord.toEnum()) << self.synram_selection_bit)
-
-        # select target driver on the PADI bus
-        label.row_select_address = int(
-            target_driver.toSynapseDriverOnPADIBus().toEnum())
-
-        # set address sent to the driver (MSB + hagen activation)
-        label.synapse_label = address
-
-        return hal.SpikePack1ToChip([label])
-
     def reset_synin(self,
                     builder: sta.PlaybackProgramBuilder):
         """
@@ -402,42 +369,11 @@ class Multiplication:
             builder.copy_back(self.cached_reset_synin)
             helpers.wait(builder, 10 * pq.us)
 
-            # Optimize runtime if wait_period is 1 and multiple sends
-            # are requested by copying a vector_builder for each send
-            if self.num_sends > 1 and self.wait_period <= 1:  # pylint: disable=chained-comparison
-                num_loops = 1
-                num_copies = self.num_sends
-            else:
-                num_loops = self.num_sends
-                num_copies = 1
-
-            entry_counter = 0
-            builder.write(halco.TimerOnDLS(), hal.Timer())
-
-            vector_builder = sta.PlaybackProgramBuilder()
-            for _ in range(num_loops):
-                for row, entry in enumerate(vector):
-                    if entry == 0:
-                        continue
-
-                    # send event on a different address in order to
-                    # select one of the two rows connected to a driver
-                    entry += 32 if row % 2 == 1 else 0
-                    vector_builder.write(
-                        halco.SpikePack1ToChipOnDLS(),
-                        self.prepare_event(
-                            halco.SynapseLabel(entry),
-                            halco.SynapseDriverOnSynapseDriverBlock(row // 2)))
-
-                    # wait only if needed:
-                    if self.wait_period > 1:
-                        vector_builder.block_until(
-                            halco.TimerOnDLS(), hal.Timer.Value(
-                                int(self.wait_period * entry_counter)))
-                    entry_counter += 1
-
-            for _ in range(num_copies):
-                builder.copy_back(vector_builder)
+            pyccalix.hagen.send_vectors(
+                builder, vector, num_sends=self.num_sends,
+                wait_period=self.wait_period,
+                synram_coord=self.synram_coord,
+                synram_selection_bit=self.synram_selection_bit)
 
             # Read amplitudes
             coord = halco.CADCSampleRowOnDLS(

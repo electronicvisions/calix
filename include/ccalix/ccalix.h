@@ -1,4 +1,5 @@
 #include "ccalix/genpybind.h"
+#include "ccalix/hagen/multiplication.h"
 #include "ccalix/helpers.h"
 
 GENPYBIND_MANUAL({
