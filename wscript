@@ -3,11 +3,25 @@ from os.path import join
 from waflib import Utils
 from waflib.extras.test_base import summary
 from waflib.extras.symwaf2ic import get_toplevel_path
+from waflib.extras.symwaf2ic import describe_project
 
 
 def depends(dep):
     dep("code-format")
     dep("haldls")
+    dep.execute()
+
+    def recurse(deps, name, alldeps):
+        for subname in deps[name]:
+            if subname not in alldeps:
+                alldeps.add(subname)
+                recurse(deps, subname, alldeps)
+    alldeps = set()
+    recurse(dep.dependencies, dep.path.abspath(), alldeps)
+
+    global _dependencies
+    _dependencies = set(
+        ctx.replace(dep.toplevel.abspath() + "/", "").split("/")[0] for ctx  in alldeps)
 
 
 def options(opt):
@@ -28,6 +42,11 @@ def configure(cfg):
     cfg.load('doxygen')
     cfg.load("compiler_cxx")
     cfg.load("genpybind")
+    cfg.env.DEFINES_CALIX = [
+        'CALIX_REPO_STATE="' + "; ".join([
+            describe_project(cfg, dep).replace('"', '\\"') for dep in _dependencies] +
+            [describe_project(cfg, 'calix').replace('"', '\\"') + '"'])
+    ]
 
 
 def build(bld):
@@ -44,7 +63,9 @@ def build(bld):
             "stadls_vx_v3",
             "halco_hicann_dls_vx_v3",
             "haldls_vx_v3",
-        ])
+        ],
+        uselib='CALIX',
+        export_defines=bld.env.DEFINES_CALIX)
 
     bld(target="pyccalix",
         features="genpybind cxx cxxshlib pyext pyembed",

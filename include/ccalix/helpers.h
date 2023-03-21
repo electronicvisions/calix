@@ -4,6 +4,7 @@
 #include "halco/hicann-dls/vx/v3/capmem.h"
 #include "stadls/vx/v3/dumper.h"
 #include "stadls/vx/v3/playback_program_builder.h"
+#include <string>
 #include <pybind11/numpy.h>
 
 
@@ -34,6 +35,9 @@ extern template SYMBOL_VISIBLE void write_capmem_row(
     stadls::vx::v3::PlaybackProgramBuilderDumper&,
     const halco::hicann_dls::vx::v3::CapMemRowOnCapMemBlock,
     const pybind11::array_t<uint_fast16_t>&);
+
+GENPYBIND(visible)
+std::string get_repo_state();
 
 } // namespace helpers
 } // namespace ccalix

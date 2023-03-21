@@ -6,6 +6,10 @@
 #include <stdexcept>
 #include <pybind11/numpy.h>
 
+#ifndef CALIX_REPO_STATE
+#error "Needs CALIX_REPO_STATE for get_repo_state()"
+#endif
+
 using namespace halco::common;
 using namespace halco::hicann_dls::vx::v3;
 using namespace haldls::vx::v3;
@@ -48,5 +52,10 @@ template void write_capmem_row(
     stadls::vx::v3::PlaybackProgramBuilderDumper&,
     const halco::hicann_dls::vx::v3::CapMemRowOnCapMemBlock,
     const pybind11::array_t<uint_fast16_t>&);
+
+std::string get_repo_state()
+{
+	return CALIX_REPO_STATE;
+};
 
 } // namespace ccalix::helpers

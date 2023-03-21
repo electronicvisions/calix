@@ -6,6 +6,7 @@ from hashlib import sha256
 import os
 from typing import List, Optional
 from dlens_vx_v3 import hxcomm, sta, logger
+import pyccalix
 from calix.common import base
 
 _DEFAULT_GLOBAL_CACHE: Path = Path("/wang",
@@ -70,9 +71,9 @@ def calibrate(
     # The key into the cache is defined by the parameters target, options.
     # As the data-holding parameters are mutable, we define a custom hashing
     # function
-    # TODO: incorporate calix software state in hash.
     str_to_hash = repr(target) + repr(options) +\
-        repr(connection.get_unique_identifier())
+        repr(connection.get_unique_identifier()) +\
+        repr(pyccalix.helpers.get_repo_state())
     filename = str(sha256(str_to_hash.encode("utf-8")).hexdigest())
 
     # search for existing cache
