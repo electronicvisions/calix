@@ -375,7 +375,7 @@ class TestCorrelation(ConnectionSetup):
         for event_id in range(n_events):
             # initial wait
             time_offset = 500 * pq.us * (event_id + 1)
-            builder.wait_until(
+            builder.block_until(
                 halco.TimerOnDLS(),
                 int(time_offset.rescale(pq.us).magnitude * int(
                     hal.Timer.Value.fpga_clock_cycles_per_us)))
@@ -386,7 +386,7 @@ class TestCorrelation(ConnectionSetup):
                 self.reset_neurons(builder, quad, synram)
 
             # wait for delay
-            builder.wait_until(
+            builder.block_until(
                 halco.TimerOnDLS(),
                 int((time_offset + np.abs(delay)
                      ).rescale(pq.us).magnitude
