@@ -119,7 +119,11 @@ Closure calibrationPipeline = { HxVersion version ->
 	Set<HxCubeSetup> calibratedSetups = []
 	stage("Setup IDs for ${version}") {
 		List<HxCubeSetup> setups = getCubeSetups(version)
-		calibratedSetups.addAll(setups.findAll { it.hxCubeId == HxCubeSetup.GERRIT_HXCUBE_ID })
+
+		// add random Jenkins setup
+		List<HxCubeSetup> jenkins_setups = setups.findAll { it.hxCubeId == HxCubeSetup.GERRIT_HXCUBE_ID }
+		Collections.shuffle(jenkins_setups)
+		calibratedSetups.add(jenkins_setups.first())
 
 		if (!isTriggeredByGerrit()) {
 			calibratedSetups.addAll(setups)
