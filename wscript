@@ -73,6 +73,8 @@ def build(bld):
         use=[
             "ccalix",
             "pyhalco_hicann_dls_vx_v3",
+            "pyhaldls_vx_v3",
+            "pystadls_vx_v3",
         ],
         genpybind_tags="ccalix",
         genpybind_num_files=1,
