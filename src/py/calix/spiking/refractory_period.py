@@ -3,13 +3,12 @@ Calculations related to determining the refractory clock scales as well as
 counter values.
 '''
 from dataclasses import dataclass
-import math
 from typing import Optional
 
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import hal
+from dlens_vx_v3 import hal, halco, logger
 
 
 # Assume refractory clock frequency yo be unchanged after
@@ -56,23 +55,34 @@ def calculate_settings(tau_ref: pq.Quantity,
 
     :return: Clock settings.
 
-    :raises ValueError: If `tau_ref` and `holdoff_time` have different sizes
-        and none of them is a scalar value.
+    :raises ValueError: If `tau_ref` and `holdoff_time` have shapes
+        that are incompatible with the number of neurons on chip.
     """
-    if tau_ref.size != holdoff_time.size:
-        # try to resize arrays to same sizes
-        if tau_ref.size == 1:
-            tau_ref = tau_ref * np.ones(holdoff_time.size)
-        elif holdoff_time.size == 1:
-            holdoff_time = holdoff_time * np.ones(tau_ref.size)
-        else:
-            raise ValueError("Shapes of `tau_ref` and `holdoff_time` do not "
-                             "match and can not be resized properly: "
-                             f"{tau_ref.size} != {holdoff_time.size}.")
+
+    try:
+        tau_ref = np.broadcast_to(tau_ref, (halco.NeuronConfigOnDLS.size,)) \
+            * tau_ref.units  # quantities lose units when reshaping...
+        holdoff_time = np.broadcast_to(
+            holdoff_time, (halco.NeuronConfigOnDLS.size,)) \
+            * holdoff_time.units  # quantities lose units when reshaping...
+    except ValueError as err:
+        raise ValueError(
+            f"Shapes of `tau_ref` ({tau_ref.shape}) and `holdoff_time` "
+            + f"({tau_ref.shape}) can not be resized to match the "
+            + f"number of neurons on chip ({halco.NeuronConfigOnDLS.size})."
+        ) from err
 
     # The factor of 2 and addition of 1 accounts for the fact that the
     # lowest bit of the refractory counter is always used for holdoff
     max_cycles_holdoff = 2 * hal.NeuronBackendConfig.ResetHoldoff.max + 1
+
+    # Calculate sensible minimum cycles:
+    # We choose the minimum number of clock cycles to be 30 in order to
+    # keep the relative quantization error below approximately 3%.
+    # Also, there are issues when setting the refractory counter too low,
+    # cf. issue 3741.
+    min_cycles_refractory = 30
+    min_cycles_holdoff = 1
 
     clock_settings = Settings(
         refractory_counters=np.empty(tau_ref.size, dtype=int),
@@ -87,6 +97,7 @@ def calculate_settings(tau_ref: pq.Quantity,
         clock_settings.fast_clock = _calculate_clock_scale(
             np.max(tau_ref[fast_neurons])
             / hal.NeuronBackendConfig.RefractoryTime.max,
+            np.min(tau_ref[fast_neurons]) / min_cycles_refractory,
             _clock_base_frequency)
         clock_settings.refractory_counters[fast_neurons] = \
             _calculate_clock_cycles(tau_ref[fast_neurons],
@@ -106,9 +117,13 @@ def calculate_settings(tau_ref: pq.Quantity,
         min_time_per_cycle_holdoff = np.max(holdoff_time) / max_cycles_holdoff
         min_time_per_cycle_refractory = np.max(tau_ref[slow_neurons]) \
             / hal.NeuronBackendConfig.RefractoryTime.max
+        max_time_per_cycle_holdoff = np.min(holdoff_time) / min_cycles_holdoff
+        max_time_per_cycle_refractory = np.min(tau_ref[slow_neurons]) \
+            / min_cycles_refractory
 
         clock_settings.slow_clock = _calculate_clock_scale(
             max(min_time_per_cycle_holdoff, min_time_per_cycle_refractory),
+            min(max_time_per_cycle_holdoff, max_time_per_cycle_refractory),
             _clock_base_frequency)
         clock_settings.refractory_counters[slow_neurons] = \
             _calculate_clock_cycles(tau_ref[slow_neurons],
@@ -126,24 +141,55 @@ def calculate_settings(tau_ref: pq.Quantity,
 
 
 def _calculate_clock_scale(min_time_per_cycle: pq.Quantity,
+                           max_time_per_cycle: pq.Quantity,
                            f_base: pq.Quantity) -> int:
     '''
-    Calculate clock scale needed to have at least the given amount of time
-    per cycle.
+    Calculate clock scale needed to have a suitable time per cycle.
+
+    The clock scaler is chosen such that the minimum time per cycle
+    is fulfilled. Then, it tries to also fulfil the maximum time per
+    cycle. If there's still headroom, a medium clock scaler will
+    be preferred.
 
     :param min_time_per_cycle: Minimum time one cycle should take.
+    :param max_time_per_cycle: Maximum time one cycle is allowed to take.
     :param f_base: Base frequency of the refractory clock.
+
     :return: Minimum clock scale for which one cycle needs at least the
         given time.
-    '''
-    # number of "base clock cycles" per desired cycle length.
-    # Factor of 2 since clock is always down scaled by 2.
-    cycles = (min_time_per_cycle * f_base / 2).simplified
-    if cycles > 1:
-        clock_scale = math.ceil(np.log2(cycles))
-    else:
-        clock_scale = 0
 
+    :raises ValueError: If requested minimum time per clock cycle is
+        too large for BSS-2.
+    '''
+
+    # Only fulfil maximum condition in case it's not too tight
+    if max_time_per_cycle < 2 * min_time_per_cycle:
+        max_time_per_cycle = 2 * min_time_per_cycle
+
+    # Find matching clock scaler, starting at ideal value:
+    # We start with a clock scaler of 4 since this scaler should still
+    # give enough head room to alter the refractory counters manually
+    # after the calibration. This facilitates the exploration of
+    # neuron properties in higher level software stacks.
+    clock_scale = 4
+
+    for _ in range(hal.CommonNeuronBackendConfig.ClockScale.max):
+        time_per_cycle = 1 / (f_base / 2) * (2 ** clock_scale)
+        if min_time_per_cycle <= time_per_cycle <= max_time_per_cycle:
+            break
+        if time_per_cycle < min_time_per_cycle:
+            clock_scale += 1
+        elif time_per_cycle > max_time_per_cycle:
+            clock_scale -= 1
+
+    if clock_scale < hal.CommonNeuronBackendConfig.ClockScale.min:
+        # Reaching the fastest clock is not a hard limit, as the counter will
+        # just be smaller than ideal.
+        clock_scale = hal.CommonNeuronBackendConfig.ClockScale.min
+        logger.get("calix.spiking.refractory_period").warn(
+            "Refractory clock scaler has reached the fastest possible "
+            + "setting. Expect refractory and holdoff times to be less "
+            + "precise.")
     if clock_scale > hal.CommonNeuronBackendConfig.ClockScale.max:
         raise ValueError("Refractory times or holdoff times are larger "
                          "than feasible.")

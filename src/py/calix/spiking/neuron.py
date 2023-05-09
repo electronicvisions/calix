@@ -155,9 +155,6 @@ class NeuronCalibTarget(base.CalibTarget):
         if self.holdoff_time.size not in [1, halco.NeuronConfigOnDLS.size]:
             raise ValueError("Holdoff time needs to have size 1 or "
                              f"{halco.NeuronConfigOnDLS.size}.")
-        if self.holdoff_time.size == 1:
-            self.holdoff_time = \
-                np.ones(halco.NeuronConfigOnDLS.size) * self.holdoff_time
 
     def check_values(self):
         """

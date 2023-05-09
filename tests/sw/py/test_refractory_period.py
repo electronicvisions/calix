@@ -138,6 +138,29 @@ class RefractoryPeriodTest(unittest.TestCase):
         self.assert_holdoff_near_target(settings,
                                         tau_ref_holdoff[:, 1] * pq.us)
 
+    def test_specific_values(self):
+        """
+        Assert the calculation of settings yields the expected values.
+        """
+
+        # test that calculated values are correct
+        settings = calculate_settings(2 * pq.us)
+        np.testing.assert_array_equal(settings.refractory_counters, 32)
+        self.assertEqual(settings.fast_clock, 3)
+
+        settings = calculate_settings(1.5 * pq.us)
+        self.assertEqual(settings.fast_clock, 2)
+
+        # test reshaping of differently sized inputs
+        calculate_settings(
+            np.full(halco.NeuronConfigOnDLS.size, 10) * pq.us, 2 * pq.us)
+        calculate_settings(
+            10 * pq.us, np.full(halco.NeuronConfigOnDLS.size, 2) * pq.us)
+
+        with self.assertRaises(ValueError):
+            # will raise because it contains only three targets
+            calculate_settings([1, 2, 3] * pq.us)
+
 
 if __name__ == "__main__":
     unittest.main()
