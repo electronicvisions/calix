@@ -3,7 +3,7 @@ from itertools import product
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import halco, hal, logger
+from dlens_vx_v3 import halco, hal, logger, lola
 
 from calix.spiking.refractory_period import calculate_settings, Settings, \
     _clock_period, _clock_base_frequency
@@ -22,6 +22,7 @@ class RefractoryPeriodTest(unittest.TestCase):
     :cvar min_holdoff_time: Minimal possible holdoff time.
     :cvar max_holdoff_time: Maximal possible holdoff time.
     """
+
     min_tau_ref: pq.Quantity = _clock_period(
         hal.CommonNeuronBackendConfig.ClockScale.min, _clock_base_frequency) \
         * hal.NeuronBackendConfig.RefractoryTime.min
@@ -160,6 +161,28 @@ class RefractoryPeriodTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             # will raise because it contains only three targets
             calculate_settings([1, 2, 3] * pq.us)
+
+    def test_apply_to_chip(self):
+        """
+        Test the Settings.apply_to_chip() function.
+        """
+
+        settings = calculate_settings(2 * pq.us)
+        chip = lola.Chip()
+        settings.apply_to_chip(chip)
+
+        self.assertEqual(
+            chip.neuron_block.atomic_neurons[halco.AtomicNeuronOnDLS()]  # pylint: disable=no-member
+            .refractory_period.refractory_time,
+            settings.refractory_counters[0])
+        self.assertEqual(
+            chip.neuron_block.backends[halco.CommonNeuronBackendConfigOnDLS()]  # pylint: disable=no-member
+            .clock_scale_fast, settings.fast_clock)
+
+        settings.refractory_counters = np.array([10, 11, 12])
+        # apply_to_chip will raise because settings contain only 3 neurons
+        with self.assertRaises(ValueError):
+            settings.apply_to_chip(chip)
 
 
 if __name__ == "__main__":

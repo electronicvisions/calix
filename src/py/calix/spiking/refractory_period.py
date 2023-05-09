@@ -8,7 +8,7 @@ from typing import Optional
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import hal, halco, logger
+from dlens_vx_v3 import hal, halco, lola, logger
 
 
 # Assume refractory clock frequency yo be unchanged after
@@ -30,6 +30,41 @@ class Settings:
     input_clock: Optional[np.ndarray] = None
     fast_clock: int = 0
     slow_clock: int = 0
+
+    def apply_to_chip(self, chip: lola.Chip):
+        """
+        Apply refractory settings in the given chip object.
+
+        The settings have to cover a whole chip, i.e. 512 neurons.
+
+        :param chip: Chip object to reconfigure with refractory settings.
+
+        :raises ValueError: If array shapes do not match a whole chip.
+        """
+
+        if np.any(np.array([
+                len(self.refractory_counters), len(self.reset_holdoff),
+                len(self.input_clock)]) != halco.AtomicNeuronOnDLS.size):
+            raise ValueError(
+                "Shape of settings does not match number of neurons on chip.")
+
+        for coord in halco.iter_all(halco.CommonNeuronBackendConfigOnDLS):
+            chip.neuron_block.backends[coord].clock_scale_fast = \
+                self.fast_clock
+            chip.neuron_block.backends[coord].clock_scale_slow = \
+                self.slow_clock
+
+        for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
+            atomic_neuron = chip.neuron_block.atomic_neurons[coord]
+            atomic_neuron.refractory_period.refractory_time = \
+                hal.NeuronBackendConfig.RefractoryTime(
+                    self.refractory_counters[int(coord.toEnum())])
+            atomic_neuron.refractory_period.reset_holdoff = \
+                hal.NeuronBackendConfig.ResetHoldoff(
+                    self.reset_holdoff[int(coord.toEnum())])
+            atomic_neuron.refractory_period.input_clock = \
+                hal.NeuronBackendConfig.InputClock(
+                    self.input_clock[int(coord.toEnum())])
 
 
 def calculate_settings(tau_ref: pq.Quantity,
