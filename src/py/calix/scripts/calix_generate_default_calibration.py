@@ -9,7 +9,7 @@ import pickle
 import gzip
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import quantities as pq
 
@@ -20,7 +20,7 @@ from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, to_json, \
 
 import calix.hagen
 import calix.spiking
-from calix.common.base import CalibResult, TopLevelCalibTarget
+from calix.common.base import CalibResult, TopLevelCalibTarget, CalibOptions
 from calix.hagen import HagenCalibTarget, HagenSyninCalibTarget
 from calix.spiking import SpikingCalibTarget
 
@@ -49,6 +49,13 @@ class CalibRecorder(metaclass=ABCMeta):
         Calibration target to be calibrated for.
         """
         raise NotImplementedError
+
+    @property
+    def calibration_options(self) -> Optional[CalibOptions]:
+        """
+        Further options for calibration.
+        """
+        return None
 
 
 class CalibDumper(metaclass=ABCMeta):
@@ -114,7 +121,8 @@ class RecorderAndDumper(metaclass=ABCMeta):
         :param deployment_folder: Folder the file with serialized results is
                                   created in.
         """
-        result = calix.calibrate(self.recorder.calibration_target,
+        result = calix.calibrate(target=self.recorder.calibration_target,
+                                 options=self.recorder.calibration_options,
                                  cache_paths=[],  # don't cache
                                  connection=connection)
 
