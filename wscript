@@ -118,7 +118,7 @@ def build(bld):
     bld(name='calix_pyhwtests',
         tests=bld.path.ant_glob('tests/hw/py/**/*.py'),
         features='pytest pylint pycodestyle',
-        use='calix_pylib',
+        use=['calix_pylib', 'quiggeldy'],
         install_path='${PREFIX}/bin/tests',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),

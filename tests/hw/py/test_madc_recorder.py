@@ -7,7 +7,7 @@ import os
 
 import numpy as np
 
-from dlens_vx_v3 import halco, sta, logger
+from dlens_vx_v3 import halco, logger
 
 from connection_setup import ConnectionSetup
 
@@ -31,7 +31,7 @@ class TestMADCRecorder(ConnectionSetup):
         """
 
         # Apply default configuration of neurons
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder, _ = neuron_helpers.configure_chip(builder)
         base.run(self.connection, builder)
 
@@ -41,7 +41,8 @@ class TestMADCRecorder(ConnectionSetup):
         recorder = madc_base.MembraneRecorder()
         recorder.prepare_recording(self.connection)
         samples = recorder.record_traces(
-            self.connection, builder=sta.PlaybackProgramBuilder())
+            self.connection,
+            builder=base.WriteRecordingPlaybackProgramBuilder())
         recorder.plot_traces(samples[:n_neurons_to_plot])
 
         for neuron_id in range(n_neurons_to_plot):

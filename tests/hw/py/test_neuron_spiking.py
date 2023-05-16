@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
+from dlens_vx_v3 import hal, halco, hxcomm, logger
 
 from connection_setup import ConnectionSetup
 
@@ -62,7 +62,7 @@ class TestNeuronCalib(ConnectionSetup):
 
         tickets = []
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = neuron_helpers.enable_all_synapse_drivers(
             builder, row_mode=hal.SynapseDriverConfig.RowMode.excitatory
             if excitatory else hal.SynapseDriverConfig.RowMode.inhibitory)
@@ -143,7 +143,7 @@ class TestNeuronCalib(ConnectionSetup):
         """
 
         tickets = []
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             # Reset spike counters

@@ -97,8 +97,10 @@ class CADCCalibResult(base.CalibResult):
             halco.CADCChannelConfigOnDLS.size, dtype=int))
     success: Optional[np.ndarray] = None
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]):
+    def apply(self, builder: Union[
+            sta.PlaybackProgramBuilder,
+            sta.PlaybackProgramBuilderDumper,
+            base.WriteRecordingPlaybackProgramBuilder]):
         """
         Apply the calibration into the given builder.
 
@@ -192,16 +194,17 @@ class RampOffsetCalib(base.Calib):
         """
 
         builder = helpers.capmem_set_quadrant_cells(
-            sta.PlaybackProgramBuilder(),
+            base.WriteRecordingPlaybackProgramBuilder(),
             {halco.CapMemCellOnCapMemBlock.cadc_i_ramp_slope: 350,
              halco.CapMemCellOnCapMemBlock.stp_v_charge_0:
              self.dynamic_range_min})
 
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Set CapMem cells cadc_v_ramp_offset of each quadrant to the
         values given in the array.
@@ -218,8 +221,10 @@ class RampOffsetCalib(base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Read all CADC channels. Compute means of quadrants and return those.
 
@@ -290,14 +295,15 @@ class RampSlopeCalib(base.Calib):
         """
 
         builder = helpers.capmem_set_quadrant_cells(
-            sta.PlaybackProgramBuilder(),
+            base.WriteRecordingPlaybackProgramBuilder(),
             {halco.CapMemCellOnCapMemBlock.stp_v_charge_0:
              self.dynamic_range_max})
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Set CapMem cells cadc_i_ramp_slope of each quadrant to the
         values given in the array.
@@ -314,8 +320,10 @@ class RampSlopeCalib(base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Read all CADC channels. Compute means of quadrants and return those.
 
@@ -409,7 +417,7 @@ class ChannelOffsetCalib(base.Calib):
         :param connection: Connection to the chip to calibrate.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_quadrant_cells(
             builder,
             {halco.CapMemCellOnCapMemBlock.stp_v_charge_0:
@@ -422,9 +430,10 @@ class ChannelOffsetCalib(base.Calib):
         self.initial_results = results
         self.target = self.find_target_read(results)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Set up the given CADC channel offsets.
         Expects the given parameter array to be ordered like the iter_all
@@ -444,8 +453,10 @@ class ChannelOffsetCalib(base.Calib):
 
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Read all CADC channels on chip.
 
@@ -471,7 +482,7 @@ class ChannelOffsetCalib(base.Calib):
         """
 
         cadc_evaluation.check_calibration_success(
-            connection, builder=sta.PlaybackProgramBuilder(),
+            connection, builder=base.WriteRecordingPlaybackProgramBuilder(),
             read_data=self.initial_results)
 
 
@@ -529,7 +540,7 @@ def calibrate(
     log = logger.get("calix.common.cadc_calibration.calibrate")
 
     # Configure switches for CADC debug line.
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = cadc_helpers.configure_chip(builder)
 
     # configure readout/voltage feedback:

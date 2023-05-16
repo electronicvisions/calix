@@ -159,8 +159,7 @@ class NeuronCalibResult(base.CalibResult):
     cocos: {}  # some coordinate, some container
     success: Dict[halco.AtomicNeuronOnDLS, bool]
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]):
+    def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
         """
         Apply the calibration in the given builder.
 

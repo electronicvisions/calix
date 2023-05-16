@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import quantities as pq
-from dlens_vx_v3 import hal, sta, halco, hxcomm, logger
+from dlens_vx_v3 import hal, halco, hxcomm, logger
 
 from calix.common import base, cadc_helpers, madc_base, helpers, exceptions
 from calix.hagen import neuron_helpers
@@ -60,7 +60,7 @@ class DACBiasCalibMADC(madc_base.Calib):
         # prepare MADC
         super().prelude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # Ensure synaptic inputs are disabled
         # Otherwise, high membrane potentials can leak through the
@@ -85,11 +85,13 @@ class DACBiasCalibMADC(madc_base.Calib):
 
         # set target
         self.target = np.min(self.measure_results(
-            connection, builder=sta.PlaybackProgramBuilder()))
+            connection, builder=base.WriteRecordingPlaybackProgramBuilder()))
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self,
+            builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configures the given array of synapse DAC bias currents.
 
@@ -106,10 +108,10 @@ class DACBiasCalibMADC(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Send some PADI events to the synaptic input in order to
         drop the potential.
@@ -241,7 +243,7 @@ class DACBiasCalibCADC(base.Calib):
             should not happen.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # read current neuron config
         neuron_tickets = []
@@ -295,7 +297,7 @@ class DACBiasCalibCADC(base.Calib):
                 1 <= n_rows_enabled <= halco.SynapseRowOnSynram.size:
             iteration += 1
 
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
 
             # configure desired number of enabled rows
             builder = neuron_helpers.configure_synapses(
@@ -330,9 +332,10 @@ class DACBiasCalibCADC(base.Calib):
         log.DEBUG(f"Using {n_rows_enabled} synapse rows during DAC bias "
                   + f"calib. Target amplitude: {self.target}")
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configures the given array of synapse DAC bias currents.
 
@@ -350,7 +353,7 @@ class DACBiasCalibCADC(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Measures the drop in synaptic input potentials for all
@@ -407,7 +410,7 @@ class DACBiasCalibCADC(base.Calib):
         log.DEBUG("Calibrated synapse DAC bias current: "
                   + f"{self.result.calibrated_parameters}")
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # restore original neuron config
         for neuron_coord, neuron_config in zip(

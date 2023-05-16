@@ -15,12 +15,12 @@ import quantities as pq
 
 from dlens_vx_v3 import logger
 from dlens_vx_v3.hxcomm import ConnectionHandle, ManagedConnection
-from dlens_vx_v3.sta import PlaybackProgramBuilderDumper, to_json, \
-    to_portablebinary
+from dlens_vx_v3.sta import to_json, to_portablebinary
 
 import calix.hagen
 import calix.spiking
-from calix.common.base import CalibResult, TopLevelCalibTarget, CalibOptions
+from calix.common.base import CalibResult, TopLevelCalibTarget, CalibOptions, \
+    StatefulConnection, WriteRecordingPlaybackProgramBuilder
 from calix.hagen import HagenCalibTarget, HagenSyninCalibTarget
 from calix.spiking import SpikingCalibTarget
 
@@ -206,11 +206,11 @@ class CocoListPortableBinaryFormatDumper(CalibDumper):
 
     def dump_calibration(self, calibration_result: CalibResult,
                          target_file: Path):
-        builder = PlaybackProgramBuilderDumper()
+        builder = WriteRecordingPlaybackProgramBuilder()
         calibration_result.apply(builder)
 
         with target_file.open(mode="wb") as target:
-            target.write(to_portablebinary(builder.done()))
+            target.write(to_portablebinary(builder.done()[1]))
 
 
 class CocoListJsonFormatDumper(CalibDumper):
@@ -223,11 +223,11 @@ class CocoListJsonFormatDumper(CalibDumper):
 
     def dump_calibration(self, calibration_result: CalibResult,
                          target_file: Path):
-        builder = PlaybackProgramBuilderDumper()
+        builder = WriteRecordingPlaybackProgramBuilder()
         calibration_result.apply(builder)
 
         with gzip.open(target_file, mode="wt") as target:
-            target.write(to_json(builder.done()))
+            target.write(to_json(builder.done()[1]))
 
 
 class HagenCalib(RecorderAndDumper):
@@ -268,7 +268,8 @@ def run_and_save_all(deployment_folder: Path):
     with ManagedConnection() as connection:
         for calib in [HagenCalib(), HagenSyninCalib(),
                       SpikingCalib(), SpikingCalib2()]:
-            calib.record_and_dump(connection, deployment_folder)
+            calib.record_and_dump(
+                StatefulConnection(connection), deployment_folder)
 
 
 if __name__ == "__main__":

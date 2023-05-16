@@ -5,11 +5,11 @@ calibration are significantly lower than one expects without calibration.
 
 import unittest
 import numpy as np
-from dlens_vx_v3 import sta, halco, hal, logger
+from dlens_vx_v3 import halco, hal, logger
 
 from connection_setup import ConnectionSetup
 
-from calix.common import cadc, cadc_helpers, helpers
+from calix.common import base, cadc, cadc_helpers, helpers
 from calix import constants
 
 
@@ -98,7 +98,7 @@ class TestCADCCalib(ConnectionSetup):
         """
 
         # Overwrite calibration
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         capmem_config = {
             halco.CapMemCellOnCapMemBlock.cadc_v_ramp_offset: 50,
             halco.CapMemCellOnCapMemBlock.cadc_i_ramp_slope: 250
@@ -121,7 +121,7 @@ class TestCADCCalib(ConnectionSetup):
         """
 
         # Apply result of previous calibration
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         self.__class__.calibration_result.apply(builder)
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 

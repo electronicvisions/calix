@@ -5,7 +5,7 @@ for the usual spiking mode.
 
 from typing import Union
 import numpy as np
-from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
+from dlens_vx_v3 import hal, halco, hxcomm, logger
 
 from calix import constants
 from calix.common import base, helpers
@@ -37,7 +37,7 @@ class STPMultiplication(multiplication.Multiplication):
 
         # read synapse driver config
         syndrv_tickets = []
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
             syndrv_tickets.append(builder.read(
                 halco.SynapseDriverOnDLS(
@@ -46,7 +46,7 @@ class STPMultiplication(multiplication.Multiplication):
         base.run(connection, builder)
 
         # write synapse driver config with hagen encoding disabled
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
             config = syndrv_tickets[coord.toEnum()].get()
             config.enable_stp = True
@@ -106,9 +106,10 @@ class STPOffsetCalib(base.Calib):
         self.measurement = hagen_driver.SynapseDriverMeasurement()
         self.measurement.multiplication = STPMultiplication(signed_mode=False)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the synapse drivers to the given offsets.
 
@@ -128,7 +129,7 @@ class STPOffsetCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Read output amplitudes of synapse drivers.
@@ -152,7 +153,7 @@ class STPOffsetCalib(base.Calib):
         Measure target values as median of drivers of a CapMem block.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_quadrant_cells(builder, config={
             halco.CapMemCellOnCapMemBlock.stp_v_charge_0: self.v_stp,
             halco.CapMemCellOnCapMemBlock.stp_v_recover_0: self.v_stp,
@@ -195,7 +196,7 @@ class STPOffsetCalib(base.Calib):
         :param connection: Connection to the chip to run on.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         logger.get(
             "calix.spiking.synapse_driver.STPOffsetCalib.postlude"

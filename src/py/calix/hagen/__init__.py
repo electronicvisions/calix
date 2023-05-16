@@ -10,7 +10,7 @@ from warnings import warn
 
 import numpy as np
 
-from dlens_vx_v3 import sta, hxcomm, halco, hal, lola
+from dlens_vx_v3 import hxcomm, halco, hal, lola
 
 from calix.common import algorithms, base, cadc, synapse, helpers
 from calix.hagen import neuron, synapse_driver, neuron_helpers, multiplication
@@ -130,8 +130,7 @@ class HagenSyninCalibResult(base.CalibResult):
     synapse_driver_result: synapse_driver.SynapseDriverCalibResult
     syn_i_bias_dac: np.ndarray
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]):
+    def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
         """
         Apply the calib to the chip.
 
@@ -202,8 +201,7 @@ class HagenCalibResult(base.CalibResult):
     neuron_result: neuron.NeuronCalibResult
     synapse_driver_result: synapse_driver.SynapseDriverCalibResult
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]):
+    def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
         """
         Apply the calib to the chip.
 
@@ -250,7 +248,7 @@ class HagenCalibResult(base.CalibResult):
         cadc_result = cadc.calibrate(connection, cadc_target, cadc_options)
 
         # reconnect neuron readout to CADCs
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         neuron_helpers.configure_chip(builder)
 
         # set target synapse DAC bias current
@@ -278,7 +276,7 @@ class HagenCalibResult(base.CalibResult):
             cadc_result=cadc_result,
             synapse_driver_result=self.synapse_driver_result,
             syn_i_bias_dac=calibrated_dac_bias)
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         result.apply(builder)
         base.run(connection, builder)
 
@@ -320,12 +318,12 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     # preparations for synapse driver calib: calibrate CADC to smaller range
     cadc.calibrate(connection, cadc.CADCCalibTarget(
         dynamic_range=base.ParameterRange(150, 340)))
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     neuron_helpers.configure_chip(builder)
     base.run(connection, builder)
 
     # set suitable synapse DAC bias current
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = helpers.capmem_set_quadrant_cells(
         builder,
         {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac: 800})
@@ -343,7 +341,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         connection, options.synapse_driver_options)
 
     # disconnect DAC from pad
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder.write(halco.ShiftRegisterOnBoard(), hal.ShiftRegister())
     base.run(connection, builder)
 
@@ -358,7 +356,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     # set leak biases to zero
     # We want to have only integration on the neurons, no leakage.
     if options.neuron_disable_leakage:
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak: 0})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
@@ -377,7 +375,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     # apply calibration again:
     # The calibration is re-applied since synapse driver calibration
     # may be overwritten during neuron calibration.
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     to_be_returned.apply(builder)
     base.run(connection, builder)
 
@@ -414,12 +412,12 @@ def calibrate_for_synin_integration(
         connection, target.cadc_target, options.cadc_options)
 
     # global configuration
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     neuron_helpers.configure_chip(builder)
     base.run(connection, builder)
 
     # set target synapse DAC bias current
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = helpers.capmem_set_quadrant_cells(
         builder,
         {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac:
@@ -441,7 +439,7 @@ def calibrate_for_synin_integration(
         target=target, options=options,
         cadc_result=cadc_result, synapse_driver_result=synapse_driver_result,
         syn_i_bias_dac=calibrated_dac_bias)
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     to_be_returned.apply(builder)
     base.run(connection, builder)
 

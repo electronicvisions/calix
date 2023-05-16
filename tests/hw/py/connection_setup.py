@@ -2,8 +2,9 @@ import unittest
 from pathlib import Path
 import pickle
 import os
+import time
 
-from dlens_vx_v3 import sta, hxcomm, logger
+from dlens_vx_v3 import hxcomm, logger
 
 from calix.common import base
 import calix.scripts.calix_generate_default_calibration as calib_generator
@@ -39,14 +40,11 @@ class ConnectionSetup(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.connection = cls.conn_manager.__enter__()
+        cls.connection = base.StatefulConnection(
+            cls.conn_manager.__enter__())
 
         # extend target_directory by connection id
         cls.target_directory /= cls.connection.get_unique_identifier()
-
-        # Initialize the chip
-        builder, _ = sta.ExperimentInit().generate()
-        base.run(cls.connection, builder)
 
     @classmethod
     def apply_calibration(cls, identifier: str) -> base.CalibResult:
@@ -84,11 +82,7 @@ class ConnectionSetup(unittest.TestCase):
             with open(filename, "rb") as calibfile:
                 result = pickle.load(calibfile)
 
-            # re-initialize chip after calibration has run
-            builder, _ = sta.ExperimentInit().generate()
-            base.run(cls.connection, builder)
-
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         result.apply(builder)
         base.run(cls.connection, builder)
         return result
@@ -96,6 +90,28 @@ class ConnectionSetup(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         cls.conn_manager.__exit__()
+
+
+class QuiggeldyConnectionSetup(ConnectionSetup):
+    """
+    Base class for hardware tests using local quiggeldy instance.
+    """
+
+    quiggeldy_pid = None
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.quiggeldy_pid, _ = hxcomm.launch_quiggeldy_locally_from_env()
+        time.sleep(5)
+
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.conn_manager.__exit__()
+        if cls.quiggeldy_pid is not None:
+            hxcomm.terminate(cls.quiggeldy_pid)
+            hxcomm.unset_quiggeldy_env()
 
 
 def string_to_bool(string: str) -> bool:

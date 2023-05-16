@@ -5,7 +5,7 @@ Provides functions to calibrate leak and reset potential.
 from typing import Union, List, Optional
 import numpy as np
 import quantities as pq
-from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from calix.common import base, cadc, cadc_helpers, helpers
 from calix.hagen import neuron_helpers
@@ -52,7 +52,7 @@ class LeakPotentialCalib(base.Calib):
         if self.target is not None:
             return
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         self.target = int(np.median(
             self.measure_results(connection, builder)))
         logger.get(
@@ -60,9 +60,10 @@ class LeakPotentialCalib(base.Calib):
             + ".LeakPotentialCalib.prelude"
         ).DEBUG(f"Read target for v_leak calibration: {self.target}")
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given parameters (leak potential settings) in the given
         builder.
@@ -81,7 +82,7 @@ class LeakPotentialCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Measures the membrane potentials of all neurons.
@@ -107,7 +108,7 @@ class LeakPotentialCalib(base.Calib):
         :Param connection: Connection to the chip to run on.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         reads = self.measure_results(connection, builder)
         logger.get(
             "calix.hagen.neuron_potentials"
@@ -187,7 +188,7 @@ class ResetPotentialCalib(base.Calib):
         """
 
         # Read the previous neuron backend configs
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         backend_tickets = []
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
             backend_tickets.append(builder.read(coord))
@@ -236,9 +237,10 @@ class ResetPotentialCalib(base.Calib):
         for ticket in common_backend_tickets:
             self.common_backend_configs.append(ticket.get())
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the reset potentials of all neurons to the
         values given in the parameter array.
@@ -256,8 +258,10 @@ class ResetPotentialCalib(base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Test the configured settings. The neurons are artificially reset and
         their membrane potentials are read using the CADCs.
@@ -297,7 +301,7 @@ class ResetPotentialCalib(base.Calib):
 
         # Print results
         results = self.measure_results(
-            connection, builder=sta.PlaybackProgramBuilder())
+            connection, builder=base.WriteRecordingPlaybackProgramBuilder())
 
         logger.get(
             "calix.hagen.neuron_potentials"
@@ -307,7 +311,7 @@ class ResetPotentialCalib(base.Calib):
                + f"{np.std(results[self.result.success]):4.2f}")
 
         # Set up original neuron backend config again
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, config in zip(halco.iter_all(
                 halco.NeuronBackendConfigOnDLS), self.backend_configs):
             builder.write(coord, config)
@@ -350,7 +354,7 @@ class BaselineCalib(cadc.ChannelOffsetCalib):
                  f"{np.mean(results):5.2f} +- {np.std(results):3.2f}")
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Read all CADC channels at the neuron's baseline voltage.
@@ -369,6 +373,6 @@ class BaselineCalib(cadc.ChannelOffsetCalib):
             builder = neuron_helpers.reset_neurons(builder)
             builder = helpers.wait(builder, 30 * pq.us)
             results[run] = cadc_helpers.read_cadcs(connection, builder)
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
 
         return results.mean(axis=0)

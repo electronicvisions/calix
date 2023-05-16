@@ -6,7 +6,7 @@ import quantities as pq
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
-from dlens_vx_v3 import hal, halco, sta, logger
+from dlens_vx_v3 import hal, halco, logger
 
 from connection_setup import ConnectionSetup
 
@@ -85,10 +85,11 @@ class TestNeuronCalib(ConnectionSetup):
             self._wait_before_stimulation = 10 * pq.us
             self.sampling_time = 100 * pq.us
 
-        def stimulate(self, builder: sta.PlaybackProgramBuilder,
+        def stimulate(self,
+                      builder: base.WriteRecordingPlaybackProgramBuilder,
                       neuron_coord: halco.NeuronConfigOnDLS,
                       stimulation_time: hal.Timer.Value
-                      ) -> sta.PlaybackProgramBuilder:
+                      ) -> base.WriteRecordingPlaybackProgramBuilder:
             padi_event = hal.PADIEvent()
             for bus in halco.iter_all(halco.PADIBusOnPADIBusBlock):
                 padi_event.fire_bus[bus] = True
@@ -111,13 +112,13 @@ class TestNeuronCalib(ConnectionSetup):
         """
 
         # disable threshold
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         tickets = []
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
         base.run(self.connection, builder)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, ticket in zip(
                 halco.iter_all(halco.NeuronConfigOnDLS), tickets):
             config = ticket.get()
@@ -159,7 +160,8 @@ class TestNeuronCalib(ConnectionSetup):
             recorder = self.Recorder()
             recorder.prepare_recording(self.connection)
             samples = recorder.record_traces(
-                self.connection, builder=sta.PlaybackProgramBuilder())
+                self.connection,
+                builder=base.WriteRecordingPlaybackProgramBuilder())
 
             for neuron_id, neuron_samples in enumerate(samples):
                 neuron_samples = neuron_samples["value"]

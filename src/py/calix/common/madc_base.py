@@ -89,7 +89,7 @@ class Recorder(ABC):
         :param connection: Connection to the chip.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # read current readout config
         readout_ticket = builder.read(halco.ReadoutSourceSelectionOnDLS())
@@ -131,7 +131,7 @@ class Recorder(ABC):
         # disable readout for all neurons
         # runs in a separate program so that self.original_neuron_configs
         # is available when calling self.neuron_config_disabled()
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
             builder.write(
                 neuron_coord, self.neuron_config_disabled(neuron_coord))
@@ -166,10 +166,10 @@ class Recorder(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Execute some commands after triggering MADC sampling.
 
@@ -186,8 +186,8 @@ class Recorder(ABC):
 
     # pylint: disable=too-many-statements
     def build_measurement_program(
-            self, builder: sta.PlaybackProgramBuilder) -> Tuple[
-                sta.PlaybackProgramBuilder, List[
+            self, builder: base.WriteRecordingPlaybackProgramBuilder) -> Tuple[
+                base.WriteRecordingPlaybackProgramBuilder, List[
                     sta.ContainerTicket]]:
         """
         Builds a program to measure an arbitrary MADC trace for each
@@ -342,7 +342,7 @@ class Recorder(ABC):
         return builder, switching_time_tickets
 
     def record_traces(self, connection: hxcomm.ConnectionHandle,
-                      builder: sta.PlaybackProgramBuilder
+                      builder: base.WriteRecordingPlaybackProgramBuilder
                       ) -> List[np.ndarray]:
         """
         Executes measurement on chip, returns samples per neuron.
@@ -414,7 +414,7 @@ class Recorder(ABC):
         :param connection: Connection to the chip to calibrate.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # restore original readout config
         builder.write(halco.ReadoutSourceSelectionOnDLS(),
@@ -465,8 +465,9 @@ class Calib(base.Calib, Recorder):
 
         raise NotImplementedError
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) -> np.ndarray:
         """
         Measure and evaluate the results.
 
@@ -518,7 +519,7 @@ class MembraneRecorder(Recorder):
     >>> recorder = madc_base.MembraneRecorder()
     >>> recorder.prepare_recording(connection)
     >>> samples = recorder.record_traces(
-    ...     connection, builder=sta.PlaybackProgramBuilder())
+    ...     connection, builder=base.WriteRecordingPlaybackProgramBuilder())
     >>> recorder.plot_traces(samples)
     """
 
@@ -556,10 +557,10 @@ class MembraneRecorder(Recorder):
             plt.savefig(f"trace_neuron{neuron_id}.png", dpi=300)
             plt.close()
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Send no stimuli to the observed neuron.
 

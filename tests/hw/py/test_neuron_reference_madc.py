@@ -7,7 +7,7 @@ the drift of the membrane potentials is not too large.
 import unittest
 
 import numpy as np
-from dlens_vx_v3 import halco, sta, logger
+from dlens_vx_v3 import halco, logger
 
 from connection_setup import ConnectionSetup
 
@@ -39,7 +39,7 @@ class TestReferenceCalib(ConnectionSetup):
         calibration = neuron_synin.InhSynReferenceCalibMADC()
         calibration.n_runs = 10
         calibration.prelude(self.connection)
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         drift = calibration.measure_results(self.connection, builder)
         self.log.DEBUG("Drift statistics: ([0, 10, 50, 90, 100] percentiles):",
                        np.percentile(np.abs(drift), [0, 10, 50, 90, 100]))
@@ -60,7 +60,7 @@ class TestReferenceCalib(ConnectionSetup):
         """
 
         builder = helpers.capmem_set_neuron_cells(
-            sta.PlaybackProgramBuilder(),
+            base.WriteRecordingPlaybackProgramBuilder(),
             {halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_shift: 310})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         base.run(self.connection, builder)

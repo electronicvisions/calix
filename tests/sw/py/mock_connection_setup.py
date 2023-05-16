@@ -1,5 +1,6 @@
 import unittest
 from dlens_vx_v3 import hxcomm
+from calix.common import base
 
 
 class ConnectionSetup(unittest.TestCase):
@@ -17,7 +18,8 @@ class ConnectionSetup(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.connection = cls.conn_manager.__enter__()
+        cls.connection = base.StatefulConnection(
+            cls.conn_manager.__enter__())
 
     @classmethod
     def tearDownClass(cls) -> None:

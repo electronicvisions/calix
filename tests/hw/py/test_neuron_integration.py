@@ -10,7 +10,7 @@ import os
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from connection_setup import ConnectionSetup
 
@@ -68,7 +68,7 @@ class TestNeuronCalib(ConnectionSetup):
         baselines = []
         results = []
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         row_mode = hal.SynapseDriverConfig.RowMode.excitatory if excitatory \
             else hal.SynapseDriverConfig.RowMode.inhibitory
         builder = neuron_helpers.enable_all_synapse_drivers(
@@ -338,7 +338,7 @@ class TestNeuronCalib(ConnectionSetup):
 
         # Overwrite calibration
         builder = helpers.capmem_set_neuron_cells(
-            sta.PlaybackProgramBuilder(),
+            base.WriteRecordingPlaybackProgramBuilder(),
             {halco.CapMemRowOnCapMemBlock.v_leak: 600,
              halco.CapMemRowOnCapMemBlock.v_reset: 610,
              halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_shift: 310,

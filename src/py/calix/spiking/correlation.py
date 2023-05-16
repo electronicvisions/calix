@@ -11,7 +11,7 @@ import copy
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import hal, halco, sta, lola, hxcomm, logger
+from dlens_vx_v3 import hal, halco, lola, hxcomm, logger
 
 from calix.common import algorithms, base, exceptions
 from calix.hagen import helpers
@@ -115,9 +115,10 @@ class TimeConstantCalib(base.Calib):
 
         self.measurement.prelude(connection)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given ramp bias currents in the given builder.
 
@@ -137,7 +138,7 @@ class TimeConstantCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Estimate correlation parameters of each quadrant.
@@ -239,9 +240,10 @@ class AmplitudeCalib(base.Calib):
 
         self.measurement.prelude(connection)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given store bias currents in the given builder.
 
@@ -262,7 +264,7 @@ class AmplitudeCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Estimate correlation parameters of each quadrant.
@@ -458,8 +460,8 @@ class CorrelationCalibResult(base.CalibResult):
         self.amp_calib[:] = self.options.default_amp_calib
         self.time_calib[:] = self.options.default_time_calib
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]) -> None:
+    def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> None:
         """
         Apply the calibration in the given builder.
 
@@ -590,7 +592,7 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
     calib_result = CorrelationCalibResult(target=target, options=options)
 
     # set necessary voltages
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     calib_result.apply(builder)
     base.run(connection, builder)
 
@@ -616,7 +618,7 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
 
     # re-apply amplitude calibration
     calibration = AmplitudeCalib()
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = calibration.configure_parameters(
         builder, calib_result.i_bias_store)
     base.run(connection, builder)

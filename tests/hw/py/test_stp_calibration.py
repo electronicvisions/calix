@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from dlens_vx_v3 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from connection_setup import ConnectionSetup
 
@@ -66,7 +66,7 @@ class STPCalibTest(ConnectionSetup):
                 dynamic_range=base.ParameterRange(100, 450)))
 
         # reconnect neuron readout to CADCs
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         neuron_helpers.configure_chip(builder)
 
         # set target synapse DAC bias current

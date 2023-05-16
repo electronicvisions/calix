@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import sta, halco, hal, hxcomm
+from dlens_vx_v3 import halco, hal, hxcomm
 
 from calix.common import algorithms, base, synapse, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
@@ -183,7 +183,7 @@ def calibrate_synapse_dac_bias(
     """
 
     # set synapse DAC bias current
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = helpers.capmem_set_quadrant_cells(
         builder,
         {halco.CapMemCellOnCapMemBlock.syn_i_bias_dac:
@@ -225,7 +225,7 @@ def prepare_for_synin_calib(
     """
 
     # Configure chip for synin calibration:
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder, initial_config = neuron_helpers.configure_chip(
         builder, readout_neuron=options.readout_neuron)
     calib_result.i_bias_reset = initial_config[
@@ -314,7 +314,7 @@ def finalize_synin_calib(
     """
 
     # re-apply synaptic input time constant
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = helpers.capmem_set_neuron_cells(
         builder, {halco.CapMemRowOnCapMemBlock.i_bias_synin_exc_tau:
                   calib_result.i_syn_exc_tau,
@@ -492,7 +492,7 @@ def calibrate_synin_coba(
 
     # calibrate COBA excitatory synaptic input:
     # enable excitatory COBA modulation for requested neurons
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for neuron_coord, neuron_config in zip(
             halco.iter_all(halco.NeuronConfigOnDLS),
             calib_result.neuron_configs):
@@ -518,7 +518,7 @@ def calibrate_synin_coba(
 
     # calibrate COBA inhibitory synaptic input:
     # enable inhibitory COBA modulation for requested neurons
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for neuron_coord, neuron_config in zip(
             halco.iter_all(halco.NeuronConfigOnDLS),
             calib_result.neuron_configs):
@@ -558,7 +558,7 @@ def disable_synin_and_threshold(
     :param calib_result: Neuron calibration result.
     """
 
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for neuron_coord, neuron_config in zip(
             halco.iter_all(halco.NeuronConfigOnDLS),
             calib_result.neuron_configs):

@@ -8,7 +8,7 @@ import time
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import lola, halco, hal, sta, logger, hxcomm
+from dlens_vx_v3 import lola, halco, hal, logger, hxcomm
 
 import pyccalix
 
@@ -59,7 +59,7 @@ class Multiplication:
         self.signed_mode = signed_mode
 
         # store cached reset_synin builder
-        self.cached_reset_synin = sta.PlaybackProgramBuilder()
+        self.cached_reset_synin = base.WriteRecordingPlaybackProgramBuilder()
         self.reset_synin(self.cached_reset_synin)
 
     @property
@@ -79,7 +79,7 @@ class Multiplication:
         self._synram_coord = value
 
         # update cached reset_synin builder
-        self.cached_reset_synin = sta.PlaybackProgramBuilder()
+        self.cached_reset_synin = base.WriteRecordingPlaybackProgramBuilder()
         self.reset_synin(self.cached_reset_synin)
 
     @staticmethod
@@ -114,7 +114,7 @@ class Multiplication:
 
     @classmethod
     def preconfigure_crossbar(
-            cls, builder: sta.PlaybackProgramBuilder) -> None:
+            cls, builder: base.WriteRecordingPlaybackProgramBuilder) -> None:
         """
         Configure the crossbar such that the upper bits in an event
         label select target hemisphere and PADI bus. Also enable
@@ -165,7 +165,8 @@ class Multiplication:
             builder.write(coord, padi_config)
 
     @staticmethod
-    def preconfigure_dac(builder: sta.PlaybackProgramBuilder) -> None:
+    def preconfigure_dac(
+            builder: base.WriteRecordingPlaybackProgramBuilder) -> None:
         """
         Connect the external DAC to the synapse debug lines, supplying
         a voltage of 1.2 V.
@@ -210,7 +211,7 @@ class Multiplication:
         # of synapse drivers)
         syndrv_tickets = []
         neuron_tickets = []
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
             syndrv_tickets.append(builder.read(
                 halco.SynapseDriverOnDLS(
@@ -223,7 +224,7 @@ class Multiplication:
         base.run(connection, builder)
 
         # configure synapse drivers
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord in halco.iter_all(halco.SynapseDriverOnSynapseDriverBlock):
             config = syndrv_tickets[coord.toEnum()].get()
             config.enable_address_out = False
@@ -294,7 +295,7 @@ class Multiplication:
         return synapses
 
     def reset_synin(self,
-                    builder: sta.PlaybackProgramBuilder):
+                    builder: base.WriteRecordingPlaybackProgramBuilder):
         """
         Connect synapse lines to the debug lines shortly.
 
@@ -343,7 +344,8 @@ class Multiplication:
                 coord, self._synram_coord), quad_config)
 
     def _send_vectors(self, vectors: np.ndarray
-                      ) -> Tuple[sta.PlaybackProgramBuilder, List]:
+                      ) -> Tuple[
+            base.WriteRecordingPlaybackProgramBuilder, List]:
         """
         Send given vectors and multiply them with the previously
         configured synapse matrix.
@@ -359,7 +361,7 @@ class Multiplication:
         """
 
         read_tickets = []
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         for vector in vectors.copy():
             # convert vector to address: high amplitude = low address
@@ -370,7 +372,7 @@ class Multiplication:
             helpers.wait(builder, 10 * pq.us)
 
             pyccalix.hagen.send_vectors(
-                builder, vector, num_sends=self.num_sends,
+                builder.builder, vector, num_sends=self.num_sends,
                 wait_period=self.wait_period,
                 synram_coord=self.synram_coord,
                 synram_selection_bit=self.synram_selection_bit)
@@ -447,7 +449,7 @@ class Multiplication:
         self._check_shape(vectors, matrix)
 
         # set up synapse matrix
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         synapses = self.get_synapse_matrix(matrix)
         builder.write(self._synram_coord, synapses)
 

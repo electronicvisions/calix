@@ -467,7 +467,7 @@ def calibrate(
         tau_ref=target.refractory_time, holdoff_time=target.holdoff_time)
 
     # Configure chip for calibration
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder, _ = neuron_helpers.configure_chip(
         builder, readout_neuron=options.readout_neuron)
     base.run(connection, builder)
@@ -538,7 +538,7 @@ def calibrate(
             np.arange(halco.NeuronConfigOnDLS.size)[~calib_result.success])
 
     result = calib_result.to_neuron_calib_result(target, options)
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     result.apply(builder)
     base.run(connection, builder)
 
@@ -570,7 +570,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     target.check()
 
     # apply given calibration result
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     result.apply(builder)
     base.run(connection, builder)
 
@@ -582,7 +582,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     ).calibrated_parameters
 
     # disable threshold (necessary before calibrating leak and reset)
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
         config = result.neurons[coord]
         config.threshold.enable = False
@@ -614,7 +614,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
             hal.CapMemCell.Value(v_threshold[int(coord.toEnum())])
 
     # re-enable threshold
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
         config = result.neurons[coord]
         config.threshold.enable = True
@@ -648,7 +648,7 @@ def calibrate_leak_over_threshold(
     """
 
     # apply calib result (in case chip is configured differently)
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     result.apply(builder)
     base.run(connection, builder)
 
@@ -669,6 +669,6 @@ def calibrate_leak_over_threshold(
 
     # apply calib result (restores config of neurons that are
     # not to be calibrated)
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     result.apply(builder)
     base.run(connection, builder)

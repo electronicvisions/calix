@@ -4,9 +4,9 @@ CADC calibration.
 """
 
 import numpy as np
-from dlens_vx_v3 import halco, sta, logger, hxcomm
+from dlens_vx_v3 import halco, logger, hxcomm
 
-from calix.common import cadc_helpers
+from calix.common import cadc_helpers, base
 
 
 def compare_results(uncalibrated_data: np.ndarray, calibrated_data: np.ndarray
@@ -41,9 +41,10 @@ def compare_results(uncalibrated_data: np.ndarray, calibrated_data: np.ndarray
                 quadrant_mean_after, quadrant_std_after))
 
 
-def check_calibration_success(connection: hxcomm.ConnectionHandle,
-                              builder: sta.PlaybackProgramBuilder,
-                              read_data: np.ndarray) -> None:
+def check_calibration_success(
+        connection: hxcomm.ConnectionHandle,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
+        read_data: np.ndarray) -> None:
     """
     Compare the given uncalibrated reads to a new read that is done
     with the supplied builder/connection. Logs a warning if the

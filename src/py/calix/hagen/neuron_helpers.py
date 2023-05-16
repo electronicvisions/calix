@@ -89,7 +89,7 @@ class CADCReadNeurons(sta.PlaybackGenerator):
             return inspect_read_tickets(self.tickets).flatten()
 
     @classmethod
-    def generate(cls) -> Tuple[sta.PlaybackProgramBuilder,
+    def generate(cls) -> Tuple[base.WriteRecordingPlaybackProgramBuilder,
                                CADCReadNeurons.Result]:
         """
         Generate a builder with CADC read instructions for both synrams.
@@ -99,7 +99,7 @@ class CADCReadNeurons(sta.PlaybackGenerator):
             * Result object that can be processed.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         tickets = []
         for synram in halco.iter_all(halco.SynramOnDLS):
             coord = halco.CADCSampleRowOnDLS(
@@ -110,9 +110,10 @@ class CADCReadNeurons(sta.PlaybackGenerator):
         return builder, cls.Result(tickets)
 
 
-def cadc_read_neuron_potentials(connection: hxcomm.ConnectionHandle,
-                                builder: sta.PlaybackProgramBuilder = None
-                                ) -> np.ndarray:
+def cadc_read_neuron_potentials(
+        connection: hxcomm.ConnectionHandle,
+        builder: base.WriteRecordingPlaybackProgramBuilder = None) \
+        -> np.ndarray:
     """
     Read from the CADCs and interpret the results as membrane potentials.
 
@@ -172,17 +173,18 @@ def reshape_neuron_quadrants(neuron_reads: np.ndarray) -> np.ndarray:
 
 # builders with stored neuron reset commands
 # caching these saves 25 ms per call of reset_neurons().
-neuron_reset_builders = {_coord: sta.PlaybackProgramBuilder() for _coord
-                         in halco.iter_all(halco.SynramOnDLS)}
+neuron_reset_builders = {
+    _coord: base.WriteRecordingPlaybackProgramBuilder() for _coord
+    in halco.iter_all(halco.SynramOnDLS)}
 for _synram in halco.iter_all(halco.SynramOnDLS):
     for _quad_coord in halco.iter_all(halco.SynapseQuadColumnOnDLS):
         _coord = halco.NeuronResetQuadOnDLS(_quad_coord, _synram)
         neuron_reset_builders[_synram].write(_coord, hal.NeuronResetQuad())
 
 
-def reset_neurons(builder: sta.PlaybackProgramBuilder,
+def reset_neurons(builder: base.WriteRecordingPlaybackProgramBuilder,
                   synram: halco.SynramOnDLS = None
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Trigger an artificial reset in all neurons.
 
@@ -207,7 +209,7 @@ def reset_neurons(builder: sta.PlaybackProgramBuilder,
 
 def cadc_read_neurons_repetitive(
         connection: hxcomm.ConnectionHandle,
-        builder: sta.PlaybackProgramBuilder, *,
+        builder: base.WriteRecordingPlaybackProgramBuilder, *,
         synram: halco.SynramOnDLS,
         n_reads: int = 50,
         wait_time: pq.quantity.Quantity = 1000 * pq.us,
@@ -302,8 +304,8 @@ def neuron_backend_config_default() -> hal.NeuronBackendConfig:
     return neuron_config
 
 
-def configure_integration(builder: sta.PlaybackProgramBuilder
-                          ) -> sta.PlaybackProgramBuilder:
+def configure_integration(builder: base.WriteRecordingPlaybackProgramBuilder
+                          ) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Applies static configuration required for integrate-operation of
     the neurons in hagen mode.
@@ -364,11 +366,11 @@ def configure_integration(builder: sta.PlaybackProgramBuilder
 
 
 def configure_synapses(
-        builder: sta.PlaybackProgramBuilder,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
         n_synapse_rows: int = 8, *,
         stimulation_address: hal.SynapseQuad.Label = hal.SynapseQuad.Label(0),
         weight: hal.SynapseQuad.Weight = hal.SynapseQuad.Weight(10)
-) -> sta.PlaybackProgramBuilder:
+) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Configures the synapses such that events can be sent to the neurons.
     The given number of synapse rows are enabled.
@@ -407,8 +409,8 @@ def configure_synapses(
     return builder
 
 
-def configure_stp_and_padi(builder: sta.PlaybackProgramBuilder
-                           ) -> sta.PlaybackProgramBuilder:
+def configure_stp_and_padi(builder: base.WriteRecordingPlaybackProgramBuilder
+                           ) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Configure global STP config and PADI bus config to default.
 
@@ -432,9 +434,10 @@ def configure_stp_and_padi(builder: sta.PlaybackProgramBuilder
     return builder
 
 
-def enable_all_synapse_drivers(builder: sta.PlaybackProgramBuilder,
-                               row_mode: hal.SynapseDriverConfig.RowMode
-                               ) -> sta.PlaybackProgramBuilder:
+def enable_all_synapse_drivers(
+        builder: base.WriteRecordingPlaybackProgramBuilder,
+        row_mode: hal.SynapseDriverConfig.RowMode) \
+        -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Configure synapse drivers to drive both connected rows of
     synapses either excitatory or inhibitory.
@@ -461,9 +464,9 @@ def enable_all_synapse_drivers(builder: sta.PlaybackProgramBuilder,
 
 
 def set_analog_neuron_config(
-        builder: sta.PlaybackProgramBuilder,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
         v_leak: Union[int, np.ndarray], i_leak: Union[int, np.ndarray]
-) -> Tuple[sta.PlaybackProgramBuilder,
+) -> Tuple[base.WriteRecordingPlaybackProgramBuilder,
            Dict[halco.CapMemRowOnCapMemBlock, np.ndarray]]:
     """
     Configure all neurons' CapMem cells to the given v_leak potential and
@@ -512,7 +515,8 @@ def set_analog_neuron_config(
 
 
 def set_global_capmem_config(
-        builder: sta.PlaybackProgramBuilder) -> sta.PlaybackProgramBuilder:
+        builder: base.WriteRecordingPlaybackProgramBuilder) \
+        -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Set required global bias currents to static values.
 
@@ -545,9 +549,9 @@ def set_global_capmem_config(
 
 # pylint: disable=unsupported-assignment-operation
 def configure_readout_neurons(
-        builder: sta.PlaybackProgramBuilder,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
         readout_neuron: halco.AtomicNeuronOnDLS
-) -> sta.PlaybackProgramBuilder:
+) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Configure the readout such that the membrane potential of one neuron
     and the CADC ramp is available at the pads.
@@ -603,10 +607,10 @@ def configure_readout_neurons(
     return builder
 
 
-def configure_chip(builder: sta.PlaybackProgramBuilder,
+def configure_chip(builder: base.WriteRecordingPlaybackProgramBuilder,
                    v_leak: int = 700, n_synapse_rows: int = 8,
                    readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
-                   ) -> Tuple[sta.PlaybackProgramBuilder,
+                   ) -> Tuple[base.WriteRecordingPlaybackProgramBuilder,
                               Dict[halco.CapMemRowOnCapMemBlock, np.ndarray]]:
     """
     Does all the necessary configurations on the chip to start calibrating
@@ -692,7 +696,7 @@ def reconfigure_synaptic_input(
         return
 
     # Read current neuron configurations
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     read_tickets = []
 
     for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
@@ -700,7 +704,7 @@ def reconfigure_synaptic_input(
     base.run(connection, builder)
 
     # Reconfigure CapMem bias currents
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     config = {}
     if excitatory_biases is not None:
         config.update({

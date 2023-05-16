@@ -12,7 +12,7 @@ import os
 import numpy as np
 import quantities as pq
 from scipy.optimize import curve_fit
-from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from calix.common import algorithms, base, madc_base, cadc_helpers, helpers, \
     exceptions
@@ -121,9 +121,10 @@ class SynReferenceCalib(base.Calib):
             neuron_helpers.reconfigure_synaptic_input(
                 connection, **{self._bias_current_keyword: self.bias_currents})
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given parameters to the respective CapMem cell
         determined by whether the excitatory or inhibitory synaptic input
@@ -141,8 +142,10 @@ class SynReferenceCalib(base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Measure the membrane potentials of each neuron.
 
@@ -163,7 +166,7 @@ class SynReferenceCalib(base.Calib):
         :param connection: Connection to the chip to run on.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         logger.get(
             "calix.hagen.neuron_synin.SynReferenceCalib.postlude"
@@ -347,7 +350,7 @@ class SynBiasCalib(base.Calib):
         # The actual number of enabled synapse rows is later configured with
         # the help of `neuron_helpers.configure_synapses`.
         builder = neuron_helpers.enable_all_synapse_drivers(
-            builder=sta.PlaybackProgramBuilder(),
+            builder=base.WriteRecordingPlaybackProgramBuilder(),
             row_mode=self._row_mode)
         builder = neuron_helpers.configure_synapses(builder)
         base.run(connection, builder)
@@ -363,7 +366,8 @@ class SynBiasCalib(base.Calib):
 
             for _ in range(max_retries):
                 self.target = int(np.median(self.measure_amplitudes(
-                    connection, builder=sta.PlaybackProgramBuilder(),
+                    connection,
+                    builder=base.WriteRecordingPlaybackProgramBuilder(),
                     recalibrate_syn_ref=False)))
                 if self.target < self.reliable_amplitudes:
                     break
@@ -384,9 +388,10 @@ class SynBiasCalib(base.Calib):
             log.DEBUG("Target amplitude for i_bias_syn calibration: "
                       + f"{self.target}")
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the bias current of the synaptic input OTA of all neurons
         to the given parameters. The target can be the excitatory or the
@@ -406,7 +411,7 @@ class SynBiasCalib(base.Calib):
         return builder
 
     def measure_amplitudes(self, connection: hxcomm.ConnectionHandle,
-                           builder: sta.PlaybackProgramBuilder,
+                           builder: base.WriteRecordingPlaybackProgramBuilder,
                            recalibrate_syn_ref: Optional[bool] = None
                            ) -> np.ndarray:
         """
@@ -487,7 +492,7 @@ class SynBiasCalib(base.Calib):
 
             base.run(connection, builder)
 
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # Inspect reads
         baselines = neuron_helpers.inspect_read_tickets(
@@ -499,8 +504,10 @@ class SynBiasCalib(base.Calib):
 
         return np.mean(differences, axis=0) * self._expected_sign
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Measure results of calibration.
 
@@ -525,7 +532,7 @@ class SynBiasCalib(base.Calib):
         :param connection: Connection to the chip to run on.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         log = logger.get("calix.hagen.neuron_synin"
                          + ".SynBiasCalib.postlude")
@@ -659,7 +666,7 @@ class SynTimeConstantCalib(madc_base.Calib):
         # prepare MADC
         super().prelude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # Ensure synaptic inputs are disabled (the readout mux is
         # not capable of disconnecting more than 1.2 V):
@@ -683,9 +690,10 @@ class SynTimeConstantCalib(madc_base.Calib):
         # run program
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configures the given array of synaptic input resistor bias currents.
 
@@ -702,10 +710,10 @@ class SynTimeConstantCalib(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Send some PADI events to the synaptic input in order to
         drop the potential.
@@ -928,7 +936,7 @@ class SynReferenceCalibMADC(madc_base.Calib):
         # prepare MADC
         super().prelude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # disable leak OTA
         builder = helpers.capmem_set_neuron_cells(
@@ -938,9 +946,10 @@ class SynReferenceCalibMADC(madc_base.Calib):
         # run program
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configures the given array of synaptic input reference potentials.
 
@@ -957,10 +966,10 @@ class SynReferenceCalibMADC(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Reset the neuron's membrane potential.
 
@@ -1031,8 +1040,10 @@ class SynReferenceCalibMADC(madc_base.Calib):
 
         return np.array(neuron_fits)[:, 0]
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Executes multiple measurements on chip, returns the mean result.
 
@@ -1047,7 +1058,8 @@ class SynReferenceCalibMADC(madc_base.Calib):
         results = np.empty((self.n_runs, halco.NeuronConfigOnDLS.size))
         for run_id in range(self.n_runs):
             results[run_id] = super().measure_results(
-                connection, builder=sta.PlaybackProgramBuilder())
+                connection,
+                builder=base.WriteRecordingPlaybackProgramBuilder())
 
         return np.mean(results, axis=0)
 

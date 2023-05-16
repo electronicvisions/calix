@@ -2,7 +2,7 @@ import numbers
 from typing import Optional, Union, ClassVar
 import unittest
 import numpy as np
-from dlens_vx_v3 import sta, logger
+from dlens_vx_v3 import logger
 
 from mock_connection_setup import ConnectionSetup
 
@@ -197,7 +197,7 @@ class _AlgorithmsGeneral(ConnectionSetup):
             self.n_instances, axis=1)
         results = np.empty_like(parameters, dtype=float)
         for parameter_id, parameter in enumerate(parameters):
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             builder = calibration.configure_parameters(builder, parameter)
             results[parameter_id] = calibration.measure_results(
                 self.connection, builder)

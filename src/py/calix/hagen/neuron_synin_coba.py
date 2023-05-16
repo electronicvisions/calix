@@ -9,7 +9,7 @@ from abc import abstractmethod
 
 import numpy as np
 
-from dlens_vx_v3 import halco, hal, sta, hxcomm, logger
+from dlens_vx_v3 import halco, hal, hxcomm, logger
 
 from calix import constants
 from calix.common import algorithms, base, boundary_check, helpers
@@ -136,9 +136,10 @@ class COBAReferenceCalib(base.Calib):
 
         self.cuba_bias_calib.prelude(connection)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given COBA reference potentials.
 
@@ -175,7 +176,7 @@ class COBAReferenceCalib(base.Calib):
             Given in CapMem LSB, used for the lower (upper) measurement.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         reference_low = boundary_check.check_range_boundaries(
             self.parameters - slope_estimation_distance,
             self.parameter_range).parameters
@@ -185,7 +186,7 @@ class COBAReferenceCalib(base.Calib):
         resting_potential_low = neuron_helpers.cadc_read_neuron_potentials(
             connection, builder)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         reference_high = boundary_check.check_range_boundaries(
             self.parameters + slope_estimation_distance,
             self.parameter_range).parameters
@@ -200,8 +201,9 @@ class COBAReferenceCalib(base.Calib):
 
         return slope
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) -> np.ndarray:
         """
         Measure synaptic input amplitudes.
 
@@ -223,7 +225,7 @@ class COBAReferenceCalib(base.Calib):
 
         # Measure amplitudes
         results = self.cuba_bias_calib.measure_amplitudes(
-            connection, builder=sta.PlaybackProgramBuilder())
+            connection, builder=base.WriteRecordingPlaybackProgramBuilder())
 
         # If the difference between leak (resting) potential without and with
         # COBA is high, decide in which direction the reference potential
@@ -474,13 +476,13 @@ class COBABiasCalib(base.Calib):
         """
 
         # disable COBA modulation for leak calibration and CUBA measurement
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         tickets = []
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
         base.run(connection, builder)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, ticket in zip(
                 halco.iter_all(halco.NeuronConfigOnDLS), tickets):
             config = ticket.get()
@@ -503,7 +505,7 @@ class COBABiasCalib(base.Calib):
         # Measure (original CUBA) amplitude
         self.cuba_bias_calib.prelude(connection)
         cuba_amplitudes = self.cuba_bias_calib.measure_amplitudes(
-            connection, builder=sta.PlaybackProgramBuilder())
+            connection, builder=base.WriteRecordingPlaybackProgramBuilder())
         self.log.DEBUG(
             "Target amplitude near reference potential:", cuba_amplitudes)
 
@@ -551,16 +553,17 @@ class COBABiasCalib(base.Calib):
         self.target = 0
 
         # restore original COBA modulation enables
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, ticket in zip(
                 halco.iter_all(halco.NeuronConfigOnDLS), tickets):
             config = ticket.get()
             builder.write(coord, config)
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given bias currents on the chip.
 
@@ -579,8 +582,10 @@ class COBABiasCalib(base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Measure the synaptic input amplitudes close to the
         reversal potential.
@@ -633,7 +638,7 @@ class COBABiasCalib(base.Calib):
 
         # measure amplitude at e_coba_reversal (or maximum leak potential)
         results = self.cuba_bias_calib.measure_amplitudes(
-            connection, builder=sta.PlaybackProgramBuilder())
+            connection, builder=base.WriteRecordingPlaybackProgramBuilder())
 
         # Invert result for instances that get measured on the other
         # side of the reference potential
@@ -659,7 +664,7 @@ class COBABiasCalib(base.Calib):
         """
 
         # set up leak at e_coba_reference
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.v_leak:
                       self.leak_parameters_reference})

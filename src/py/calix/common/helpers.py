@@ -9,10 +9,12 @@ import quantities as pq
 from dlens_vx_v3 import hal, sta, halco
 
 import pyccalix
+from calix.common import base
 
 
-def wait(builder: sta.PlaybackProgramBuilder,
-         waiting_time: pq.quantity.Quantity) -> sta.PlaybackProgramBuilder:
+def wait(builder: base.WriteRecordingPlaybackProgramBuilder,
+         waiting_time: pq.quantity.Quantity) \
+        -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Waits for a given amount of time.
 
@@ -54,9 +56,9 @@ def capmem_noise(start: int = -5, end: int = 6,
 
 
 def capmem_set_quadrant_cells(
-        builder: sta.PlaybackProgramBuilder,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
         config: Dict[halco.CapMemCellOnCapMemBlock, Union[int, np.ndarray]]
-) -> sta.PlaybackProgramBuilder:
+) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Set multiple CapMem cells that are global per quadrant to the same
     provided values.
@@ -83,9 +85,9 @@ def capmem_set_quadrant_cells(
 
 
 def capmem_set_neuron_cells(
-        builder: sta.PlaybackProgramBuilder,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
         config: Dict[halco.CapMemRowOnCapMemBlock, Union[int, np.ndarray]]
-) -> sta.PlaybackProgramBuilder:
+) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Set single CapMem rows on the neurons to the desired values.
     Expects parameters to be configured along with the
@@ -108,6 +110,7 @@ def capmem_set_neuron_cells(
 
     noise_amplitude = 5
 
+    dumper = sta.PlaybackProgramBuilderDumper()
     for capmem_row, parameters in config.items():
         # Add noise if single, non-zero value is given
         if not isinstance(parameters, np.ndarray):
@@ -122,8 +125,10 @@ def capmem_set_neuron_cells(
             config[capmem_row] = parameters
 
         # Append write instructions to builder
-        pyccalix.helpers.write_capmem_row(builder,
+        pyccalix.helpers.write_capmem_row(dumper,
                                           capmem_row,
                                           config[capmem_row])
 
+    builder.dumper.copy_back(dumper)
+    builder.builder.merge_back(sta.convert_to_builder(dumper))
     return builder

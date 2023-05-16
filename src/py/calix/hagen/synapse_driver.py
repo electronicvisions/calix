@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from calix.common import algorithms, base, helpers
 from calix.hagen import multiplication
@@ -61,8 +61,7 @@ class SynapseDriverCalibResult(base.CalibResult):
         halco.SynapseDriverOnDLS, hal.SynapseDriverConfig]
     success: Dict[halco.SynapseDriverOnDLS, bool]
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]):
+    def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
         """
         Apply the calibration result in the given builder.
 
@@ -140,8 +139,8 @@ class _SynapseDriverResultInternal:
         return result
 
 
-def preconfigure_capmem(builder: sta.PlaybackProgramBuilder
-                        ) -> sta.PlaybackProgramBuilder:
+def preconfigure_capmem(builder: base.WriteRecordingPlaybackProgramBuilder
+                        ) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Set necessary static biases required for hagen mode.
 
@@ -461,9 +460,10 @@ class STPRampCalib(base.Calib):
         self.log = logger.get(
             "calix.hagen.synapse_driver.STPRampCalib")
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given STP ramp currents to the CapMem quadrants.
 
@@ -530,7 +530,7 @@ class STPRampCalib(base.Calib):
         self.log.DEBUG("STP ramp calib target amplitudes:", self.target)
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Measure the amplitudes of all drivers at a low activation.
@@ -617,9 +617,10 @@ class HagenDACOffsetCalib(base.Calib):
         self.log = logger.get(
             "calix.hagen.synapse_driver.HagenDACOffsetCalib")
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the synapse drivers to the given offsets.
 
@@ -640,7 +641,7 @@ class HagenDACOffsetCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Read output amplitudes of synapse drivers.
@@ -676,7 +677,7 @@ class HagenDACOffsetCalib(base.Calib):
         previous_test_activation = self.test_activation
         self.test_activation = hal.PADIEvent.HagenActivation.max
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         for capmem_block in halco.iter_all(halco.CapMemBlockOnDLS):
             coord = halco.CapMemCellOnDLS(
@@ -694,7 +695,7 @@ class HagenDACOffsetCalib(base.Calib):
                        maximum_amplitudes)
 
         # restore previous i_ramp and test activation
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for capmem_block in halco.iter_all(halco.CapMemBlockOnDLS):
             coord = halco.CapMemCellOnDLS(
                 halco.CapMemCellOnCapMemBlock.stp_i_ramp, capmem_block)
@@ -735,7 +736,7 @@ class HagenDACOffsetCalib(base.Calib):
         self.log.TRACE("Calibrated DAC offsets:\n"
                        + f"{self.result.calibrated_parameters}")
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
         self.log.DEBUG(
             "Deviation of synapse driver amplitudes after offset calib: "
@@ -778,7 +779,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         options = SynapseDriverCalibOptions()
 
     # preconfigure chip
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder = preconfigure_capmem(builder)
     base.run(connection, builder)
 

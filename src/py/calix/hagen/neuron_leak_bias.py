@@ -19,7 +19,7 @@ import os
 import numpy as np
 import quantities as pq
 from scipy.optimize import curve_fit
-from dlens_vx_v3 import hal, sta, halco, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from calix.common import algorithms, base, exceptions, madc_base, helpers
 from calix.hagen import neuron_potentials, neuron_helpers
@@ -132,9 +132,10 @@ class MembraneTimeConstCalibCADC(base.Calib):
         self.target = self.target_leak_read - (
             self.target_leak_read - target_reset_read) / np.e
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the leak OTA bias currents of all neurons to the given
         values.
@@ -175,7 +176,7 @@ class MembraneTimeConstCalibCADC(base.Calib):
         read_positions = []
 
         runs_in_builder = 0
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for target_neuron in halco.iter_all(halco.NeuronConfigOnDLS):
             # Reset neuron
             builder.write(target_neuron.toNeuronResetOnDLS(),
@@ -215,7 +216,7 @@ class MembraneTimeConstCalibCADC(base.Calib):
             if runs_in_builder == runs_per_builder:
                 base.run(connection, builder)
 
-                builder = sta.PlaybackProgramBuilder()
+                builder = base.WriteRecordingPlaybackProgramBuilder()
                 runs_in_builder = 0
             else:
                 runs_in_builder += 1
@@ -240,8 +241,10 @@ class MembraneTimeConstCalibCADC(base.Calib):
 
         return results
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Calibrate the leak potentials such that the CADC reads match
         the read targets.
@@ -356,7 +359,7 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
         super().prelude(connection)
 
         # set reset potential low and leak potential high
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_neuron_cells(
             builder, {
                 halco.CapMemRowOnCapMemBlock.v_reset: 520,
@@ -372,7 +375,7 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
 
         # measure at low leak bias current: If time constant is still
         # smaller than the target, then enable division.
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.configure_parameters(
             builder, parameters=np.ones(self.n_instances, dtype=int) * 63
             + helpers.capmem_noise(size=self.n_instances))
@@ -381,7 +384,7 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
 
         # measure at high leak bias current: If time constant is still
         # larger than the target, then enable multiplication.
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.configure_parameters(
             builder, parameters=np.ones(self.n_instances, dtype=int)
             * (hal.CapMemCell.Value.max - 63)
@@ -414,14 +417,15 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
         """
 
         # restore original readout config
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder.write(halco.ReadoutSourceSelectionOnDLS(),
                       self.original_readout_config)
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given array of leak bias currents.
 
@@ -437,10 +441,10 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Reset the neuron membrane potential to a low voltage.
 
@@ -663,7 +667,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
         super().prelude(connection)
 
         # set offset current onto membrane (enabled later)
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_mem_offset: 1000})
         builder = helpers.wait(builder, constants.capmem_level_off_time)
@@ -681,7 +685,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
 
             # measure at maximum leak bias current: If time constant is
             # smaller than the target, then keep division enabled.
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             builder = self.configure_parameters(
                 # subtract CapMem noise amplitude
                 builder, parameters=hal.CapMemCell.Value.max - 5)
@@ -715,7 +719,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
         # neuron would now be spiking regularly.
 
         # restore original readout config
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder.write(halco.ReadoutSourceSelectionOnDLS(),
                       self.original_readout_config)
 
@@ -725,9 +729,10 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given array of leak bias currents.
 
@@ -776,10 +781,10 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
         config.enable_membrane_offset = True
         return config
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Disable the membrane offset current.
 
@@ -981,9 +986,10 @@ class LeakBiasCalib(base.Calib):
             self.target_leak_read = \
                 neuron_helpers.cadc_read_neuron_potentials(connection)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure leak OTA bias currents to the given parameters.
 
@@ -1001,7 +1007,7 @@ class LeakBiasCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Measure the noise on each neuron's membrane.
@@ -1032,7 +1038,8 @@ class LeakBiasCalib(base.Calib):
         for synram in halco.iter_all(halco.SynramOnDLS):
             synram_results.append(
                 neuron_helpers.cadc_read_neurons_repetitive(
-                    connection, builder=sta.PlaybackProgramBuilder(),
+                    connection,
+                    builder=base.WriteRecordingPlaybackProgramBuilder(),
                     synram=synram, n_reads=n_reads, wait_time=5000 * pq.us,
                     reset=True))
 
@@ -1085,7 +1092,7 @@ class LeakBiasCalib(base.Calib):
         log = logger.get("calix.hagen.neuron_leak_bias.LeakBiasCalib")
 
         # Measure noise again
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         results = self.measure_results(connection, builder)
 
         # Mask too noisy neurons

@@ -5,7 +5,7 @@ import errno
 from hashlib import sha256
 import os
 from typing import List, Optional
-from dlens_vx_v3 import hxcomm, sta, logger
+from dlens_vx_v3 import hxcomm, logger
 import pyccalix
 from calix.common import base
 
@@ -20,16 +20,6 @@ if os.getenv("XDG_CACHE_HOME") is not None:
     _DEFAULT_LOCAL_CACHE = Path(os.getenv("XDG_CACHE_HOME")).joinpath("calix")
 else:
     _DEFAULT_LOCAL_CACHE = Path.home().joinpath(".cache", "calix")
-
-
-def _calibrate(
-    connection,
-    target: base.TopLevelCalibTarget,
-    options: Optional[base.CalibOptions] = None,
-) -> base.CalibResult:
-    builder, _ = sta.generate(sta.ExperimentInit())
-    sta.run(connection, builder.done())
-    return target.calibrate(connection, options)
 
 
 def calibrate(
@@ -62,11 +52,15 @@ def calibrate(
 
     if connection is None:
         conn_manager = hxcomm.ManagedConnection()
-        connection = conn_manager.__enter__()
+        connection = base.StatefulConnection(
+            conn_manager.__enter__())
+    else:
+        if not isinstance(connection, base.StatefulConnection):
+            raise RuntimeError("Only StatefulConnection is supported.")
 
     if len(cache_paths) == 0:
         log.info("List of calib cache paths is empty, cache disabled.")
-        return _calibrate(connection, target, options)
+        return target.calibrate(connection, options)
 
     # The key into the cache is defined by the parameters target, options.
     # As the data-holding parameters are mutable, we define a custom hashing
@@ -89,7 +83,7 @@ def calibrate(
 
     # no cache found
     log.INFO("Executing calibration")
-    result = _calibrate(connection, target, options)
+    result = target.calibrate(connection, options)
 
     if cache_read_only:
         return result

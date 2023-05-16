@@ -8,7 +8,7 @@ changing the leak potential in one neuron after another.
 
 import unittest
 import numpy as np
-from dlens_vx_v3 import sta, halco, hal, logger
+from dlens_vx_v3 import halco, hal, logger
 
 from connection_setup import ConnectionSetup
 
@@ -30,8 +30,9 @@ class TestCADCAssignment(ConnectionSetup):
     """
 
     @classmethod
-    def preconfigure_chip(cls, builder: sta.PlaybackProgramBuilder
-                          ) -> sta.PlaybackProgramBuilder:
+    def preconfigure_chip(
+            cls, builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Set the CADC debug voltage low and all neurons' leak voltage high.
         Also enable readout of the neuron membranes, but don't connect
@@ -68,9 +69,9 @@ class TestCADCAssignment(ConnectionSetup):
 
     @classmethod
     def enable_synapse_switch(
-            cls, builder: sta.PlaybackProgramBuilder,
+            cls, builder: base.WriteRecordingPlaybackProgramBuilder,
             neuron_coord: halco.NeuronConfigOnDLS
-    ) -> sta.PlaybackProgramBuilder:
+    ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Switch on the neuron readout for the given column correlation switch.
         All other switches are connected to the debug line.
@@ -107,9 +108,10 @@ class TestCADCAssignment(ConnectionSetup):
         return builder
 
     @classmethod
-    def set_leak_pattern(cls, builder: sta.PlaybackProgramBuilder,
-                         neuron_coord: halco.NeuronConfigOnDLS
-                         ) -> sta.PlaybackProgramBuilder:
+    def set_leak_pattern(
+        cls, builder: base.WriteRecordingPlaybackProgramBuilder,
+        neuron_coord: halco.NeuronConfigOnDLS) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Set the leak potential for one neuron low. The other neurons are
         set to a value of 1000 (plus noise), which yields a high CADC read.
@@ -155,7 +157,7 @@ class TestCADCAssignment(ConnectionSetup):
         """
 
         # Preconfigure chip for reading synapse assignment
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.preconfigure_chip(builder)
         base.run(self.connection, builder)
 
@@ -164,7 +166,7 @@ class TestCADCAssignment(ConnectionSetup):
         # For each synapse switch assert it affects the right channels
         for neuron_id, neuron_coord in enumerate(
                 halco.iter_all(halco.NeuronConfigOnDLS)):
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             builder = self.enable_synapse_switch(builder, neuron_coord)
             results = neuron_helpers.cadc_read_neuron_potentials(
                 self.connection, builder)
@@ -198,7 +200,7 @@ class TestCADCAssignment(ConnectionSetup):
         """
 
         # connect all CADC channels to the neurons
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         quad_config = hal.ColumnCorrelationQuad()
         switch_config = hal.ColumnCorrelationQuad.ColumnCorrelationSwitch()
@@ -220,7 +222,7 @@ class TestCADCAssignment(ConnectionSetup):
         # For each neuron assert the leak potential changes the CADC reads
         for neuron_id, neuron_coord in enumerate(
                 halco.iter_all(halco.NeuronConfigOnDLS)):
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             builder = self.set_leak_pattern(builder, neuron_coord)
             results = neuron_helpers.cadc_read_neuron_potentials(
                 self.connection, builder)

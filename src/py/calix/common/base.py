@@ -14,10 +14,90 @@ from dlens_vx_v3 import halco, hal, sta, logger, hxcomm, lola
 from calix.common.boundary_check import check_range_boundaries
 
 
-def run(connection: hxcomm.ConnectionHandle,
-        builder: sta.PlaybackProgramBuilder) -> sta.PlaybackProgram:
+class WriteRecordingPlaybackProgramBuilder:
+    def __init__(self):
+        self.builder = sta.PlaybackProgramBuilder()
+        self.dumper = sta.PlaybackProgramBuilderDumper()
+        self.cocos = {}
+
+    def done(self):
+        for coord, config in self.cocos.items():
+            self.dumper.write(coord, config)
+        self.cocos = {}
+        return self.builder.done(), self.dumper.done()
+
+    def merge_back(self, other):
+        self.builder.merge_back(other.builder)
+        self.dumper.merge_back(other.dumper)
+        self.cocos.update(other.cocos)
+        other.cocos = {}
+
+    def copy_back(self, other):
+        self.builder.copy_back(other.builder)
+        self.dumper.copy_back(other.dumper)
+        self.cocos.update(other.cocos)
+
+    def block_until(self, coord, config):
+        self.builder.block_until(coord, config)
+
+    def write(self, coord, config, backend=None):
+        if backend is not None:
+            self.builder.write(coord, config, backend)
+        else:
+            self.builder.write(coord, config)
+        self.cocos.update({coord: config})
+
+    def read(self, coord, backend=None):
+        if backend is not None:
+            return self.builder.read(coord, backend)
+        return self.builder.read(coord)
+
+    def empty(self):
+        return self.builder.empty() and self.dumper.empty()
+
+
+class StatefulConnection:
+    def __init__(
+            self,
+            connection: hxcomm.ConnectionHandle,
+            init: sta.ExperimentInit = sta.ExperimentInit()):
+        self.connection = connection
+        self.reinit = sta.ReinitStackEntry(self.connection)
+        self.init = init
+        self.dumper = sta.PlaybackProgramBuilderDumper()
+
+        builder, _ = sta.generate(init)
+        self.reinit.set(builder.done(), enforce=True)
+
+    def update_reinit(self, dumperdone: sta.DumperDone):
+        dumperdone.remove_block_until()
+        self.dumper.merge_back(sta.convert_to_dumper(dumperdone))
+        dumperdone = self.dumper.done()
+        dumperdone.squash()
+        self.dumper = sta.convert_to_dumper(dumperdone)
+
+        dumper_copy = sta.PlaybackProgramBuilderDumper()
+        dumper_copy.copy_back(self.dumper)
+
+        sta_builder, _ = sta.generate(self.init)
+        sta_builder.merge_back(sta.convert_to_builder(dumper_copy))
+        sta_builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
+        sta_builder.write(halco.TimerOnDLS(), hal.Timer())
+        sta_builder.block_until(
+            halco.TimerOnDLS(), hal.Timer.Value(
+                hal.Timer.Value.fpga_clock_cycles_per_us * 1000 * 100))
+        self.reinit.set(sta_builder.done(), enforce=False)
+
+    def get_unique_identifier(self):
+        return self.connection.get_unique_identifier()
+
+
+def run(connection: StatefulConnection,
+        builder: WriteRecordingPlaybackProgramBuilder) -> sta.PlaybackProgram:
     """
     Wraps the stadls run function.
+
+    Records all write accesses and updates the connection's reinit program.
 
     Includes a barrier, blocking for the omnibus being idle, before
     the end of the program. The finished program is returned,
@@ -30,8 +110,9 @@ def run(connection: hxcomm.ConnectionHandle,
     """
 
     builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
-    program = builder.done()
-    sta.run(connection, program)
+    program, dumperdone = builder.done()
+    sta.run(connection.connection, program)
+    connection.update_reinit(dumperdone)
     return program
 
 
@@ -192,8 +273,13 @@ class CalibResult(ABC):
         if initial_config is None:
             initial_config = sta.PlaybackProgramBuilderDumper()
 
-        self.apply(initial_config)
-        dumperdone = initial_config.done()
+        builder = WriteRecordingPlaybackProgramBuilder()
+        builder.dumper = initial_config
+        dumper_copy = sta.PlaybackProgramBuilderDumper()
+        dumper_copy.copy_back(builder.dumper)
+        builder.builder = sta.convert_to_builder(dumper_copy)
+        self.apply(builder)
+        _, dumperdone = builder.done()
 
         if chip is None:
             chip = lola.Chip()
@@ -273,9 +359,10 @@ class Calib(ABC):
         """
 
     @abstractmethod
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> WriteRecordingPlaybackProgramBuilder:
         """
         Function to set up parameters for testing.
 
@@ -296,8 +383,9 @@ class Calib(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: WriteRecordingPlaybackProgramBuilder) -> np.ndarray:
         """
         Function to measure the observable.
 

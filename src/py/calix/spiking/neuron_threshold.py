@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import List, Union, Optional
 import numpy as np
 import quantities as pq
-from dlens_vx_v3 import hal, halco, sta, logger, hxcomm
+from dlens_vx_v3 import hal, halco, logger, hxcomm
 
 from calix.common import algorithms, base, cadc_helpers, helpers, madc_base
 from calix.hagen import neuron_helpers
@@ -32,9 +32,10 @@ class _SpikeCounterCalib(base.Calib):
         self.accumulation_time: pq.quantity.Quantity = 2000 * pq.us
         self.target: int = 30  # number of spikes in accumulation time
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given spike threshold potentials in the
         given builder.
@@ -52,7 +53,7 @@ class _SpikeCounterCalib(base.Calib):
         return builder
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Resets the spike counters, waits for a suitable amount of time,
@@ -67,7 +68,7 @@ class _SpikeCounterCalib(base.Calib):
 
         # run previous program (may be large)
         base.run(connection, builder)
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # Start timing-critical program: reset timer, wait a bit
         initial_wait = 100 * pq.us
@@ -158,13 +159,13 @@ class NeuronThresholdCalib(_SpikeCounterCalib):
 
         # Read current neuron configs
         tickets = []
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord in halco.iter_all(halco.NeuronConfigOnDLS):
             tickets.append(builder.read(coord))
         base.run(connection, builder)
 
         # Enable spiking in neurons
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, ticket in zip(
                 halco.iter_all(halco.NeuronConfigOnDLS), tickets):
             neuron_config = ticket.get()
@@ -209,7 +210,7 @@ class NeuronThresholdCalib(_SpikeCounterCalib):
         for error in result.messages:
             log.WARN(error)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.configure_parameters(
             builder, self.result.calibrated_parameters)
         log.INFO("Calibrated neuron threshold potentials.")
@@ -326,7 +327,7 @@ class LeakOverThresholdCalib(_SpikeCounterCalib):
         """
 
         # read original neuron config and CapMem values
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         neuron_tickets = []
         for coord in halco.iter_all(halco.AtomicNeuronOnDLS):
             neuron_tickets.append(builder.read(coord))
@@ -369,7 +370,7 @@ class LeakOverThresholdCalib(_SpikeCounterCalib):
         log.DEBUG("Threshold at reset:", self.threshold_at_reset)
 
         # restore original neuron config and CapMem values
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, ticket in zip(
                 halco.iter_all(halco.AtomicNeuronOnDLS), neuron_tickets):
             builder.write(coord, ticket.get())
@@ -383,9 +384,10 @@ class LeakOverThresholdCalib(_SpikeCounterCalib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given spike threshold potentials in the
         given builder.
@@ -407,7 +409,7 @@ class LeakOverThresholdCalib(_SpikeCounterCalib):
         return super().configure_parameters(builder, parameters)
 
     def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder
+                        builder: base.WriteRecordingPlaybackProgramBuilder
                         ) -> np.ndarray:
         """
         Measures the spike rate without synaptic input.
@@ -489,7 +491,7 @@ class ThresholdCalibMADC(madc_base.Calib):
         # prepare MADC
         super().prelude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # set reset potential low, set constant current, disable leak
         builder = helpers.capmem_set_neuron_cells(
@@ -502,9 +504,10 @@ class ThresholdCalibMADC(madc_base.Calib):
         # run program
         base.run(connection, builder)
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given array of threshold voltages.
 
@@ -520,10 +523,10 @@ class ThresholdCalibMADC(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder: base.WriteRecordingPlaybackProgramBuilder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_time: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Empty function. The offset current is enabled already in the
         `neuron_config_readout`, therefore no stimuli are neccesary.
@@ -610,7 +613,7 @@ class ThresholdCalibMADC(madc_base.Calib):
 
         super().postlude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_neuron_cells(
             builder, {
                 halco.CapMemRowOnCapMemBlock.i_mem_offset: 0})
@@ -663,7 +666,7 @@ class ThresholdCalibCADC(base.Calib):
         :param connection: Connection to the chip to calibrate.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # read original neuron config
         tickets = []
@@ -697,9 +700,10 @@ class ThresholdCalibCADC(base.Calib):
                 halco.iter_all(halco.NeuronConfigOnDLS), tickets):
             self.original_neuron_configs.append(ticket.get())
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
-                             parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+    def configure_parameters(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
+            parameters: np.ndarray) \
+            -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given array of threshold voltages.
 
@@ -715,8 +719,10 @@ class ThresholdCalibCADC(base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def measure_results(self, connection: hxcomm.ConnectionHandle,
-                        builder: sta.PlaybackProgramBuilder) -> np.ndarray:
+    def measure_results(
+            self, connection: hxcomm.ConnectionHandle,
+            builder: base.WriteRecordingPlaybackProgramBuilder) \
+            -> np.ndarray:
         """
         Samples the membrane repeatedly and returns the maximum obtained
         value as the voltage measurement closest to the threshold.
@@ -757,7 +763,7 @@ class ThresholdCalibCADC(base.Calib):
 
         super().postlude(connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_neuron_cells(
             builder, {
                 halco.CapMemRowOnCapMemBlock.i_mem_offset: 0})

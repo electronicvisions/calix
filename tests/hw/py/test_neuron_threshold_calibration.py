@@ -60,14 +60,14 @@ class NeuronThresholdTest(ConnectionSetup):
         """
 
         # Read neuron backend configs
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         tickets = []
         for coord in halco.iter_all(halco.NeuronBackendConfigOnDLS):
             tickets.append(builder.read(coord))
         base.run(connection, builder)
 
         # Write modified neuron backend configs
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, ticket in zip(
                 halco.iter_all(halco.NeuronBackendConfigOnDLS), tickets):
             config = ticket.get()
@@ -161,7 +161,7 @@ class NeuronThresholdTest(ConnectionSetup):
         # test for spike response
         self.preconfigure(self.connection, weight=32)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # buffer program for a bit
         builder = helpers.wait(builder, 1000 * pq.us)
@@ -219,7 +219,8 @@ class NeuronThresholdTest(ConnectionSetup):
             check = neuron_threshold.ThresholdCalibCADC()
             check.prelude(self.connection)
             results = check.measure_results(
-                self.connection, builder=sta.PlaybackProgramBuilder())
+                self.connection,
+                builder=base.WriteRecordingPlaybackProgramBuilder())
 
             # assert at most 5% of neurons deviate by more than 8 CADC LSB
             # from median threshold of all neurons
@@ -250,7 +251,8 @@ class NeuronThresholdTest(ConnectionSetup):
             check = neuron_threshold.ThresholdCalibMADC()
             check.prelude(self.connection)
             results = check.measure_results(
-                self.connection, builder=sta.PlaybackProgramBuilder())
+                self.connection,
+                builder=base.WriteRecordingPlaybackProgramBuilder())
             self.__class__.log.TRACE(
                 f"MADC results at target {target}:", results)
 

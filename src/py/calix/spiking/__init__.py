@@ -4,7 +4,7 @@ from typing import Optional, Union
 from dataclasses import dataclass, field
 from warnings import warn
 
-from dlens_vx_v3 import sta, hxcomm, hal, halco
+from dlens_vx_v3 import hxcomm, hal, halco
 
 from calix.common import base, cadc
 from calix.spiking import neuron, correlation
@@ -77,8 +77,7 @@ class SpikingCalibResult(base.CalibResult):
     neuron_result: neuron.NeuronCalibResult
     correlation_result: Optional[correlation.CorrelationCalibResult] = None
 
-    def apply(self, builder: Union[sta.PlaybackProgramBuilder,
-                                   sta.PlaybackProgramBuilderDumper]):
+    def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
         """
         Apply the calib to the chip.
 

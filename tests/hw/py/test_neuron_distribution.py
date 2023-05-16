@@ -5,7 +5,7 @@ import numpy as np
 import scipy.stats
 import quantities as pq
 
-from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
+from dlens_vx_v3 import hal, halco, hxcomm, logger
 
 from connection_setup import ConnectionSetup
 
@@ -112,7 +112,7 @@ class TestNeuronDistribution(ConnectionSetup):
             :param connection: Connection to the chip to run on.
             """
 
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             self.calibration.configure_parameters(
                 builder, self.uncalibrated_value)
             base.run(connection, builder)
@@ -134,14 +134,15 @@ class TestNeuronDistribution(ConnectionSetup):
             """
 
             # apply original calib
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             self.calib_result.apply(builder)
             base.run(connection, builder)
 
             # measure in calibrated state
             self.calibration.prelude(connection)
             calibrated_result = self.calibration.measure_results(
-                connection, builder=sta.PlaybackProgramBuilder())
+                connection,
+                builder=base.WriteRecordingPlaybackProgramBuilder())
             self.log.DEBUG(self.name, ": ", calibrated_result)
             if results is not None:
                 results.update({self.name: calibrated_result})
@@ -149,7 +150,8 @@ class TestNeuronDistribution(ConnectionSetup):
             # equalize parameters, measure in uncalibrated state
             self.equalize_parameters(connection)
             uncalibrated_result = self.calibration.measure_results(
-                connection, builder=sta.PlaybackProgramBuilder())
+                connection,
+                builder=base.WriteRecordingPlaybackProgramBuilder())
             self.log.DEBUG(self.name + "_uncalibrated: ", uncalibrated_result)
             if results is not None:
                 results.update(
@@ -287,7 +289,7 @@ class TestNeuronDistribution(ConnectionSetup):
             def equalize_parameters(self, connection: hxcomm.ConnectionHandle):
                 self.calibration = second_calibration
                 self.calibration.prelude(connection)
-                builder = sta.PlaybackProgramBuilder()
+                builder = base.WriteRecordingPlaybackProgramBuilder()
                 self.calibration.configure_parameters(
                     builder, self.uncalibrated_value)
                 base.run(connection, builder)

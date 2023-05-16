@@ -10,8 +10,9 @@ from dlens_vx_v3 import halco, hal, sta, hxcomm
 from calix.common import base, helpers
 
 
-def configure_readout_cadc_debug(builder: sta.PlaybackProgramBuilder
-                                 ) -> sta.PlaybackProgramBuilder:
+def configure_readout_cadc_debug(
+        builder: base.WriteRecordingPlaybackProgramBuilder) \
+        -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Writes the readout chain configuration in a way that allows
     reading the capmem debug cell output voltage at the
@@ -53,8 +54,8 @@ def configure_readout_cadc_debug(builder: sta.PlaybackProgramBuilder
     return builder
 
 
-def configure_chip(builder: sta.PlaybackProgramBuilder
-                   ) -> sta.PlaybackProgramBuilder:
+def configure_chip(builder: base.WriteRecordingPlaybackProgramBuilder
+                   ) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Configures the chip from an arbitrary state to run CADC calibration.
 
@@ -100,9 +101,9 @@ def configure_chip(builder: sta.PlaybackProgramBuilder
 
 
 def cadc_read_row(
-        builder: sta.PlaybackProgramBuilder,
+        builder: base.WriteRecordingPlaybackProgramBuilder,
         synram: halco.SynramOnDLS
-) -> Tuple[sta.PlaybackProgramBuilder, sta.ContainerTicket]:
+) -> Tuple[base.WriteRecordingPlaybackProgramBuilder, sta.ContainerTicket]:
     """
     Read one row of CADCs and return the read ticket.
 
@@ -122,8 +123,10 @@ def cadc_read_row(
     return builder, ticket
 
 
-def read_cadcs(connection: hxcomm.ConnectionHandle,
-               builder: sta.PlaybackProgramBuilder = None) -> np.ndarray:
+def read_cadcs(
+        connection: hxcomm.ConnectionHandle,
+        builder: base.WriteRecordingPlaybackProgramBuilder = None) \
+        -> np.ndarray:
     """
     Read all CADC channels in order top causal, top acausal,
     bottom causal, bottom acausal. Dump results into a numpy array.
@@ -144,7 +147,7 @@ def read_cadcs(connection: hxcomm.ConnectionHandle,
 
     # Construct read builder
     read_tickets = []
-    read_builder = sta.PlaybackProgramBuilder()
+    read_builder = base.WriteRecordingPlaybackProgramBuilder()
 
     for synram in halco.iter_all(halco.SynramOnDLS):
         read_builder, ticket = cadc_read_row(read_builder, synram)

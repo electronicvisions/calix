@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import sta, halco, hal, hxcomm
+from dlens_vx_v3 import halco, hal, hxcomm
 
 from calix.common import algorithms, base
 from calix.hagen import neuron_helpers, neuron_evaluation, \
@@ -95,7 +95,7 @@ def calibrate(
     target.check()
 
     # Configure chip for calibration
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     builder, initial_config = neuron_helpers.configure_chip(
         builder, readout_neuron=options.readout_neuron)
     base.run(connection, builder)
@@ -122,12 +122,12 @@ def calibrate(
 
     # select small capacitance mode for syn. input lines
     tickets = []
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for coord in halco.iter_all(halco.NeuronConfigOnDLS):
         tickets.append(builder.read(coord))
     base.run(connection, builder)
 
-    builder = sta.PlaybackProgramBuilder()
+    builder = base.WriteRecordingPlaybackProgramBuilder()
     for coord, ticket in zip(halco.iter_all(halco.NeuronConfigOnDLS), tickets):
         config = ticket.get()
         config.enable_synaptic_input_excitatory_small_capacitance = True

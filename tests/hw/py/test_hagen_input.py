@@ -9,7 +9,7 @@ from typing import Optional
 
 import numpy as np
 
-from dlens_vx_v3 import hal, halco, sta, logger
+from dlens_vx_v3 import hal, halco, logger
 
 from connection_setup import ConnectionSetup
 
@@ -138,7 +138,7 @@ class HagenInputTest(ConnectionSetup):
         """
 
         # Overwrite synapse driver calibration
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_quadrant_cells(
             builder,
             {halco.CapMemCellOnCapMemBlock.stp_i_ramp: 400})
@@ -161,7 +161,7 @@ class HagenInputTest(ConnectionSetup):
         """
 
         # Apply calibration again
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         self.__class__.calib_result.synapse_driver_result.apply(builder)
         base.run(self.connection, builder)
 

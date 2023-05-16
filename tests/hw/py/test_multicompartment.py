@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import halco, sta, hal, logger
+from dlens_vx_v3 import halco, hal, logger
 
 from connection_setup import ConnectionSetup
 
@@ -91,7 +91,7 @@ class TestICCCalib(ConnectionSetup):
         # Calibrate CADC
         cadc.calibrate(self.connection)
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder, _ = neuron_helpers.configure_chip(builder)
         base.run(self.connection, builder)
 
@@ -104,7 +104,7 @@ class TestICCCalib(ConnectionSetup):
 
         # reapply the neuron configs of the calibration, which were overwritten
         # during the postlude, which is called in run
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, config in zip(halco.iter_all(halco.NeuronConfigOnDLS),
                                  calibration.neuron_configs):
             builder.write(coord, config)
@@ -118,7 +118,7 @@ class TestICCCalib(ConnectionSetup):
             calibration.neuron_configs)
 
         # write the most common neuron config for all neurons
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         for coord, config in zip(halco.iter_all(halco.NeuronConfigOnDLS),
                                  calibration.neuron_configs):
             builder.write(coord, config)

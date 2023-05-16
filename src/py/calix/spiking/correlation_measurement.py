@@ -10,7 +10,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 import quantities as pq
 
-from dlens_vx_v3 import hal, halco, sta, lola, hxcomm, logger
+from dlens_vx_v3 import hal, halco, lola, hxcomm, logger
 
 import pyccalix
 
@@ -83,7 +83,8 @@ class CorrelationMeasurement:
             "calix.spiking.correlation.CorrelationMeasurement")
 
     @staticmethod
-    def configure_base(builder: sta.PlaybackProgramBuilder) -> None:
+    def configure_base(
+            builder: base.WriteRecordingPlaybackProgramBuilder) -> None:
         """
         Basic config for reading correlation.
 
@@ -131,7 +132,8 @@ class CorrelationMeasurement:
             builder.write(coord, config)
 
     @staticmethod
-    def configure_input(builder: sta.PlaybackProgramBuilder) -> None:
+    def configure_input(
+            builder: base.WriteRecordingPlaybackProgramBuilder) -> None:
         """
         Configures PADI bus and synapse drivers such that
         pre-pulses can be sent to all synapse rows.
@@ -159,7 +161,8 @@ class CorrelationMeasurement:
                 halco.SynapseDriverOnDLS):
             builder.write(synapse_driver_coord, synapse_driver_config)
 
-    def configure_capmem(self, builder: sta.PlaybackProgramBuilder) -> None:
+    def configure_capmem(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder) -> None:
         """
         Configure synapse bias currents for the correlation sensors.
 
@@ -175,7 +178,7 @@ class CorrelationMeasurement:
         helpers.wait(builder, constants.capmem_level_off_time)
 
     def configure_synapses(
-            self, builder: sta.PlaybackProgramBuilder,
+            self, builder: base.WriteRecordingPlaybackProgramBuilder,
             quad: halco.SynapseQuadColumnOnDLS) -> None:
         """
         Set the columns of synapses in the given column quad to the
@@ -214,7 +217,8 @@ class CorrelationMeasurement:
 
             builder.write(synram, synapses)
 
-    def configure_all(self, builder: sta.PlaybackProgramBuilder) -> None:
+    def configure_all(
+            self, builder: base.WriteRecordingPlaybackProgramBuilder) -> None:
         """
         Preconfigure the chip for correlation measurements.
 
@@ -233,7 +237,7 @@ class CorrelationMeasurement:
         :param connection: Connection to the chip to run on.
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         self.configure_all(builder)
         base.run(connection, builder)
 
@@ -263,7 +267,7 @@ class CorrelationMeasurement:
             [1]: https://brainscales-r.kip.uni-heidelberg.de/projects/symap2ic/wiki/xboard#putting-a-new-board-into-service  # pylint: disable=line-too-long
         """
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         self.configure_synapses(builder, quad)
         base.run(connection, builder)
 
@@ -273,7 +277,7 @@ class CorrelationMeasurement:
             dtype=int)
 
         for delay_id, delay in enumerate(self.delays):
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
 
             # reach "stable pattern":
             # Send the second pulse of correlated pairs once before starting.
@@ -282,17 +286,18 @@ class CorrelationMeasurement:
             # a long time ago. This is documented in issue 4021, which is
             # worked around here.
             if delay > 0:  # pre before post
-                pyccalix.spiking.send_postpulse(builder, quad, synram)
+                pyccalix.spiking.send_postpulse(builder.builder, quad, synram)
             else:  # post before pre
-                pyccalix.spiking.send_prepulse(builder, synram, self.address)
+                pyccalix.spiking.send_prepulse(
+                    builder.builder, synram, self.address)
             helpers.wait(builder, 1 * pq.ms)
 
             # Reset correlations
-            pyccalix.spiking.reset_correlation(builder, quad, synram)
+            pyccalix.spiking.reset_correlation(builder.builder, quad, synram)
 
             # Read baseline correlations
             baselines = pyccalix.spiking.read_correlation(
-                builder, quad, synram)
+                builder.builder, quad, synram)
 
             # Send correlated pulses
             builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
@@ -308,9 +313,10 @@ class CorrelationMeasurement:
 
                 if delay > 0:  # pre before post
                     pyccalix.spiking.send_prepulse(
-                        builder, synram, self.address)
+                        builder.builder, synram, self.address)
                 else:  # post before pre
-                    pyccalix.spiking.send_postpulse(builder, quad, synram)
+                    pyccalix.spiking.send_postpulse(
+                        builder.builder, quad, synram)
 
                 # wait for delay
                 builder.block_until(
@@ -321,13 +327,15 @@ class CorrelationMeasurement:
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 if delay > 0:  # pre before post
-                    pyccalix.spiking.send_postpulse(builder, quad, synram)
+                    pyccalix.spiking.send_postpulse(
+                        builder.builder, quad, synram)
                 else:  # post before pre
                     pyccalix.spiking.send_prepulse(
-                        builder, synram, self.address)
+                        builder.builder, synram, self.address)
 
             # Read correlation
-            results = pyccalix.spiking.read_correlation(builder, quad, synram)
+            results = pyccalix.spiking.read_correlation(
+                builder.builder, quad, synram)
 
             # Run program, evaluate results
             base.run(connection, builder)

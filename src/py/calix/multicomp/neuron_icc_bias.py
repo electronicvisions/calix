@@ -111,7 +111,7 @@ class ICCMADCCalib(madc_base.Calib):
             v_leak = self.v_leak
         # set i_bias_leak initially high to ensure a sufficient leak potential
         # calibration
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = helpers.capmem_set_neuron_cells(
             builder, {halco.CapMemRowOnCapMemBlock.i_bias_leak:
                       hal.CapMemCell.Value.max})
@@ -138,7 +138,7 @@ class ICCMADCCalib(madc_base.Calib):
             connection, excitatory_biases=0, inhibitory_biases=0)
 
         # calibrate leak potential alternating
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         leak_calib = neuron_potentials.LeakPotentialCalib(v_leak)
         leak_calib.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
@@ -191,7 +191,7 @@ class ICCMADCCalib(madc_base.Calib):
 
         # measure at low icc/nmda bias current: If time constant is still
         # smaller than the target, then enable division.
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.configure_parameters(
             builder, parameters=200 + helpers.capmem_noise(
                 size=self.n_instances))
@@ -200,7 +200,7 @@ class ICCMADCCalib(madc_base.Calib):
 
         # measure at high icc/nmda bias current: If time constant is still
         # larger than the target, then enable multiplication.
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.configure_parameters(
             builder, parameters=hal.CapMemCell.Value.max - 63
             + helpers.capmem_noise(size=self.n_instances))
@@ -225,9 +225,9 @@ class ICCMADCCalib(madc_base.Calib):
                 enable_multiply_multicomp_conductance_bias = \
                 enable_multiplication[neuron_id]
 
-    def configure_parameters(self, builder: sta.PlaybackProgramBuilder,
+    def configure_parameters(self, builder,
                              parameters: np.ndarray
-                             ) -> sta.PlaybackProgramBuilder:
+                             ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Configure the given array of inter-compartment conductance bias
         currents.
@@ -243,10 +243,10 @@ class ICCMADCCalib(madc_base.Calib):
         builder = helpers.wait(builder, constants.capmem_level_off_time)
         return builder
 
-    def stimulate(self, builder: sta.PlaybackProgramBuilder,
+    def stimulate(self, builder,
                   neuron_coord: halco.NeuronConfigOnDLS,
                   stimulation_wait: hal.Timer.Value
-                  ) -> sta.PlaybackProgramBuilder:
+                  ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Enables the inter-compartment conductance (ICC) between the
         compartments resulting in an approach of their membrane potentials.

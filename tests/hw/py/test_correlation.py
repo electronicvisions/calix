@@ -10,7 +10,7 @@ import unittest
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import halco, sta, lola, logger
+from dlens_vx_v3 import halco, lola, logger
 
 from connection_setup import ConnectionSetup
 
@@ -60,7 +60,7 @@ class TestCorrelation(ConnectionSetup):
         """
 
         # set correlation voltages
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         dac_config = lola.DACChannelBlock().default_ldo_2
         dac_config.set_voltage(halco.DACChannelOnBoard.v_res_meas, 0.95)
         dac_config.set_voltage(halco.DACChannelOnBoard.mux_dac_25, 1.85)
@@ -114,7 +114,7 @@ class TestCorrelation(ConnectionSetup):
         """
 
         # unset correlation voltages, calibration must set them itself
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder.write(halco.DACChannelBlockOnBoard(),
                       lola.DACChannelBlock().default_ldo_2)
         base.run(self.connection, builder)

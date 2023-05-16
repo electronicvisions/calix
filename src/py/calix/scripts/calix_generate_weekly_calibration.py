@@ -18,6 +18,7 @@ from calix.spiking import correlation
 from calix.scripts.calix_generate_default_calibration import \
     CalibRecorder, RecorderAndDumper, CalixFormatDumper, \
     CocoListPortableBinaryFormatDumper, CocoListJsonFormatDumper
+from calix.common.base import StatefulConnection
 
 log = logger.get("calix")
 logger.set_loglevel(log, logger.LogLevel.DEBUG)
@@ -65,7 +66,8 @@ def run_and_save_all(deployment_folder: Path):
     """
     with ManagedConnection() as connection:
         for calib in [CorrelationCalib()]:
-            calib.record_and_dump(connection, deployment_folder)
+            calib.record_and_dump(
+                StatefulConnection(connection), deployment_folder)
 
 
 if __name__ == "__main__":

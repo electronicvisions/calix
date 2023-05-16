@@ -9,7 +9,7 @@ from typing import Union, Optional, ClassVar
 import numbers
 from abc import abstractmethod
 import numpy as np
-from dlens_vx_v3 import sta, hxcomm
+from dlens_vx_v3 import hxcomm
 
 from calix.common import base, boundary_check, exceptions, helpers
 
@@ -122,7 +122,7 @@ class BinarySearch(base.Algorithm):
 
         for step, increment in enumerate(self.step_increments):
             # Configure parameters, measure results
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             builder = self.calibration.configure_parameters(
                 builder, parameters)
             results = self.calibration.measure_results(connection, builder)
@@ -171,7 +171,7 @@ class BinarySearch(base.Algorithm):
             np.arange(self.calibration.n_instances)]
 
         # Set up best parameters again
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(
             builder, best_parameters)
         base.run(connection, builder)
@@ -342,7 +342,7 @@ class LinearSearch(base.Algorithm):
                 parameters, self.calibration.parameter_range).parameters
 
             # Configure parameters, measure results
-            builder = sta.PlaybackProgramBuilder()
+            builder = base.WriteRecordingPlaybackProgramBuilder()
             builder = self.calibration.configure_parameters(
                 builder, parameters)
             results = self.calibration.measure_results(connection, builder)
@@ -383,7 +383,7 @@ class LinearSearch(base.Algorithm):
             np.arange(self.calibration.n_instances)]
 
         # Set up best parameters again
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(builder, parameters)
         base.run(connection, builder)
 
@@ -453,7 +453,7 @@ class PredictiveModel(base.Algorithm):
                 self.calibration.n_instances, dtype=int
             ) * self.probe_parameters
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(
             builder, probe_parameters)
         probe_results = self.calibration.measure_results(connection, builder)
@@ -462,7 +462,7 @@ class PredictiveModel(base.Algorithm):
         optimal_parameters = boundary_check.check_range_boundaries(
             optimal_parameters, self.calibration.parameter_range).parameters
 
-        builder = sta.PlaybackProgramBuilder()
+        builder = base.WriteRecordingPlaybackProgramBuilder()
         builder = self.calibration.configure_parameters(
             builder, optimal_parameters)
         base.run(connection, builder)
