@@ -84,8 +84,9 @@ class TestNeuronCalib(ConnectionSetup):
         for event in range(n_events):  # send some spikes
             builder.block_until(
                 halco.TimerOnDLS(),
-                int((event * wait_between_events.rescale(pq.us)) * int(
-                    hal.Timer.Value.fpga_clock_cycles_per_us)))
+                hal.Timer.Value(
+                    int((event * wait_between_events.rescale(pq.us)) * int(
+                        hal.Timer.Value.fpga_clock_cycles_per_us))))
             for coord in halco.iter_all(halco.PADIEventOnDLS):
                 builder.write(coord, padi_event)
 

@@ -188,7 +188,7 @@ class Recorder(ABC):
     def build_measurement_program(
             self, builder: sta.PlaybackProgramBuilder) -> Tuple[
                 sta.PlaybackProgramBuilder, List[
-                    sta.ContainerTicket_NullPayloadReadable]]:
+                    sta.ContainerTicket]]:
         """
         Builds a program to measure an arbitrary MADC trace for each
         neuron.
@@ -275,8 +275,9 @@ class Recorder(ABC):
                 + self.wait_between_neurons * int(neuron_coord.toEnum())
             builder.block_until(
                 halco.TimerOnDLS(),
-                int(current_time.rescale(pq.us)
-                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+                hal.Timer.Value(
+                    int(current_time.rescale(pq.us)
+                        * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
             madc_control = hal.MADCControl()
             madc_control.enable_power_down_after_sampling = \
                 int(neuron_coord.toEnum()) == halco.NeuronConfigOnDLS.max
@@ -296,8 +297,9 @@ class Recorder(ABC):
             current_time += self.invalid_samples_time
             builder.block_until(
                 halco.TimerOnDLS(),
-                int(current_time.rescale(pq.us)
-                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+                hal.Timer.Value(
+                    int(current_time.rescale(pq.us)
+                        * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
             switching_time_tickets.append(builder.read(
                 halco.NullPayloadReadableOnFPGA()))
 
@@ -305,8 +307,9 @@ class Recorder(ABC):
             current_time += self._wait_before_stimulation
             builder.block_until(
                 halco.TimerOnDLS(),
-                int((current_time).rescale(pq.us)
-                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+                hal.Timer.Value(
+                    int((current_time).rescale(pq.us)
+                        * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
             # stimulate
             builder = self.stimulate(
@@ -319,8 +322,9 @@ class Recorder(ABC):
                 * (int(neuron_coord.toEnum()) + 1)
             builder.block_until(
                 halco.TimerOnDLS(),
-                int(current_time.rescale(pq.us)
-                    * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+                hal.Timer.Value(
+                    int(current_time.rescale(pq.us)
+                        * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
             # read something once valid samples end (to get time)
             switching_time_tickets.append(builder.read(

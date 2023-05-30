@@ -10,14 +10,12 @@
 
 namespace ccalix::spiking::correlation_measurement {
 
-std::vector<stadls::vx::v3::PlaybackProgram::ContainerTicket<haldls::vx::v3::CADCSampleQuad>>
-read_correlation(
+std::vector<stadls::vx::v3::ContainerTicket> read_correlation(
     stadls::vx::v3::PlaybackProgramBuilder& builder,
     const halco::hicann_dls::vx::v3::SynapseQuadColumnOnDLS quad,
     const halco::hicann_dls::vx::v3::SynramOnDLS synram)
 {
-	std::vector<stadls::vx::v3::PlaybackProgram::ContainerTicket<haldls::vx::v3::CADCSampleQuad>>
-	    tickets;
+	std::vector<stadls::vx::v3::ContainerTicket> tickets;
 
 	for (auto const row :
 	     halco::common::iter_all<halco::hicann_dls::vx::v3::SynapseRowOnSynram>()) {
@@ -56,8 +54,7 @@ void reset_correlation(
 }
 
 pybind11::array_t<uint_fast16_t> evaluate_correlation(
-    std::vector<stadls::vx::v3::PlaybackProgram::ContainerTicket<haldls::vx::v3::CADCSampleQuad>>
-        tickets)
+    std::vector<stadls::vx::v3::ContainerTicket> tickets)
 {
 	auto results = pybind11::array_t<uint_fast16_t>(
 	    {halco::hicann_dls::vx::v3::EntryOnQuad::size,
@@ -70,7 +67,7 @@ pybind11::array_t<uint_fast16_t> evaluate_correlation(
 	for (size_t ticket_id = 0; ticket_id < tickets.size(); ++ticket_id) {
 		auto ticket = tickets.at(ticket_id);
 
-		auto result = ticket.get();
+		auto const& result = dynamic_cast<haldls::vx::v3::CADCSampleQuad const&>(ticket.get());
 		for (auto const entry_on_quad :
 		     halco::common::iter_all<halco::hicann_dls::vx::v3::EntryOnQuad>()) {
 			size_t index = results.index_at(

@@ -15,8 +15,8 @@ from calix import constants
 
 def inspect_read_tickets(
         read_tickets: Union[
-            sta.ContainerTicket_CADCSampleRow,
-            List[sta.ContainerTicket_CADCSampleRow]]
+            sta.ContainerTicket,
+            List[sta.ContainerTicket]]
 ) -> np.ndarray:
     """
     Iterate the given read tickets and return the contained results as an
@@ -74,7 +74,7 @@ class CADCReadNeurons(sta.PlaybackGenerator):
         """
 
         def __init__(self, tickets: List[
-                sta.ContainerTicket_CADCSampleRow]):
+                sta.ContainerTicket]):
             self.tickets = tickets
 
         def to_numpy(self) -> np.ndarray:

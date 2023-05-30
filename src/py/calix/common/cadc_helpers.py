@@ -102,8 +102,7 @@ def configure_chip(builder: sta.PlaybackProgramBuilder
 def cadc_read_row(
         builder: sta.PlaybackProgramBuilder,
         synram: halco.SynramOnDLS
-) -> Tuple[sta.PlaybackProgramBuilder,
-           sta.ContainerTicket_CADCSampleRow]:
+) -> Tuple[sta.PlaybackProgramBuilder, sta.ContainerTicket]:
     """
     Read one row of CADCs and return the read ticket.
 

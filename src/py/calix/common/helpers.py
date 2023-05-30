@@ -28,9 +28,9 @@ def wait(builder: sta.PlaybackProgramBuilder,
     # Returning the modified builder is regarded as bad style.
     # This returning should be removed, also elsewhere, cf. issue 3952
     builder.write(halco.TimerOnDLS(), hal.Timer())
-    builder.block_until(halco.TimerOnDLS(), int(
+    builder.block_until(halco.TimerOnDLS(), hal.Timer.Value(int(
         waiting_time.rescale(pq.us)
-        * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+        * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
     return builder
 
 

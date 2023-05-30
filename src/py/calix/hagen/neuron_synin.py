@@ -455,8 +455,11 @@ class SynBiasCalib(base.Calib):
                 for i in range(self.n_events):
                     builder.block_until(
                         halco.TimerOnDLS(),
-                        int(i * self.wait_between_events.rescale(pq.us) * int(
-                            hal.Timer.Value.fpga_clock_cycles_per_us)))
+                        hal.Timer.Value(
+                            int(i * self.wait_between_events.rescale(pq.us)
+                                * int(
+                                    hal.Timer.Value.fpga_clock_cycles_per_us)))
+                    )
                     builder.write(synram.toPADIEventOnDLS(), padi_event)
 
                 # Wait like for 2 events (some 2 * tau_syn) before CADC read.
@@ -465,9 +468,10 @@ class SynBiasCalib(base.Calib):
                 # to leakage.
                 builder.block_until(
                     halco.TimerOnDLS(),
-                    int((self.n_events + 1)
-                        * self.wait_between_events.rescale(pq.us)
-                        * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+                    hal.Timer.Value(
+                        int((self.n_events + 1)
+                            * self.wait_between_events.rescale(pq.us)
+                            * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 # final measurement in the same builder
                 builder, ticket = cadc_helpers.cadc_read_row(

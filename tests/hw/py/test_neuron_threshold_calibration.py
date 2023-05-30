@@ -184,8 +184,9 @@ class NeuronThresholdTest(ConnectionSetup):
         for i in range(self.n_events):
             builder.block_until(
                 halco.TimerOnDLS(),
-                int(i * self.wait_time.rescale(pq.us) * int(
-                    hal.Timer.Value.fpga_clock_cycles_per_us)))
+                hal.Timer.Value(
+                    int(i * self.wait_time.rescale(pq.us) * int(
+                        hal.Timer.Value.fpga_clock_cycles_per_us))))
             for synram in halco.iter_all(halco.SynramOnDLS):
                 builder.write(synram.toPADIEventOnDLS(), padi_event)
 

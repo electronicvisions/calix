@@ -5,6 +5,7 @@
 #include "halco/hicann-dls/vx/v3/synram.h"
 #include "haldls/vx/v3/cadc.h"
 #include "haldls/vx/v3/synapse.h"
+#include "stadls/vx/v3/container_ticket.h"
 #include "stadls/vx/v3/playback_program.h"
 #include "stadls/vx/v3/playback_program_builder.h"
 
@@ -25,11 +26,10 @@ namespace correlation_measurement {
  * @param synram Synram to be used.
  * @return List of read tickets, ordered [causal row 0, acausal row 0, causal row 1, ...]
  */
-SYMBOL_VISIBLE GENPYBIND(visible) std::
-    vector<stadls::vx::v3::PlaybackProgram::ContainerTicket<haldls::vx::v3::CADCSampleQuad>> read_correlation(
-        stadls::vx::v3::PlaybackProgramBuilder& builder,
-        const halco::hicann_dls::vx::v3::SynapseQuadColumnOnDLS quad,
-        const halco::hicann_dls::vx::v3::SynramOnDLS synram);
+SYMBOL_VISIBLE GENPYBIND(visible) std::vector<stadls::vx::v3::ContainerTicket> read_correlation(
+    stadls::vx::v3::PlaybackProgramBuilder& builder,
+    const halco::hicann_dls::vx::v3::SynapseQuadColumnOnDLS quad,
+    const halco::hicann_dls::vx::v3::SynramOnDLS synram);
 
 /**
  * Reset all synapse correlations in given quad.
@@ -52,8 +52,7 @@ SYMBOL_VISIBLE GENPYBIND(visible) void reset_correlation(
  *      and the causal/acausal correlation.
  */
 SYMBOL_VISIBLE GENPYBIND(visible) pybind11::array_t<uint_fast16_t> evaluate_correlation(
-    std::vector<stadls::vx::v3::PlaybackProgram::ContainerTicket<haldls::vx::v3::CADCSampleQuad>>
-        tickets);
+    std::vector<stadls::vx::v3::ContainerTicket> tickets);
 
 /**
   * Send a PADI event to all drivers, i.e. an STDP prepulse to all

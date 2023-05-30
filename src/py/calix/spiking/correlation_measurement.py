@@ -302,8 +302,9 @@ class CorrelationMeasurement:
                 time_offset = self.wait_between_pairs * (event_id + 1)
                 builder.block_until(
                     halco.TimerOnDLS(),
-                    int(time_offset.rescale(pq.us).magnitude * int(
-                        hal.Timer.Value.fpga_clock_cycles_per_us)))
+                    hal.Timer.Value(
+                        int(time_offset.rescale(pq.us).magnitude * int(
+                            hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 if delay > 0:  # pre before post
                     pyccalix.spiking.send_prepulse(
@@ -314,9 +315,10 @@ class CorrelationMeasurement:
                 # wait for delay
                 builder.block_until(
                     halco.TimerOnDLS(),
-                    int((time_offset + np.abs(delay)
-                         ).rescale(pq.us).magnitude
-                        * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
+                    hal.Timer.Value(
+                        int((time_offset + np.abs(delay)).rescale(pq.us)
+                            .magnitude
+                            * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 if delay > 0:  # pre before post
                     pyccalix.spiking.send_postpulse(builder, quad, synram)

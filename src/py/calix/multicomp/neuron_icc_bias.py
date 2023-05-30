@@ -292,8 +292,9 @@ class ICCMADCCalib(madc_base.Calib):
         # Disconnect compartments after wait
         builder.block_until(
             halco.TimerOnDLS(),
-            int(stimulation_wait) + int(self.sampling_time.rescale(pq.us))
-            * int(hal.Timer.Value.fpga_clock_cycles_per_us))
+            hal.Timer.Value(
+                int(stimulation_wait) + int(self.sampling_time.rescale(pq.us))
+                * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
         builder.write(
             halco.NeuronConfigOnDLS(halco.common.Enum(neighboring_id)),
