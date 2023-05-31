@@ -126,6 +126,7 @@ class TestNeuronCalib(ConnectionSetup):
             builder.write(coord, config)
 
         # set synapses for stimulus
+        neuron_helpers.configure_stp_and_padi(builder)
         neuron_helpers.enable_all_synapse_drivers(
             builder,
             row_mode=hal.SynapseDriverConfig.RowMode.excitatory if excitatory

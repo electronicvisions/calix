@@ -3,12 +3,15 @@ Provides a calibration class for the synapse driver STP offset
 for the usual spiking mode.
 """
 
-from typing import Union
+from dataclasses import dataclass
+from typing import Union, Optional
+
 import numpy as np
-from dlens_vx_v3 import hal, halco, hxcomm, logger
+
+from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
 from calix import constants
-from calix.common import base, helpers
+from calix.common import algorithms, base, helpers
 import calix.hagen.synapse_driver as hagen_driver
 from calix.hagen import multiplication
 
@@ -159,7 +162,8 @@ class STPOffsetCalib(base.Calib):
             halco.CapMemCellOnCapMemBlock.stp_v_recover_0: self.v_stp,
             halco.CapMemCellOnCapMemBlock.stp_i_ramp: self.i_ramp,
             halco.CapMemCellOnCapMemBlock.stp_i_calib: self.i_ramp,
-            halco.CapMemCellOnCapMemBlock.stp_i_bias_comparator: 1022
+            halco.CapMemCellOnCapMemBlock.stp_i_bias_comparator:
+            hal.CapMemCell.Value.max
         })
         builder = helpers.wait(builder, constants.capmem_level_off_time)
 
@@ -203,3 +207,138 @@ class STPOffsetCalib(base.Calib):
         ).INFO(
             "Deviation of synapse driver amplitudes after offset calib: "
             + f"{np.std(results):4.2f}")
+
+
+@dataclass
+class STPCalibTarget(base.CalibTarget):
+    """
+    Target for STP calibration.
+
+    The STP voltages, which affect the dynamic range of the amplitudes,
+    are set here. They are currently not calibrated, but can be set per
+    quadrant.
+
+    :param v_charge_0: STP v_charge (fully modulated state) for
+        voltage set 0, in CapMem LSB. You can choose the two voltage
+        sets to be, e.g., depressing and facilitating. By default, we
+        select voltage set 0 to be facilitating and voltage set 1 to
+        be depressing.
+    :param v_recover_0: STP v_recover (fully recovered state) for
+        voltage set 0, in CapMem LSB. Note that a utilization of some
+        0.2 happens before processing each event, so the voltage applied
+        to the comparator never actually reaches v_recover.
+    :param v_charge_1: STP v_charge (fully modulated state) for
+        voltage set 1, in CapMem LSB.
+    :param v_recover_1: STP v_recover (fully recovered state) for
+        voltage set 1, in CapMem LSB.
+    """
+
+    v_charge_0 = 100
+    v_recover_0 = 400
+    v_charge_1 = 330
+    v_recover_1 = 50
+
+
+@dataclass
+class STPCalibOptions(base.CalibOptions):
+    """
+    Set bias parameters for the STP circuitry.
+
+    All parameters can be configured per quadrant.
+
+    :param i_ramp: Ramp current for STP pulse width modulation,
+        in CapMem LSB.
+    :param v_stp: Voltage (STP state) where all drivers' amplitudes are
+        equalized at, in CapMem LSB. Should be chosen between
+        v_charge and v_recover.
+    """
+
+    i_ramp = 600
+    v_stp = 180
+
+
+@dataclass
+class STPCalibResult(base.CalibResult):
+    """
+    Result from STP calibration.
+    """
+
+    offsets: np.ndarray
+
+    def apply(self, builder: sta.PlaybackProgramBuilder):
+        """
+        Apply the result in the given builder.
+
+        Note that in the synapse driver config, no outputs are generated,
+        and STP is disabled. Only the offset is configured by this calib.
+        So STP is ready to be used, but disabled.
+
+        :param builder: Builder to append instructions to.
+        """
+
+        config = {
+            halco.CapMemCellOnCapMemBlock.stp_i_ramp: self.options.i_ramp,
+            halco.CapMemCellOnCapMemBlock.stp_i_calib: self.options.i_ramp,
+            halco.CapMemCellOnCapMemBlock.stp_v_charge_0:
+            self.target.v_charge_0,
+            halco.CapMemCellOnCapMemBlock.stp_v_charge_1:
+            self.target.v_charge_1,
+            halco.CapMemCellOnCapMemBlock.stp_v_recover_0:
+            self.target.v_recover_0,
+            halco.CapMemCellOnCapMemBlock.stp_v_recover_1:
+            self.target.v_recover_1,
+            halco.CapMemCellOnCapMemBlock.stp_i_bias_comparator:
+            hal.CapMemCell.Value.max,
+        }
+
+        helpers.capmem_set_quadrant_cells(builder, config)
+        helpers.wait(builder, constants.capmem_level_off_time)
+
+        for coord in halco.iter_all(halco.SynapseDriverOnDLS):
+            config = hal.SynapseDriverConfig()
+            config.offset = hal.SynapseDriverConfig.Offset(
+                self.offsets[int(coord.toEnum())])
+            builder.write(coord, config)
+
+
+def calibrate(connection: hxcomm.ConnectionHandle, *,
+              target: Optional[STPCalibTarget] = None,
+              options: Optional[STPCalibOptions] = None,
+              ) -> STPCalibResult:
+    """
+    Calibrate all synapse drivers' STP offsets.
+
+    The STP ramp current is set as provided in the options.
+    The other STP voltages, as given in the options, are configured
+    after calibration.
+
+    Requirements:
+    * CADCs and Synapse DAC biases are calibrated.
+
+    :param connection: Connection to the chip to calibrate.
+    :param target: Target parameters for calibration.
+    :param options: Further options for calibration, including STP
+        voltages.
+
+    :return: STP calib result.
+    """
+
+    if target is None:
+        target = STPCalibTarget()
+    if options is None:
+        options = STPCalibOptions()
+
+    target.check()
+
+    calib = STPOffsetCalib(i_ramp=options.i_ramp, v_stp=options.v_stp)
+    calib_result = calib.run(connection, algorithm=algorithms.BinarySearch())
+
+    result = STPCalibResult(
+        target=target, options=options,
+        offsets=calib_result.calibrated_parameters)
+
+    builder = base.WriteRecordingPlaybackProgramBuilder()
+    result.apply(builder)
+    base.run(connection, builder)
+
+    return result

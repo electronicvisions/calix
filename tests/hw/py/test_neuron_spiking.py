@@ -63,6 +63,7 @@ class TestNeuronCalib(ConnectionSetup):
         tickets = []
 
         builder = base.WriteRecordingPlaybackProgramBuilder()
+        neuron_helpers.configure_stp_and_padi(builder)
         builder = neuron_helpers.enable_all_synapse_drivers(
             builder, row_mode=hal.SynapseDriverConfig.RowMode.excitatory
             if excitatory else hal.SynapseDriverConfig.RowMode.inhibitory)

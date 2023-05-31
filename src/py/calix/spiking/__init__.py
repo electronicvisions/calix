@@ -7,7 +7,7 @@ from warnings import warn
 from dlens_vx_v3 import hxcomm, hal, halco
 
 from calix.common import base, cadc
-from calix.spiking import neuron, correlation
+from calix.spiking import neuron, correlation, synapse_driver
 
 
 @dataclass
@@ -19,6 +19,7 @@ class SpikingCalibTarget(base.TopLevelCalibTarget):
     :ivar neuron_target: Target parameters for neuron calibration.
     :ivar correlation_target: Target parameters for calibration of
         correlation sensors. If None, they will not be calibrated.
+    :ivar stp_target: Target for STP calibration.
     """
 
     cadc_target: cadc.CADCCalibTarget = field(
@@ -26,6 +27,8 @@ class SpikingCalibTarget(base.TopLevelCalibTarget):
     neuron_target: neuron.NeuronCalibTarget = field(
         default_factory=neuron.NeuronCalibTarget)
     correlation_target: Optional[correlation.CorrelationCalibTarget] = None
+    stp_target: synapse_driver.STPCalibTarget = field(
+        default_factory=synapse_driver.STPCalibTarget)
 
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,
@@ -42,6 +45,7 @@ class SpikingCalibOptions(base.CalibOptions):
     :ivar cadc_options: Further options for CADC calibration.
     :ivar neuron_options: Further options for neuron calibration.
     :ivar correlation_options: Further options for correlation calibration.
+    :ivar stp_options: Further options for STP calibration.
     :ivar refine_potentials: Switch whether after the neuron calibration,
         the CADCs and neuron potentials are calibrated again. This mitigates
         CapMem crosstalk effects. By default, refinement is only performed
@@ -54,6 +58,8 @@ class SpikingCalibOptions(base.CalibOptions):
         default_factory=neuron.NeuronCalibOptions)
     correlation_options: correlation.CorrelationCalibOptions = field(
         default_factory=correlation.CorrelationCalibOptions)
+    stp_options: synapse_driver.STPCalibOptions = field(
+        default_factory=synapse_driver.STPCalibOptions)
     refine_potentials: Optional[bool] = None
 
 
@@ -64,17 +70,20 @@ class SpikingCalibResult(base.CalibResult):
     calibration, all what is necessary for operation in spiking mode.
 
     Refer to the documentation of :class:`calix.common.cadc.CADCCalibResult`,
-    :class:`calix.spiking.neuron.NeuronCalibResult` and
-    :class:`calix.spiking.correlation.CorrelationCalibResult`
+    :class:`calix.spiking.neuron.NeuronCalibResult`,
+    :class:`calix.spiking.correlation.CorrelationCalibResult` and
+    :class:`calix.spiking.synapse_driver.STPCalibResult`
     for details about the contained result objects.
 
     :ivar cadc_result: Result form CADC calibration.
     :ivar neuron_result: Result form neuron calibration.
     :ivar correlation_result: Result from correlation calibration.
+    :ivar stp_result: Result from STP calibration.
     """
 
     cadc_result: cadc.CADCCalibResult
     neuron_result: neuron.NeuronCalibResult
+    stp_result: synapse_driver.STPCalibResult
     correlation_result: Optional[correlation.CorrelationCalibResult] = None
 
     def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
@@ -91,6 +100,7 @@ class SpikingCalibResult(base.CalibResult):
             self.correlation_result.apply(builder)
         self.cadc_result.apply(builder)
         self.neuron_result.apply(builder)
+        self.stp_result.apply(builder)
 
 
 def calibrate(connection: hxcomm.ConnectionHandle,
@@ -144,6 +154,10 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     neuron_result = neuron.calibrate(
         connection, target.neuron_target, options.neuron_options)
 
+    # calibrate STP
+    stp_result = synapse_driver.calibrate(
+        connection, target=target.stp_target, options=options.stp_options)
+
     # Refine potentials only if COBA mode is not selected:
     # The large voltage swings on v_mem during refinement with the
     # default binary search algorithm may affect the synaptic input
@@ -167,7 +181,12 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         neuron.refine_potentials(
             connection, neuron_result, target.neuron_target)
 
-    return SpikingCalibResult(
+    result = SpikingCalibResult(
         target=target, options=options,
         cadc_result=cadc_result, neuron_result=neuron_result,
-        correlation_result=correlation_result)
+        correlation_result=correlation_result, stp_result=stp_result)
+
+    builder = base.WriteRecordingPlaybackProgramBuilder()
+    result.apply(builder)
+    base.run(connection, builder)
+    return result
