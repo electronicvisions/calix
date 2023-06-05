@@ -4,39 +4,11 @@ in one of the named modules.
 """
 
 from typing import Union, Dict, Optional, Tuple
-import warnings
 import numpy as np
 import quantities as pq
 from dlens_vx_v3 import hal, sta, halco
 
 import pyccalix
-
-
-def wait_for_us(builder: sta.PlaybackProgramBuilder, waiting_time: float
-                ) -> sta.PlaybackProgramBuilder:
-    """
-    Waits for a given amount of time in us.
-
-    This function appends instructions to the given builder which
-    first reset the timer and then wait until the given time is reached.
-
-    :note: This function is deprecated. Use `wait()` instead.
-
-    :param builder: Builder to add wait instruction to.
-    :param waiting_time: Time in us to wait for.
-
-    :return: Builder with wait instruction added to.
-    """
-    warnings.warn("This function is deprecated. Use "
-                  "`calix.common.helpers.wait()` instead.",
-                  DeprecationWarning, stacklevel=2)
-
-    # Returning the modified builder is regarded as bad style.
-    # This returning should be removed, also elsewhere, cf. issue 3952
-    builder.write(halco.TimerOnDLS(), hal.Timer())
-    builder.block_until(halco.TimerOnDLS(), int(
-        waiting_time * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
-    return builder
 
 
 def wait(builder: sta.PlaybackProgramBuilder,
