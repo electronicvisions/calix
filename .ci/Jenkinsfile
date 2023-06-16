@@ -15,11 +15,7 @@ Map<String, Object> pipelineOptions = [
 if (executeHwTests) {
 	pipelineOptions << [
 			testOptions      : "--test-execall -j1",
-			testSlurmResource: [partition: "cube",
-			                    wafer: 62,
-			                    "fpga-without-aout": 3,
-			                    "cpus-per-task": 8,
-			                    time: 120],
+			testSlurmResource: getHxTestResource(3) << ["cpus-per-task": 8, time: 120],
 			preTestHook      : { configureHxCubeBitfile() },
 	]
 }
