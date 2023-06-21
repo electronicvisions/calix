@@ -142,14 +142,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     cadc_result = cadc.calibrate(
         connection, target.cadc_target, options.cadc_options)
 
-    # calibrate correlation
-    if target.correlation_target is None:
-        correlation_result = None
-    else:
-        correlation_result = correlation.calibrate(
-            connection, target=target.correlation_target,
-            options=options.correlation_options)
-
     # calibrate neurons
     neuron_result = neuron.calibrate(
         connection, target.neuron_target, options.neuron_options)
@@ -180,6 +172,16 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         # re-calibrate neuron potentials
         neuron.refine_potentials(
             connection, neuron_result, target.neuron_target)
+
+    # Perform correlation calibration at the end since correlation bias
+    # currents affect the neuron CADC readout. Also, a high voltage on
+    # the correlation capacitor can affect the readout, cf. issue #3469.
+    if target.correlation_target is None:
+        correlation_result = None
+    else:
+        correlation_result = correlation.calibrate(
+            connection, target=target.correlation_target,
+            options=options.correlation_options)
 
     result = SpikingCalibResult(
         target=target, options=options,
