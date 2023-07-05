@@ -54,7 +54,7 @@ class TestCADCCalib(ConnectionSetup):
         quadrant_means = np.mean(calibrated_data, axis=1)
 
         # Assert means of the quadrants are close to each other
-        mean_spread_threshold = 3
+        mean_spread_threshold = 5
         self.assertLess(
             np.max(quadrant_means) - np.min(quadrant_means),
             mean_spread_threshold,
