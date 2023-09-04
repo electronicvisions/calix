@@ -90,10 +90,10 @@ def calibrate(
 
     # create cache
     for path in cache_paths:
-        path.mkdir(parents=True, exist_ok=True)
-        cache_file_path = path.joinpath(filename)
-        # pickle result file in temp file and rename due to nfs
         try:
+            path.mkdir(parents=True, exist_ok=True)
+            cache_file_path = path.joinpath(filename)
+            # pickle result file in temp file and rename due to nfs
             with tempfile.NamedTemporaryFile(dir=path, delete=False) as myfile:
                 pickle.dump(result, myfile)
                 myfile.close()
