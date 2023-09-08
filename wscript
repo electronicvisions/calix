@@ -78,14 +78,12 @@ def build(bld):
         ],
         genpybind_tags="ccalix",
         genpybind_num_files=1,
-        install_path="${PREFIX}/lib",
         linkflags="-Wl,-z,defs")
 
     bld(name='calix_pylib',
         features='py pylint pycodestyle',
         source=bld.path.ant_glob('src/py/**/*.py'),
         use='dlens_vx_v3 pyccalix',
-        install_path='${PREFIX}/lib',
         install_from='src/py',
         relative_trick=True,
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
