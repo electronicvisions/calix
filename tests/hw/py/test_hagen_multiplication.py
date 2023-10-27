@@ -77,7 +77,7 @@ class MultiplyAccumulateTest(ConnectionSetup):
                 mean_results = np.mean(matrix_results, axis=0)
                 expected_slope = np.mean(np.diff(matrix[:127, 0]))  # 1 or -1
 
-                for vector_id, _ in enumerate(mean_results):
+                for vector_id, vector_result in enumerate(mean_results):
                     slope = np.mean(np.diff(
                         mean_results[vector_id, :127]))
                     noise = np.mean(
@@ -124,10 +124,10 @@ class MultiplyAccumulateTest(ConnectionSetup):
                             > 1.5 * mean_vector_entries[vector_id]], axis=0)
                         success_less = \
                             np.abs(mean_results[significantly_less]) \
-                            < np.abs(mean_results[vector_id])
+                            < np.abs(vector_result)
                         success_more = \
                             np.abs(mean_results[significantly_more]) \
-                            > np.abs(mean_results[vector_id])
+                            > np.abs(vector_result)
 
                         # assert 60% of columns behave in the expected way:
                         # criterium is so weak since near the middle of the

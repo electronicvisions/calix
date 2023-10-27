@@ -53,7 +53,7 @@ def calibrate(
     if connection is None:
         conn_manager = hxcomm.ManagedConnection()
         connection = base.StatefulConnection(
-            conn_manager.__enter__())
+            conn_manager.__enter__())  # pylint: disable=unnecessary-dunder-call
     else:
         if not isinstance(connection, base.StatefulConnection):
             raise RuntimeError("Only StatefulConnection is supported.")

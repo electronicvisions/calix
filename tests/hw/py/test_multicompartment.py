@@ -52,7 +52,7 @@ class TestICCCalib(ConnectionSetup):
         mul_icc = [nc.enable_multiply_multicomp_conductance_bias for nc in
                    neuron_configs]
 
-        no_div_and_no_mul = [not(mul or div) for mul, div in
+        no_div_and_no_mul = [not (mul or div) for mul, div in
                              zip(mul_icc, div_icc)]
         cases = {"division": sum(div_icc), "multiplication": sum(mul_icc),
                  "None": sum(no_div_and_no_mul)}

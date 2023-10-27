@@ -41,7 +41,7 @@ class ConnectionSetup(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.connection = base.StatefulConnection(
-            cls.conn_manager.__enter__())
+            cls.conn_manager.__enter__())  # pylint: disable=unnecessary-dunder-call
 
         # extend target_directory by connection id
         cls.target_directory /= cls.connection.get_unique_identifier()
