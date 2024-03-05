@@ -81,23 +81,26 @@ def build(bld):
         linkflags="-Wl,-z,defs")
 
     bld(name='calix_pylib',
-        features='py pylint pycodestyle',
         source=bld.path.ant_glob('src/py/**/*.py'),
         use='dlens_vx_v3 pyccalix',
+        features='py',
         install_from='src/py',
         relative_trick=True,
-        pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
-        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
-        test_timeout=120,
         )
 
     bld(name='calix_scripts',
-        features='py pylint pycodestyle',
         source=bld.path.ant_glob('src/py/calix/scripts/**/*.py'),
         use='calix_pylib',
+        features='py',
         install_path='${PREFIX}/bin',
         install_from='src/py/calix/scripts',
         chmod=Utils.O755,
+        )
+
+    bld(name='calix_python_code_analysis',
+        tests=bld.path.ant_glob('src/py/**/*.py'),
+        use='dlens_vx_v3 pyccalix',
+        features='pylint pycodestyle',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
         test_timeout=120,
