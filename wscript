@@ -132,12 +132,12 @@ def build(bld):
             target = 'doxygen_calix',
             features = 'doxygen',
             doxyfile = bld.root.make_node(join(get_toplevel_path(), "code-format", "doxyfile")),
-            doxy_inputs = 'src/py/calix',
+            doxy_inputs = 'include/ccalix',
             install_path = 'doc/calix',
             pars = {
                 "PROJECT_NAME": "\"calix\"",
-                "OUTPUT_DIRECTORY": join(get_toplevel_path(), "build", "calix", "doc"),
-                "PYTHON_DOCSTRING": "NO",
+                "INCLUDE_PATH": join(get_toplevel_path(), "calix", "include"),
+                "OUTPUT_DIRECTORY": join(get_toplevel_path(), "build", "calix", "doc")
             },
         )
 
