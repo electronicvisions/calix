@@ -35,7 +35,7 @@ class BoundaryCheckTest(unittest.TestCase):
             err_msg="Boundary checker modifies parameters that did not "
             + "exceed limits.")
 
-        expected_errors = np.zeros_like(parameters, dtype=np.bool)
+        expected_errors = np.zeros_like(parameters, dtype=bool)
         expected_errors[[0, -1]] = True
         np.testing.assert_allclose(
             result.error_mask, expected_errors,
@@ -65,7 +65,7 @@ class BoundaryCheckTest(unittest.TestCase):
             result.parameters, expected_parameters,
             err_msg="Boundary checker modifies parameters incorrectly.")
 
-        expected_errors = np.zeros_like(parameters, dtype=np.bool)
+        expected_errors = np.zeros_like(parameters, dtype=bool)
         expected_errors[parameters <= 200] = True
         expected_errors[parameters >= 700] = True
         np.testing.assert_allclose(

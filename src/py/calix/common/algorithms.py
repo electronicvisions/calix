@@ -327,7 +327,7 @@ class LinearSearch(base.Algorithm):
                 "The step size for ParameterSweep needs to be a single "
                 + "number. Call run() multiple times to vary step_size.")
 
-        running = np.ones(self.calibration.n_instances, dtype=np.bool)
+        running = np.ones(self.calibration.n_instances, dtype=bool)
         last_parameters = np.empty((2, self.calibration.n_instances),
                                    dtype=int)
         last_deviations = np.ones((2, self.calibration.n_instances)) * np.inf

@@ -11,7 +11,7 @@ from calix.hagen import neuron_helpers
 def measure_quadrant_results(connection: hxcomm.ConnectionHandle,
                              success_mask: np.ndarray = np.ones(
                                  halco.NeuronConfigOnDLS.size,
-                                 dtype=np.bool)):
+                                 dtype=bool)):
     """
     Measure the current membrane potentials (without any inputs) and
     log statistics by quadrant at DEBUG level.
