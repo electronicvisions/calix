@@ -50,7 +50,7 @@ def configure(cfg):
 
 
 def build(bld):
-    bld.env.DLSvx_HARDWARE_AVAILABLE = "SLURM_HWDB_YAML" in os.environ
+    bld.env.BBS_HARDWARE_AVAILABLE = "SLURM_HWDB_YAML" in os.environ
 
     bld(name="ccalix_includes",
         export_includes="include")
@@ -123,7 +123,7 @@ def build(bld):
         install_path='${PREFIX}/bin/tests',
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
         pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
-        skip_run=not bld.env.DLSvx_HARDWARE_AVAILABLE,
+        skip_run=not bld.env.BBS_HARDWARE_AVAILABLE,
         test_timeout=45 * 60
         )
 
