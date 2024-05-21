@@ -101,17 +101,17 @@ def calibrate(
                     log.WARN(f"Cache file {cache_file_path} was created by"
                              "other process in meantime")
                     return result
-                try:
-                    os.rename(myfile.name, cache_file_path)
-                except OSError as err:
-                    # try next path if no write permission
-                    if err.errno == errno.EACCES:
-                        continue
-                    raise err
+                os.rename(myfile.name, cache_file_path)
             log.INFO(f"Cached result in {cache_file_path}")
-        except PermissionError:
+        except OSError as err:
             # In case of no write permission try next path
-            continue
+            if err.errno in [
+                errno.EACCES,
+                errno.EPERM,
+                errno.EROFS,
+            ]:
+                continue
+            raise err
         return result
 
     raise RuntimeError("Could not create cache file in any "
