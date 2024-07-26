@@ -120,13 +120,12 @@ class LeakPotentialCalib(base.Calib):
 
 class ResetPotentialCalib(base.Calib):
     """
-    Calibrate the neurons' reset target voltage such that it matches
-    the leak potential.
+    Calibrate the neurons' reset target voltage.
 
     The refractory time is extended in order to measure the membrane
-    potentials while the neuron is at reset potential. The CapMem
-    settings which yield CADC reads which match the potential without reset
-    are searched.
+    potentials while the neuron is at reset potential. If no target
+    is given, the leak potential is measured during prelude and taken
+    as a target.
 
     Requirements:
     * Neuron membrane readout is connected to the CADCs (causal and acausal).
