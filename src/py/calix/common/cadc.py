@@ -2,7 +2,7 @@
 Calibrates all CADC channels on Hicann-X for a given dynamic range.
 """
 
-from typing import Optional, Union
+from typing import ClassVar, Dict, Optional, Union
 import os
 from dataclasses import dataclass, field
 
@@ -29,12 +29,13 @@ class CADCCalibTarget(base.CalibTarget):
         the dynamic range.
     """
 
-    dynamic_range: base.ParameterRange = base.ParameterRange(70, 550)
-    read_range: base.ParameterRange = base.ParameterRange(20, 220)
-    feasible_ranges = {
-        "dynamic_range": base.ParameterRange(70, 550),
-        "read_range": base.ParameterRange(20, 220)
-    }
+    dynamic_range: base.ParameterRange = field(
+        default_factory=lambda: base.ParameterRange(70, 550))
+    read_range: base.ParameterRange = field(
+        default_factory=lambda: base.ParameterRange(20, 220))
+    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
+        {"dynamic_range": base.ParameterRange(70, 550),
+         "read_range": base.ParameterRange(20, 220)}
 
     def check_values(self):
         """

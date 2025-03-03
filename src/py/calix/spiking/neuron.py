@@ -3,8 +3,8 @@ Provides an interface for calibrating LIF neurons.
 """
 
 import numbers
-from typing import Optional, Union, List
-from dataclasses import dataclass
+from typing import ClassVar, Dict, Optional, Union, List
+from dataclasses import dataclass, field
 
 import numpy as np
 import quantities as pq
@@ -95,35 +95,36 @@ class NeuronCalibTarget(base.CalibTarget):
     leak: Union[int, np.ndarray] = 80
     reset: Union[int, np.ndarray] = 70
     threshold: Union[int, np.ndarray] = 125
-    tau_mem: pq.quantity.Quantity = 10. * pq.us
-    tau_syn: pq.quantity.Quantity = 10. * pq.us
+    tau_mem: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
+    tau_syn: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
     i_synin_gm: Union[int, np.ndarray] = 500
     e_coba_reversal: Optional[np.ndarray] = None
     e_coba_reference: Optional[np.ndarray] = None
     membrane_capacitance: Union[int, np.ndarray] = 63
-    refractory_time: pq.quantity.Quantity = 2. * pq.us
+    refractory_time: pq.Quantity = field(
+        default_factory=lambda: 2 * pq.us)
     synapse_dac_bias: int = 600
-    holdoff_time: pq.Quantity = 0 * pq.us
+    holdoff_time: pq.Quantity = field(
+        default_factory=lambda: 0 * pq.us)
 
-    feasible_ranges = {
-        "leak": base.ParameterRange(50, 160),
-        "reset": base.ParameterRange(50, 160),
-        "threshold": base.ParameterRange(50, 220),
-        "tau_mem": base.ParameterRange(0.5 * pq.us, 60 * pq.us),
-        "tau_syn": base.ParameterRange(0.3 * pq.us, 30 * pq.us),
-        "i_synin_gm": base.ParameterRange(30, 800),
-        "e_coba_reversal": base.ParameterRange(-np.inf, np.inf),
-        "e_coba_reference": base.ParameterRange(60, 160),
-        "membrane_capacitance": base.ParameterRange(
-            hal.NeuronConfig.MembraneCapacitorSize.min,
-            hal.NeuronConfig.MembraneCapacitorSize.max),
-        "refractory_time": base.ParameterRange(
-            40 * pq.ns, 32 * pq.us),
-        "synapse_dac_bias": base.ParameterRange(
-            30, hal.CapMemCell.Value.max),
-        "holdoff_time": base.ParameterRange(
-            0 * pq.ns, 4 * pq.us)
-    }
+    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
+        {"leak": base.ParameterRange(50, 160),
+         "reset": base.ParameterRange(50, 160),
+         "threshold": base.ParameterRange(50, 220),
+         "tau_mem": base.ParameterRange(0.5 * pq.us, 60 * pq.us),
+         "tau_syn": base.ParameterRange(0.3 * pq.us, 30 * pq.us),
+         "i_synin_gm": base.ParameterRange(30, 800),
+         "e_coba_reversal": base.ParameterRange(-np.inf, np.inf),
+         "e_coba_reference": base.ParameterRange(60, 160),
+         "membrane_capacitance": base.ParameterRange(
+             hal.NeuronConfig.MembraneCapacitorSize.min,
+             hal.NeuronConfig.MembraneCapacitorSize.max),
+         "refractory_time": base.ParameterRange(
+             40 * pq.ns, 32 * pq.us),
+         "synapse_dac_bias": base.ParameterRange(
+             30, hal.CapMemCell.Value.max),
+         "holdoff_time": base.ParameterRange(
+             0 * pq.ns, 4 * pq.us)}
 
     def check_types(self):
         """
@@ -184,18 +185,19 @@ class NeuronCalibTarget(base.CalibTarget):
 
 NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
     leak=np.ones(
-        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget.leak,
+        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget().leak,
     reset=np.ones(
-        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget.reset,
-    threshold=np.ones(
-        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget.threshold,
-    tau_mem=np.ones(halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.tau_mem,
+        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget().reset,
+    threshold=np.ones(halco.AtomicNeuronOnDLS.size, dtype=int)
+    * NeuronCalibTarget().threshold,
+    tau_mem=np.ones(halco.AtomicNeuronOnDLS.size)
+    * NeuronCalibTarget().tau_mem,
     tau_syn=np.ones((
         halco.SynapticInputOnNeuron.size,
-        halco.AtomicNeuronOnDLS.size)) * NeuronCalibTarget.tau_syn,
+        halco.AtomicNeuronOnDLS.size)) * NeuronCalibTarget().tau_syn,
     i_synin_gm=np.ones(
         halco.SynapticInputOnNeuron.size,
-        dtype=int) * NeuronCalibTarget.i_synin_gm,
+        dtype=int) * NeuronCalibTarget().i_synin_gm,
     e_coba_reversal=np.repeat(
         np.array([np.inf, -np.inf])[:, np.newaxis],
         halco.AtomicNeuronOnDLS.size, axis=1),
@@ -204,12 +206,12 @@ NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
         halco.AtomicNeuronOnDLS.size)) * np.nan,
     membrane_capacitance=np.ones(
         halco.AtomicNeuronOnDLS.size,
-        dtype=int) * NeuronCalibTarget.membrane_capacitance,
+        dtype=int) * NeuronCalibTarget().membrane_capacitance,
     refractory_time=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.refractory_time,
-    synapse_dac_bias=NeuronCalibTarget.synapse_dac_bias,
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().refractory_time,
+    synapse_dac_bias=NeuronCalibTarget().synapse_dac_bias,
     holdoff_time=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget.holdoff_time
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().holdoff_time
 )
 
 
@@ -238,16 +240,21 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
     Used internally during calibration.
     """
 
-    v_threshold: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_coba: np.ndarray = np.zeros(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_coba: np.ndarray = np.zeros(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    e_syn_exc_rev: np.ndarray = np.zeros(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    e_syn_inh_rev: np.ndarray = np.zeros(
-        halco.NeuronConfigOnDLS.size, dtype=int)
+    v_threshold: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_exc_coba: np.ndarray = field(
+        default_factory=lambda: np.zeros(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_inh_coba: np.ndarray = field(
+        default_factory=lambda: np.zeros(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    e_syn_exc_rev: np.ndarray = field(
+        default_factory=lambda: np.zeros(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    e_syn_inh_rev: np.ndarray = field(
+        default_factory=lambda: np.zeros(
+            halco.NeuronConfigOnDLS.size, dtype=int))
     clock_settings: Optional[refractory_period.Settings] = None
     neuron_configs: Optional[List[hal.NeuronConfig]] = None
     use_synin_small_capacitance: bool = False
@@ -531,11 +538,12 @@ def calibrate(
         calib_result.success, result.success], axis=0)
 
     # print warning in case of failed neurons
-    n_neurons_failed = np.sum(~calib_result.success)
+    n_neurons_failed = np.sum(np.invert(calib_result.success))
     if n_neurons_failed > 0:
         logger.get("calix.spiking.neuron.calibrate").WARN(
             f"Calib failed for {n_neurons_failed} neurons: ",
-            np.arange(halco.NeuronConfigOnDLS.size)[~calib_result.success])
+            np.arange(halco.NeuronConfigOnDLS.size)[
+                np.invert(calib_result.success)])
 
     result = calib_result.to_neuron_calib_result(target, options)
     builder = base.WriteRecordingPlaybackProgramBuilder()

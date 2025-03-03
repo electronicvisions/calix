@@ -131,6 +131,9 @@ class CalibTarget(ABC):
     instances (e.g., neurons) than others.
 
     :cvar feasible_ranges: Dict of feasible ranges for each parameter.
+        These values have been determined experimentally. Some setups
+        might support larger ranges but in general subpar calibrations
+        are expected outside this range.
         Warnings will be logged in case they are exceeded.
     """
 

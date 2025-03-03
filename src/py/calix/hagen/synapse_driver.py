@@ -85,11 +85,15 @@ class _SynapseDriverResultInternal:
     comparator offsets for every driver and their calibration success.
     """
 
-    ramp_current: np.ndarray = np.empty(
-        halco.NeuronConfigBlockOnDLS.size, dtype=int)
-    hagen_dac_offset: np.ndarray = np.empty(
-        halco.SynapseDriverOnDLS.size, dtype=int)
-    success: np.ndarray = np.ones(halco.SynapseDriverOnDLS.size, dtype=bool)
+    ramp_current: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigBlockOnDLS.size, dtype=int))
+    hagen_dac_offset: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.SynapseDriverOnDLS.size, dtype=int))
+    success: np.ndarray = field(
+        default_factory=lambda: np.ones(
+            halco.SynapseDriverOnDLS.size, dtype=bool))
 
     def to_synapse_driver_calib_result(self,
                                        options: SynapseDriverCalibOptions
