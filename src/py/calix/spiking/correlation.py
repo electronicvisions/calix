@@ -3,7 +3,7 @@ Provides classes for calibration of the correlation
 characteristics, i.e. time constants and amplitudes.
 """
 
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 from enum import Enum, auto
 from dataclasses import dataclass, field
 import copy
@@ -362,11 +362,13 @@ class CorrelationCalibTarget(base.CalibTarget):
     """
 
     amplitude: float = 0.5
-    time_constant: pq.Quantity = 5 * pq.us
+    time_constant: pq.Quantity = field(
+        default_factory=lambda: 5 * pq.us)
 
-    feasible_ranges = {
-        "amplitude": base.ParameterRange(0.2, 2),
-        "time_constant": base.ParameterRange(2 * pq.us, 30 * pq.us)}
+    feasible_ranges: Dict[str, base.ParameterRange] = field(
+        default_factory=lambda: {
+            "amplitude": base.ParameterRange(0.2, 2),
+            "time_constant": base.ParameterRange(2 * pq.us, 30 * pq.us)})
 
 
 @dataclass
@@ -409,8 +411,10 @@ class CorrelationCalibOptions(base.CalibOptions):
     """
 
     branches: CorrelationBranches = CorrelationBranches.BOTH
-    v_res_meas: pq.Quantity = 0.9 * pq.V
-    v_reset: pq.Quantity = 1.85 * pq.V
+    v_res_meas: pq.Quantity = field(
+        default_factory=lambda: 0.9 * pq.V)
+    v_reset: pq.Quantity = field(
+        default_factory=lambda: 1.85 * pq.V)
     calibrate_synapses: bool = False
     time_constant_priority: float = 0.3
     default_amp_calib: Optional[int] = None

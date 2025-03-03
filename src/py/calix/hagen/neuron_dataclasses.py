@@ -3,7 +3,7 @@ Dataclasses for hagen neuron calib target and result.
 """
 
 from typing import Dict, Optional, Union, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import quantities as pq
@@ -63,20 +63,23 @@ class NeuronCalibTarget(base.CalibTarget):
     """
 
     target_leak_read: Union[int, np.ndarray] = 120
-    tau_mem: pq.Quantity = 60 * pq.us
-    tau_syn: pq.Quantity = 0.32 * pq.us
+    tau_mem: pq.Quantity = field(
+        default_factory=lambda: 60 * pq.us)
+    tau_syn: pq.Quantity = field(
+        default_factory=lambda: 0.32 * pq.us)
     i_synin_gm: int = 450
     target_noise: Optional[float] = None
     synapse_dac_bias: int = hal.CapMemCell.Value.max
 
-    feasible_ranges = {
-        "target_leak_read": base.ParameterRange(100, 140),
-        "tau_syn": base.ParameterRange(0.3 * pq.us, 20 * pq.us),
-        "tau_mem": base.ParameterRange(20 * pq.us, 100 * pq.us),
-        "i_synin_gm": base.ParameterRange(30, 600),
-        "target_noise": base.ParameterRange(1.0, 2.5),
-        "synapse_dac_bias": base.ParameterRange(
-            30, hal.CapMemCell.Value.max)}
+    feasible_ranges: Dict[str, base.ParameterRange] = field(
+        default_factory=lambda: {
+            "target_leak_read": base.ParameterRange(100, 140),
+            "tau_syn": base.ParameterRange(0.3 * pq.us, 20 * pq.us),
+            "tau_mem": base.ParameterRange(20 * pq.us, 100 * pq.us),
+            "i_synin_gm": base.ParameterRange(30, 600),
+            "target_noise": base.ParameterRange(1.0, 2.5),
+            "synapse_dac_bias": base.ParameterRange(
+                30, hal.CapMemCell.Value.max)})
 
     def check_types(self):
         """
@@ -156,7 +159,7 @@ class NeuronCalibResult(base.CalibResult):
     """
 
     neurons: Dict[halco.AtomicNeuronOnDLS, lola.AtomicNeuron]
-    cocos: {}  # some coordinate, some container
+    cocos: Dict  # some coordinate, some container
     success: Dict[halco.AtomicNeuronOnDLS, bool]
 
     def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder):
@@ -201,27 +204,42 @@ class CalibResultInternal:
     Used internally during calibration.
     """
 
-    v_leak: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
-    v_reset: np.ndarray = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_shift: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_shift: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_bias_leak: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_bias_reset: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_gm: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_gm: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_exc_tau: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    i_syn_inh_tau: np.ndarray = np.empty(
-        halco.NeuronConfigOnDLS.size, dtype=int)
-    syn_bias_dac: np.ndarray = np.empty(
-        halco.CapMemBlockOnDLS.size, dtype=int)
-    success: np.ndarray = np.ones(halco.NeuronConfigOnDLS.size, dtype=bool)
+    v_leak: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    v_reset: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_exc_shift: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_inh_shift: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_bias_leak: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_bias_reset: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_exc_gm: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_inh_gm: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_exc_tau: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_syn_inh_tau: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    syn_bias_dac: np.ndarray = field(
+        default_factory=lambda: np.empty(
+            halco.CapMemBlockOnDLS.size, dtype=int))
+    success: np.ndarray = field(
+        default_factory=lambda: np.ones(
+            halco.NeuronConfigOnDLS.size, dtype=bool))
     use_synin_small_capacitance: bool = True
 
     def to_atomic_neuron(self,

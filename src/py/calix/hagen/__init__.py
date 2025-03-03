@@ -4,7 +4,7 @@ i.e. for multiply-accumulate operation.
 """
 from __future__ import annotations
 
-from typing import Tuple, Union, Optional
+from typing import Dict, Tuple, Union, Optional
 from dataclasses import dataclass, field
 from warnings import warn
 
@@ -34,10 +34,11 @@ class HagenSyninCalibTarget(base.TopLevelCalibTarget):
             dynamic_range=base.ParameterRange(150, 340)))
     synapse_dac_bias: int = 800
 
-    feasible_ranges = {
-        "synapse_dac_bias": base.ParameterRange(
-            30, hal.CapMemCell.Value.max)
-    }
+    feasible_ranges: Dict[str, base.ParameterRange]  = field(
+        default_factory=lambda: {
+            "synapse_dac_bias": base.ParameterRange(
+                30, hal.CapMemCell.Value.max)
+        })
 
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,
