@@ -2,14 +2,15 @@
 Dataclasses for hagen neuron calib target and result.
 """
 
-from typing import Dict, Optional, Union, Callable
+from typing import Dict, Optional, Union
 from dataclasses import dataclass, field
 
 import numpy as np
 import quantities as pq
 
-from dlens_vx_v3 import sta, halco, hal, hxcomm, lola
+from dlens_vx_v3 import sta, halco, hal, lola
 
+from pyccalix import NeuronCalibOptions
 from calix.common import base, helpers
 from calix.hagen import neuron_helpers
 from calix import constants
@@ -70,31 +71,6 @@ class NeuronCalibTarget(base.CalibTarget):
     i_synin_gm: int = 450
     target_noise: Optional[float] = None
     synapse_dac_bias: int = hal.CapMemCell.Value.max
-
-
-@dataclass
-class NeuronCalibOptions(base.CalibOptions):
-    """
-    Further options for the neuron calibration.
-
-    :ivar readout_neuron: Coordinate of the neuron to be connected to
-        a readout pad, i.e. can be observed using an oscilloscope.
-        The selected neuron is connected to the upper pad (channel 0),
-        the lower pad (channel 1) always shows the CADC ramp of quadrant 0.
-        The pads are connected via
-        halco.SourceMultiplexerOnReadoutSourceSelection(0) for the neuron
-        and mux 1 for the CADC ramps. When using the internal MADC
-        for recording, these multiplexers can be selected directly.
-        If None is given, the readout is not configured.
-    :ivar initial_configuration: Additional function which is called before
-        starting the calibration. Called with `connection`, such that the
-        hardware is available within the function.
-        If None (default), no additional configuration gets applied.
-    """
-
-    readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
-    initial_configuration: Optional[
-        Callable[[hxcomm.ConnectionHandle], None]] = None
 
 
 @dataclass

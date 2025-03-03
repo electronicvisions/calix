@@ -144,10 +144,6 @@ def calibrate(
         builder, readout_neuron=options.readout_neuron)
     base.run(connection, builder)
 
-    # call optional program for further initial configuration
-    if options.initial_configuration is not None:
-        options.initial_configuration(connection)
-
     # Initialize return object
     calib_result = CalibResultInternal()
     calib_result.i_bias_reset = initial_config[

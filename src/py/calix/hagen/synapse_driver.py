@@ -17,6 +17,7 @@ import numpy as np
 
 from dlens_vx_v3 import hal, halco, logger, hxcomm
 
+from pyccalix import SynapseDriverCalibOptions
 from calix.common import algorithms, base, helpers
 from calix.hagen import multiplication
 from calix import constants
@@ -31,20 +32,6 @@ RANGE_LIMIT = 0.9
 
 # Default STP ramp offset
 DEFAULT_STP_OFFSET = hal.SynapseDriverConfig.Offset.max // 2
-
-
-@dataclass
-class SynapseDriverCalibOptions(base.CalibOptions):
-    """
-    Further options for synapse driver calibration.
-
-    :ivar offset_test_activation: Hagen-mode activation where amplitudes
-        between different drivers are aligned using the individual DAC
-        offsets.
-    """
-
-    offset_test_activation: hal.SynapseQuad.Label \
-        = field(default_factory=lambda: hal.PADIEvent.HagenActivation(3))
 
 
 @dataclass

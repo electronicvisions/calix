@@ -4,7 +4,6 @@ characteristics, i.e. time constants and amplitudes.
 """
 
 from typing import Optional, Union
-from enum import Enum, auto
 from dataclasses import dataclass, field
 import copy
 
@@ -13,6 +12,7 @@ import quantities as pq
 
 from dlens_vx_v3 import hal, halco, lola, hxcomm, logger
 
+from pyccalix import CorrelationCalibOptions
 from calix.common import algorithms, base, exceptions
 from calix.hagen import helpers
 from calix.spiking import correlation_measurement
@@ -29,30 +29,20 @@ REPRESENTATIVE_QUADS = [
     halco.SynapseQuadColumnOnDLS(col) for col in range(0, 16, 4)]
 
 
-class CorrelationBranches(Enum):
+def correlation_branches_to_axes(branches) -> slice:
     """
-    Select branches of correlation: causal, acausal or both.
+    Return the appropriate slice to apply to the result data in order
+    to select the respective correlation branches.
+
+    :return: Slice to apply along correlation branch dimension of
+        result array.
     """
 
-    CAUSAL = auto()
-    ACAUSAL = auto()
-    BOTH = auto()
-
-    @property
-    def axes(self) -> slice:
-        """
-        Return the appropriate slice to apply to the result data in order
-        to select the respective correlation branches.
-
-        :return: Slice to apply along correlation branch dimension of
-            result array.
-        """
-
-        if self == CorrelationBranches.CAUSAL:
-            return slice(0, 1, 1)
-        if self == CorrelationBranches.ACAUSAL:
-            return slice(1, 2, 1)
-        return slice(0, 2, 1)
+    if branches == CorrelationCalibOptions.Branches.CAUSAL:
+        return slice(0, 1, 1)
+    if branches == CorrelationCalibOptions.Branches.ACAUSAL:
+        return slice(1, 2, 1)
+    return slice(0, 2, 1)
 
 
 class TimeConstantCalib(base.Calib):
@@ -80,7 +70,8 @@ class TimeConstantCalib(base.Calib):
     """
 
     def __init__(self, target: Optional[pq.Quantity] = 5 * pq.us, *,
-                 branches: CorrelationBranches = CorrelationBranches.CAUSAL,
+                 branches: CorrelationCalibOptions.Branches
+                 = CorrelationCalibOptions.Branches.CAUSAL,
                  amp_calib: int = 0, time_calib: int = 0):
         """
         :param target: Target time constant for calibration.
@@ -168,7 +159,7 @@ class TimeConstantCalib(base.Calib):
 
             # take median as result for the quadrant
             results[int(quadrant.toEnum())] = np.median(
-                taus[:, :, self.branches.axes])
+                taus[:, :, correlation_branches_to_axes(self.branches)])
 
         self.log.DEBUG("Obtained time constants:", results)
         return results
@@ -195,12 +186,13 @@ class AmplitudeCalib(base.Calib):
         other quadrants using corresponding offsets to the coordinates.
     :ivar log: Logger used to log outputs.
     :ivar branches: Correlation branch to consider. Choose from causal,
-        acausal or both, using the Enum CorrelationBranches.
+        acausal or both, using the Enum CorrelationCalibOptions.Branches.
     :ivar parameters: Last configured CapMem parameters.
     """
 
     def __init__(self, target: Optional[Union[float, np.ndarray]] = 0.5, *,
-                 branches: CorrelationBranches = CorrelationBranches.CAUSAL,
+                 branches: CorrelationCalibOptions.Branches
+                 = CorrelationCalibOptions.Branches.CAUSAL,
                  amp_calib: int = 0, time_calib: int = 0):
         """
         :param target: Target amplitude per correlated event.
@@ -319,7 +311,7 @@ class AmplitudeCalib(base.Calib):
 
             # take median as result for the quadrant
             results[int(quadrant.toEnum())] = np.median(
-                amps[:, :, self.branches.axes])
+                amps[:, :, correlation_branches_to_axes(self.branches)])
 
             # select smaller amplitude in case baseline read in quadrant is low
             results[baselines_invalid] = np.inf
@@ -367,72 +359,6 @@ class CorrelationCalibTarget(base.CalibTarget):
 
 
 @dataclass
-class CorrelationCalibOptions(base.CalibOptions):
-    """
-    Further options for correlation calibration.
-
-    :ivar calibrate_synapses: Decide whether individual synapses'
-        calibration bits shall be calibrated. This requires hours
-        of runtime and may not improve the usability singificantly.
-    :ivar time_constant_priority: Priority given to time constant during
-        individual calibration of synapses. Has to be in the range from
-        0 to 1, the remaining priority is given to the amplitude.
-    :ivar branches: Correlation traces to consider during calibration.
-        Use the Enum type CorrelationBranches to select from causal,
-        acausal or both.
-    :ivar v_res_meas: Reset voltage for the measurement capacitors.
-        Affects the achievable amplitudes: In case your desired amplitudes
-        cannot be reached at sensible CapMem currents, consider increasing
-        v_res_meas. However, this also increases problems observed on some
-        synapses, like traces no longer behaving exponentially. Generally,
-        you should set this as low as possible - we recommend some 0.9 V.
-    :ivar v_reset: Reset voltage for the accumulation capacitors in
-        each synapse. Controls the baseline measurement when the sensors'
-        accumulation capacitors were reset and no correlated events
-        were recorded. The baseline read should be near the upper end
-        of the reliable range of the CADC, which is the case when
-        v_reset is set to some 1.85 V. (There's a source follower circuit
-        in the correlation readout.)
-    :ivar default_amp_calib: Amplitude calibration setting used for
-        all synapses when calibrating CapMem bias currents. Should
-        allow headroom for adjusting amplitudes in both directions
-        if individual synapses are to be calibrated. Otherwise, a
-        value of 0 is recommended. Set sensibly by default.
-    :ivar default_time_calib: Time constant calibration setting used
-        for all synapses when calibrating CapMem bias currents. Should
-        allow headroom for adjusting amplitudes in both directions
-        if individual synapses are to be calibrated. Set sensibly
-        by default.
-    """
-
-    branches: CorrelationBranches = CorrelationBranches.BOTH
-    v_res_meas: pq.Quantity = field(
-        default_factory=lambda: 0.9 * pq.V)
-    v_reset: pq.Quantity = field(
-        default_factory=lambda: 1.85 * pq.V)
-    calibrate_synapses: bool = False
-    time_constant_priority: float = 0.3
-    default_amp_calib: Optional[int] = None
-    default_time_calib: Optional[int] = None
-
-    def check(self) -> None:
-        """
-        Check if given parameters are in a valid range.
-        """
-
-        if not 0 <= self.time_constant_priority <= 1:
-            raise ValueError(
-                f"Time constant priority {self.time_constant_priority} is "
-                + "not in the range from 0 to 1.")
-
-    def __post_init__(self) -> None:
-        if self.default_amp_calib is None:
-            self.default_amp_calib = 1 if self.calibrate_synapses else 0
-        if self.default_time_calib is None:
-            self.default_time_calib = 1 if self.calibrate_synapses else 0
-
-
-@dataclass
 class CorrelationCalibResult(base.CalibResult):
     """
     Result of a synapse correlation sensor calibration.
@@ -456,8 +382,8 @@ class CorrelationCalibResult(base.CalibResult):
             dtype=int))
 
     def __post_init__(self) -> None:
-        self.amp_calib[:] = self.options.default_amp_calib
-        self.time_calib[:] = self.options.default_time_calib
+        self.amp_calib[:] = self.options.default_amp_calib.value()
+        self.time_calib[:] = self.options.default_time_calib.value()
 
     def apply(self, builder: base.WriteRecordingPlaybackProgramBuilder) \
             -> None:
@@ -471,10 +397,10 @@ class CorrelationCalibResult(base.CalibResult):
         dac_config = lola.DACChannelBlock().default_ldo_2
         dac_config.set_voltage(
             halco.DACChannelOnBoard.v_res_meas,
-            self.options.v_res_meas.rescale(pq.V).magnitude)
+            self.options.v_res_meas.as_quantity().rescale(pq.V).magnitude)
         dac_config.set_voltage(
             halco.DACChannelOnBoard.mux_dac_25,
-            self.options.v_reset.rescale(pq.V).magnitude)
+            self.options.v_reset.as_quantity().rescale(pq.V).magnitude)
         builder.write(halco.DACChannelBlockOnBoard(), dac_config)
 
         measurement = correlation_measurement.CorrelationMeasurement(
@@ -523,9 +449,11 @@ def calibrate_synapses(connection: hxcomm.ConnectionHandle,
             amplitudes, time_constants = \
                 measurement.estimate_fit(correlations)
             amplitudes = np.mean(
-                amplitudes[:, :, calib_result.options.branches.axes], axis=2)
+                amplitudes[:, :, correlation_branches_to_axes(
+                    calib_result.options.branches)], axis=2)
             time_constants = np.mean(
-                time_constants[:, :, calib_result.options.branches.axes],
+                time_constants[:, :, correlation_branches_to_axes(
+                    calib_result.options.branches)],
                 axis=2)
 
             amplitude_score[amp_calib, time_calib, :, :] = \
@@ -595,6 +523,8 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
         target.time_constant,
         base.ParameterRange(2 * pq.us, 30 * pq.us))
 
+    options.check()
+
     calib_result = CorrelationCalibResult(target=target, options=options)
 
     # set necessary voltages
@@ -605,8 +535,8 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
     # calibrate CapMem amplitude
     calibration = AmplitudeCalib(
         target=target.amplitude, branches=options.branches,
-        amp_calib=options.default_amp_calib,
-        time_calib=options.default_time_calib)
+        amp_calib=options.default_amp_calib.value(),
+        time_calib=options.default_time_calib.value())
     calib_result.i_bias_store = \
         calibration.run(
             connection, algorithm=algorithms.BinarySearch()
@@ -615,8 +545,8 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
     # calibrate CapMem time constant
     calibration = TimeConstantCalib(
         target=target.time_constant, branches=options.branches,
-        amp_calib=options.default_amp_calib,
-        time_calib=options.default_time_calib)
+        amp_calib=options.default_amp_calib.value(),
+        time_calib=options.default_time_calib.value())
     calib_result.i_bias_ramp = \
         calibration.run(
             connection, algorithm=algorithms.BinarySearch()

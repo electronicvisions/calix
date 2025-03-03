@@ -10,6 +10,7 @@ import numpy as np
 
 from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
+from pyccalix import STPCalibOptions
 from calix import constants
 from calix.common import algorithms, base, helpers
 import calix.hagen.synapse_driver as hagen_driver
@@ -237,24 +238,6 @@ class STPCalibTarget(base.CalibTarget):
     v_recover_0 = 400
     v_charge_1 = 330
     v_recover_1 = 50
-
-
-@dataclass
-class STPCalibOptions(base.CalibOptions):
-    """
-    Set bias parameters for the STP circuitry.
-
-    All parameters can be configured per quadrant.
-
-    :param i_ramp: Ramp current for STP pulse width modulation,
-        in CapMem LSB.
-    :param v_stp: Voltage (STP state) where all drivers' amplitudes are
-        equalized at, in CapMem LSB. Should be chosen between
-        v_charge and v_recover.
-    """
-
-    i_ramp = 600
-    v_stp = 180
 
 
 @dataclass

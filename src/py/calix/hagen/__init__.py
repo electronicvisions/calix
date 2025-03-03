@@ -12,6 +12,7 @@ import numpy as np
 
 from dlens_vx_v3 import hxcomm, halco, hal, lola
 
+from pyccalix import HagenSyninCalibOptions, HagenCalibOptions
 from calix.common import algorithms, base, cadc, synapse, helpers
 from calix.hagen import neuron, synapse_driver, neuron_helpers, multiplication
 from calix import constants
@@ -43,23 +44,6 @@ class HagenSyninCalibTarget(base.TopLevelCalibTarget):
 
 
 @dataclass
-class HagenSyninCalibOptions(base.CalibOptions):
-    """
-    Dataclass collecting further options for Hagen-mode calibrations
-    with integration on synaptic input lines.
-
-    :ivar cadc_options: Further options for CADC calibration.
-    :ivar synapse_driver_options: Further options for synapse driver
-        calibration.
-    """
-
-    cadc_options: cadc.CADCCalibOptions = field(
-        default_factory=cadc.CADCCalibOptions)
-    synapse_driver_options: synapse_driver.SynapseDriverCalibOptions \
-        = field(default_factory=synapse_driver.SynapseDriverCalibOptions)
-
-
-@dataclass
 class HagenCalibTarget(base.TopLevelCalibTarget):
     """
     Dataclass collecting target parameters for Hagen-mode calibrations
@@ -81,32 +65,6 @@ class HagenCalibTarget(base.TopLevelCalibTarget):
                   options: Optional[HagenCalibOptions] = None
                   ) -> HagenCalibResult:
         return calibrate(connection, self, options)
-
-
-@dataclass
-class HagenCalibOptions(base.CalibOptions):
-    """
-    Dataclass collecting further options for Hagen-mode calibrations with
-    integration on membranes.
-
-    :ivar cadc_options: Further options for CADC calibration.
-    :ivar neuron_options: Further options for neuron calibration.
-    :ivar neuron_disable_leakage: Decide whether the neuron leak bias
-        currents are set to zero after calibration. This is done
-        by default, which disables leakage entirely. Note that even
-        if the leak bias is set to zero, some pseudo-leakage may occur
-        through the synaptic input OTAs.
-    :ivar synapse_driver_options: Further options for synapse driver
-        calibration.
-    """
-
-    cadc_options: cadc.CADCCalibOptions = field(
-        default_factory=cadc.CADCCalibOptions)
-    neuron_options: neuron.NeuronCalibOptions = field(
-        default_factory=neuron.NeuronCalibOptions)
-    neuron_disable_leakage: bool = True
-    synapse_driver_options: synapse_driver.SynapseDriverCalibOptions \
-        = field(default_factory=synapse_driver.SynapseDriverCalibOptions)
 
 
 @dataclass
@@ -264,12 +222,13 @@ class HagenCalibResult(base.CalibResult):
         ).calibrated_parameters
 
         # pack into result class, apply
+        options = HagenSyninCalibOptions()
+        options.cadc_options = cadc_options
+        options.synapse_driver_options = self.options.synapse_driver_options
         result = HagenSyninCalibResult(
             target=HagenSyninCalibTarget(
                 cadc_target=cadc_target, synapse_dac_bias=synapse_dac_bias),
-            options=HagenSyninCalibOptions(
-                cadc_options=cadc_options,
-                synapse_driver_options=self.options.synapse_driver_options),
+            options=options,
             cadc_result=cadc_result,
             synapse_driver_result=self.synapse_driver_result,
             syn_i_bias_dac=calibrated_dac_bias)

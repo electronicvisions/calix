@@ -11,6 +11,7 @@ import quantities as pq
 
 from dlens_vx_v3 import sta, halco, hal, hxcomm, lola, logger
 
+from pyccalix import NeuronCalibOptions
 from calix.common import algorithms, base
 from calix.hagen import neuron_helpers, neuron_potentials, \
     neuron_dataclasses
@@ -136,24 +137,6 @@ NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
     holdoff_time=np.ones(
         halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().holdoff_time
 )
-
-
-@dataclass
-class NeuronCalibOptions(base.CalibOptions):
-    """
-    Further configuration parameters for neuron calibration.
-
-    :ivar readout_neuron: Coordinate of the neuron to be connected to
-        a readout pad, i.e. can be observed using an oscilloscope.
-        The selected neuron is connected to the upper pad (channel 0),
-        the lower pad (channel 1) always shows the CADC ramp of quadrant 0.
-        When using the MADC, select
-        halco.SourceMultiplexerOnReadoutSourceSelection(0) for the neuron
-        and mux 1 for the CADC ramps.
-        If None is given, the readout is not configured.
-    """
-
-    readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None
 
 
 @dataclass

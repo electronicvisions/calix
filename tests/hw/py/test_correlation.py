@@ -120,11 +120,12 @@ class TestCorrelation(ConnectionSetup):
         base.run(self.connection, builder)
 
         # calibrate amplitudes and time constants
+        options = correlation.CorrelationCalibOptions()
+        options.calibrate_synapses = False
         calib_result = correlation.calibrate(
             self.connection, target=correlation.CorrelationCalibTarget(
                 amplitude=0.5, time_constant=5 * pq.us),
-            options=correlation.CorrelationCalibOptions(
-                calibrate_synapses=False))
+            options=options)
 
         # check correlation parameters in a few quad columns
         delays = [-50, -30, -15, -10, -5, -2.5, -1,

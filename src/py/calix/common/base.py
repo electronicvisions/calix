@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from dlens_vx_v3 import halco, hal, sta, logger, hxcomm, lola
 
+from pyccalix import CalibOptions
 from calix.common.boundary_check import check_range_boundaries
 
 
@@ -177,22 +178,6 @@ class TopLevelCalibTarget(CalibTarget):
         :return: Calibration result
         """
         raise NotImplementedError
-
-
-@dataclass
-class CalibOptions(ABC):
-    """
-    Data structure for collecting other configuration parameters for
-    higher-level calibration functions.
-
-    These options are not targets in the sense that they are more
-    technical parameters. They may still affect the result, though.
-
-    The available choices (ranges) will be clear from the expected
-    data types. For example, boolean switches can allow to perform
-    the calibration differently, or a priority setting can be applied
-    to some targets, at the cost of accuracy at other targets.
-    """
 
 
 @dataclass

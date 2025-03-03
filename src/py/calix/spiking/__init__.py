@@ -6,6 +6,7 @@ from warnings import warn
 
 from dlens_vx_v3 import hxcomm, hal, halco
 
+from pyccalix import SpikingCalibOptions
 from calix.common import base, cadc
 from calix.spiking import neuron, correlation, synapse_driver
 
@@ -35,32 +36,6 @@ class SpikingCalibTarget(base.TopLevelCalibTarget):
                   options: Optional[SpikingCalibOptions] = None
                   ) -> SpikingCalibResult:
         return calibrate(connection, self, options)
-
-
-@dataclass
-class SpikingCalibOptions(base.CalibOptions):
-    """
-    Data class containing further options for spiking calibration.
-
-    :ivar cadc_options: Further options for CADC calibration.
-    :ivar neuron_options: Further options for neuron calibration.
-    :ivar correlation_options: Further options for correlation calibration.
-    :ivar stp_options: Further options for STP calibration.
-    :ivar refine_potentials: Switch whether after the neuron calibration,
-        the CADCs and neuron potentials are calibrated again. This mitigates
-        CapMem crosstalk effects. By default, refinement is only performed
-        if COBA mode is disabled.
-    """
-
-    cadc_options: cadc.CADCCalibOptions = field(
-        default_factory=cadc.CADCCalibOptions)
-    neuron_options: neuron.NeuronCalibOptions = field(
-        default_factory=neuron.NeuronCalibOptions)
-    correlation_options: correlation.CorrelationCalibOptions = field(
-        default_factory=correlation.CorrelationCalibOptions)
-    stp_options: synapse_driver.STPCalibOptions = field(
-        default_factory=synapse_driver.STPCalibOptions)
-    refine_potentials: Optional[bool] = None
 
 
 @dataclass

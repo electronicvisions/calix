@@ -10,6 +10,7 @@ import numpy as np
 
 from dlens_vx_v3 import halco, hal, sta, logger, hxcomm
 
+from pyccalix import CADCCalibOptions
 from calix.common import helpers, algorithms, base, \
     cadc_helpers, cadc_evaluation
 from calix import constants
@@ -35,23 +36,6 @@ class CADCCalibTarget(base.CalibTarget):
     read_range: base.ParameterRange = field(
         default_factory=lambda: base.ParameterRange(
             hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)))
-
-
-@dataclass
-class CADCCalibOptions(base.CalibOptions):
-    """
-    Further configuration parameters for the CADC calibration, that are
-    not directly calibration targets.
-
-    :ivar calibrate_offsets: Decide whether the individual channel
-        offsets are calibrated. For standard usecases, including
-        neuron and correlation measurements, this should be enabled
-        (default). Only in case the auto-calibrating correlation
-        reset (cf. hal.CommonCorrelationConfig) is used, this
-        should be disabled.
-    """
-
-    calibrate_offsets: bool = True
 
 
 @dataclass
