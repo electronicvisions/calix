@@ -30,12 +30,16 @@ class CADCCalibTarget(base.CalibTarget):
     """
 
     dynamic_range: base.ParameterRange = field(
-        default_factory=lambda: base.ParameterRange(70, 550))
+        default_factory=lambda: base.ParameterRange(
+            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)))
     read_range: base.ParameterRange = field(
-        default_factory=lambda: base.ParameterRange(20, 220))
+        default_factory=lambda: base.ParameterRange(
+            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)))
     feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
-        {"dynamic_range": base.ParameterRange(70, 550),
-         "read_range": base.ParameterRange(20, 220)}
+        {"dynamic_range": base.ParameterRange(
+            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)),
+         "read_range": base.ParameterRange(
+            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220))}
 
     def check_values(self):
         """
@@ -162,7 +166,8 @@ class RampOffsetCalib(base.Calib):
         connected to the CADCs via the CapMem debug readout.
     """
 
-    def __init__(self, target: int = 20, dynamic_range_min: int = 70):
+    def __init__(self, target: int = 20, dynamic_range_min:
+                 hal.CapMemCell.Value = hal.CapMemCell.Value(70)):
         """
         :param dynamic_range_min: Lower end of the desired dynamic range
             of the CADCs. Given in LSB of a global CapMem cell.
@@ -267,7 +272,8 @@ class RampSlopeCalib(base.Calib):
         connected to the CADCs via the CapMem debug readout.
     """
 
-    def __init__(self, target: int = 220, dynamic_range_max: int = 550):
+    def __init__(self, target: int = 220, dynamic_range_max:
+                 hal.CapMemCell.Value = hal.CapMemCell.Value(550)):
         allowed_range = base.ParameterRange(hal.CapMemCell.Value.min,
                                             hal.CapMemCell.Value.max)
         super().__init__(
@@ -557,7 +563,8 @@ def calibrate(
     calibration = RampOffsetCalib(
         dynamic_range_min=target.dynamic_range.lower)
     result = calibration.run(
-        connection, algorithms.BinarySearch(), target=target.read_range.lower)
+        connection, algorithms.BinarySearch(),
+        target=target.read_range.lower.value())
     calib_result.v_ramp_offset = result.calibrated_parameters
     calib_result.success = cadc_helpers.convert_success_masks(result.success)
     log.INFO(f"Calibrated v_ramp_start, values: {calib_result.v_ramp_offset}")
@@ -566,7 +573,8 @@ def calibrate(
     calibration = RampSlopeCalib(
         dynamic_range_max=target.dynamic_range.upper)
     result = calibration.run(
-        connection, algorithms.BinarySearch(), target=target.read_range.upper)
+        connection, algorithms.BinarySearch(),
+        target=target.read_range.upper.value())
     calib_result.i_ramp_slope = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success,

@@ -31,7 +31,8 @@ class HagenSyninCalibTarget(base.TopLevelCalibTarget):
 
     cadc_target: cadc.CADCCalibTarget = field(
         default_factory=lambda: cadc.CADCCalibTarget(
-            dynamic_range=base.ParameterRange(150, 340)))
+            dynamic_range=base.ParameterRange(
+                hal.CapMemCell.Value(150), hal.CapMemCell.Value(340))))
     synapse_dac_bias: int = 800
 
     feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
@@ -73,7 +74,8 @@ class HagenCalibTarget(base.TopLevelCalibTarget):
 
     cadc_target: cadc.CADCCalibTarget = field(
         default_factory=lambda: cadc.CADCCalibTarget(
-            dynamic_range=base.ParameterRange(150, 500)))
+            dynamic_range=base.ParameterRange(
+                hal.CapMemCell.Value(150), hal.CapMemCell.Value(500))))
     neuron_target: neuron.NeuronCalibTarget = field(
         default_factory=neuron.NeuronCalibTarget)
 
@@ -315,7 +317,8 @@ def calibrate(connection: hxcomm.ConnectionHandle,
 
     # preparations for synapse driver calib: calibrate CADC to smaller range
     cadc.calibrate(connection, cadc.CADCCalibTarget(
-        dynamic_range=base.ParameterRange(150, 340)))
+        dynamic_range=base.ParameterRange(
+            hal.CapMemCell.Value(150), hal.CapMemCell.Value(340))))
     builder = base.WriteRecordingPlaybackProgramBuilder()
     neuron_helpers.configure_chip(builder)
     base.run(connection, builder)

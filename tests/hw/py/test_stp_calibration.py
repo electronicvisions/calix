@@ -63,7 +63,8 @@ class STPCalibTest(ConnectionSetup):
         cadc.calibrate(
             self.connection,
             cadc.CADCCalibTarget(
-                dynamic_range=base.ParameterRange(100, 450)))
+                dynamic_range=base.ParameterRange(
+                    hal.CapMemCell.Value(100), hal.CapMemCell.Value(450))))
 
         # reconnect neuron readout to CADCs
         builder = base.WriteRecordingPlaybackProgramBuilder()
