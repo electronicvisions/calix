@@ -136,8 +136,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     if options is None:
         options = SpikingCalibOptions()
 
-    target.check()
-
     # calibrate CADCs
     cadc_result = cadc.calibrate(
         connection, target.cadc_target, options.cadc_options)

@@ -2,7 +2,7 @@
 Dataclasses for hagen neuron calib target and result.
 """
 
-from typing import ClassVar, Dict, Optional, Union, Callable
+from typing import Dict, Optional, Union, Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -70,59 +70,6 @@ class NeuronCalibTarget(base.CalibTarget):
     i_synin_gm: int = 450
     target_noise: Optional[float] = None
     synapse_dac_bias: int = hal.CapMemCell.Value.max
-
-    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
-        {"target_leak_read": base.ParameterRange(100, 140),
-         "tau_syn": base.ParameterRange(0.3 * pq.us, 20 * pq.us),
-         "tau_mem": base.ParameterRange(20 * pq.us, 100 * pq.us),
-         "i_synin_gm": base.ParameterRange(30, 600),
-         "target_noise": base.ParameterRange(1.0, 2.5),
-         "synapse_dac_bias": base.ParameterRange(
-             30, hal.CapMemCell.Value.max)}
-
-    def check_types(self):
-        """
-        Check whether the correct types are given.
-
-        :raises TypeError: If time constants are not given with a unit
-            from the `quantities` package.
-        """
-
-        super().check_types()
-
-        if not isinstance(self.tau_mem, pq.Quantity):
-            raise TypeError(
-                "Membrane time constant is not given as a "
-                "`quantities.quantity.Quantity`.")
-        if not isinstance(self.tau_syn, pq.Quantity):
-            raise TypeError(
-                "Synaptic time constant is not given as a "
-                "`quantities.quantity.Quantity`.")
-
-    def check_values(self):
-        """
-        Check whether calibration targets are feasible.
-
-        Log warnings if the parameters are out of the typical range
-        which can be calibrated and raise an error if the time constants
-        exceed the range which can be handled by the calibration routine.
-
-        :raises ValueError: If target parameters are outside the allowed
-            range for hagen neuron calibration.
-        """
-
-        super().check_values()
-
-        if np.any([self.tau_mem < constants.tau_mem_range.lower,
-                   self.tau_mem > constants.tau_mem_range.upper]):
-            raise ValueError(
-                "Target membrane time constant is out of allowed range "
-                + "in the respective fit function.")
-        if np.any([self.tau_syn < constants.tau_syn_range.lower,
-                   self.tau_syn > constants.tau_syn_range.upper]):
-            raise ValueError(
-                "Target synaptic time constant is out of allowed range "
-                + "in the respective fit function.")
 
 
 @dataclass

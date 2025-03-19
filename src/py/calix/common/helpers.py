@@ -74,10 +74,10 @@ def capmem_set_quadrant_cells(
         for cell, value in config.items():
             coord = halco.CapMemCellOnDLS(cell, capmem_block)
 
-            if isinstance(value, np.ndarray):
+            try:
                 builder.write(coord, hal.CapMemCell(
                     hal.CapMemCell.Value(value[capmem_block_id])))
-            else:
+            except TypeError:
                 builder.write(coord, hal.CapMemCell(
                     hal.CapMemCell.Value(value)))
 

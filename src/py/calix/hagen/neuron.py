@@ -17,9 +17,10 @@ from calix.hagen import neuron_helpers, neuron_evaluation, \
 from calix.hagen.neuron_dataclasses import NeuronCalibTarget, \
     NeuronCalibOptions, NeuronCalibResult, CalibResultInternal
 from calix.spiking import neuron_calib_parts
+from calix import constants
 
 
-# pylint: disable=too-many-statements
+# pylint: disable=too-many-statements,too-many-branches
 def calibrate(
         connection: hxcomm.ConnectionHandle,
         target: Optional[NeuronCalibTarget] = None,
@@ -92,7 +93,50 @@ def calibrate(
     if options is None:
         options = NeuronCalibOptions()
 
-    target.check()
+    if not isinstance(target.tau_mem, pq.Quantity):
+        raise TypeError(
+            "Membrane time constant is not given as a "
+            "`quantities.quantity.Quantity`.")
+    if not isinstance(target.tau_syn, pq.Quantity):
+        raise TypeError(
+            "Synaptic time constant is not given as a "
+            "`quantities.quantity.Quantity`.")
+
+    if np.any([target.tau_mem < constants.tau_mem_range.lower,
+               target.tau_mem > constants.tau_mem_range.upper]):
+        raise ValueError(
+            "Target membrane time constant is out of allowed range "
+            + "in the respective fit function.")
+    if np.any([target.tau_syn < constants.tau_syn_range.lower,
+               target.tau_syn > constants.tau_syn_range.upper]):
+        raise ValueError(
+            "Target synaptic time constant is out of allowed range "
+            + "in the respective fit function.")
+
+    base.check_values(
+        "target_leak_read",
+        target.target_leak_read,
+        base.ParameterRange(100, 140))
+    base.check_values(
+        "tau_syn",
+        target.tau_syn,
+        base.ParameterRange(0.3 * pq.us, 20 * pq.us))
+    base.check_values(
+        "tau_mem",
+        target.tau_mem,
+        base.ParameterRange(20 * pq.us, 100 * pq.us))
+    base.check_values(
+        "i_synin_gm",
+        target.i_synin_gm,
+        base.ParameterRange(30, 600))
+    base.check_values(
+        "target_noise",
+        target.target_noise,
+        base.ParameterRange(1.0, 2.5))
+    base.check_values(
+        "synapse_dac_bias",
+        target.synapse_dac_bias,
+        base.ParameterRange(30, hal.CapMemCell.Value.max))
 
     # Configure chip for calibration
     builder = base.WriteRecordingPlaybackProgramBuilder()

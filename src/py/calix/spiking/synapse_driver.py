@@ -328,8 +328,6 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
     if options is None:
         options = STPCalibOptions()
 
-    target.check()
-
     calib = STPOffsetCalib(i_ramp=options.i_ramp, v_stp=options.v_stp)
     calib_result = calib.run(connection, algorithm=algorithms.BinarySearch())
 

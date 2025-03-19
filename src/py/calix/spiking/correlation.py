@@ -3,7 +3,7 @@ Provides classes for calibration of the correlation
 characteristics, i.e. time constants and amplitudes.
 """
 
-from typing import ClassVar, Dict, Optional, Union
+from typing import Optional, Union
 from enum import Enum, auto
 from dataclasses import dataclass, field
 import copy
@@ -365,10 +365,6 @@ class CorrelationCalibTarget(base.CalibTarget):
     time_constant: pq.Quantity = field(
         default_factory=lambda: 5 * pq.us)
 
-    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
-        {"amplitude": base.ParameterRange(0.2, 2),
-         "time_constant": base.ParameterRange(2 * pq.us, 30 * pq.us)}
-
 
 @dataclass
 class CorrelationCalibOptions(base.CalibOptions):
@@ -590,7 +586,14 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
         options = CorrelationCalibOptions()
 
     # check input parameters
-    target.check()
+    base.check_values(
+        "amplitude",
+        target.amplitude,
+        base.ParameterRange(0.2, 2))
+    base.check_values(
+        "time_constant",
+        target.time_constant,
+        base.ParameterRange(2 * pq.us, 30 * pq.us))
 
     calib_result = CorrelationCalibResult(target=target, options=options)
 

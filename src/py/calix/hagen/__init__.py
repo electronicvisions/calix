@@ -35,9 +35,6 @@ class HagenSyninCalibTarget(base.TopLevelCalibTarget):
                 hal.CapMemCell.Value(150), hal.CapMemCell.Value(340))))
     synapse_dac_bias: int = 800
 
-    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
-        {"synapse_dac_bias": base.ParameterRange(30, hal.CapMemCell.Value.max)}
-
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,
                   options: Optional[HagenSyninCalibOptions] = None
@@ -313,8 +310,6 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     if options is None:
         options = HagenCalibOptions()
 
-    target.check()
-
     # preparations for synapse driver calib: calibrate CADC to smaller range
     cadc.calibrate(connection, cadc.CADCCalibTarget(
         dynamic_range=base.ParameterRange(
@@ -406,7 +401,10 @@ def calibrate_for_synin_integration(
     if options is None:
         options = HagenSyninCalibOptions()
 
-    target.check()
+    base.check_values(
+        "synapse_dac_bias",
+        target.synapse_dac_bias,
+        base.ParameterRange(30, hal.CapMemCell.Value.max))
 
     # calibrate CADCs
     cadc_result = cadc.calibrate(

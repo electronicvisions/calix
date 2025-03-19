@@ -3,7 +3,7 @@ Provides an interface for calibrating LIF neurons.
 """
 
 import numbers
-from typing import ClassVar, Dict, Optional, Union, List
+from typing import Optional, Union, List
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -95,92 +95,15 @@ class NeuronCalibTarget(base.CalibTarget):
     leak: Union[int, np.ndarray] = 80
     reset: Union[int, np.ndarray] = 70
     threshold: Union[int, np.ndarray] = 125
-    tau_mem: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
-    tau_syn: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
+    tau_mem: pq.Quantity = 10. * pq.us
+    tau_syn: pq.Quantity = 10. * pq.us
     i_synin_gm: Union[int, np.ndarray] = 500
     e_coba_reversal: Optional[np.ndarray] = None
     e_coba_reference: Optional[np.ndarray] = None
     membrane_capacitance: Union[int, np.ndarray] = 63
-    refractory_time: pq.Quantity = field(
-        default_factory=lambda: 2 * pq.us)
+    refractory_time: pq.Quantity = 2 * pq.us
     synapse_dac_bias: int = 600
-    holdoff_time: pq.Quantity = field(
-        default_factory=lambda: 0 * pq.us)
-
-    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
-        {"leak": base.ParameterRange(50, 160),
-         "reset": base.ParameterRange(50, 160),
-         "threshold": base.ParameterRange(50, 220),
-         "tau_mem": base.ParameterRange(0.5 * pq.us, 60 * pq.us),
-         "tau_syn": base.ParameterRange(0.3 * pq.us, 30 * pq.us),
-         "i_synin_gm": base.ParameterRange(30, 800),
-         "e_coba_reversal": base.ParameterRange(-np.inf, np.inf),
-         "e_coba_reference": base.ParameterRange(60, 160),
-         "membrane_capacitance": base.ParameterRange(
-             hal.NeuronConfig.MembraneCapacitorSize.min,
-             hal.NeuronConfig.MembraneCapacitorSize.max),
-         "refractory_time": base.ParameterRange(
-             40 * pq.ns, 32 * pq.us),
-         "synapse_dac_bias": base.ParameterRange(
-             30, hal.CapMemCell.Value.max),
-         "holdoff_time": base.ParameterRange(
-             0 * pq.ns, 4 * pq.us)}
-
-    def check_types(self):
-        """
-        Check whether parameters have the right types and shapes.
-
-        :raises TypeError: If time constants are not given with a unit
-            from the `quantities` package.
-        :raises ValueError: If shape of parameters is bad.
-        """
-
-        super().check_types()
-
-        if not isinstance(self.tau_mem, pq.Quantity):
-            raise TypeError(
-                "Membrane time constant is not given as a "
-                "`quantities.Quantity`.")
-        if not isinstance(self.tau_syn, pq.Quantity):
-            raise TypeError(
-                "Synaptic time constant is not given as a "
-                "`quantities.Quantity`.")
-        if not isinstance(self.refractory_time, pq.Quantity):
-            raise TypeError(
-                "Refractory time is not given as a "
-                "`quantities.Quantity`.")
-        if not isinstance(self.holdoff_time, pq.Quantity):
-            raise TypeError(
-                "Holdoff time is not given as a "
-                "`quantities.Quantity`.")
-        if self.holdoff_time.size not in [1, halco.NeuronConfigOnDLS.size]:
-            raise ValueError("Holdoff time needs to have size 1 or "
-                             f"{halco.NeuronConfigOnDLS.size}.")
-
-    def check_values(self):
-        """
-        Check whether calibration targets are feasible.
-
-        Log warnings if the parameters are out of the typical range
-        which can be calibrated and raise an error if the time constants
-        exceed the range which can be handled by the calibration routine.
-
-        :raises ValueError: If target parameters are outside the allowed
-            range for spiking neuron calibration.
-        """
-
-        super().check_values()
-
-        if np.any([self.tau_mem < constants.tau_mem_range.lower,
-                   self.tau_mem > constants.tau_mem_range.upper]):
-            raise ValueError(
-                "Target membrane time constant is out of allowed range "
-                + "in the respective fit function.")
-        if np.any([self.tau_syn < constants.tau_syn_range.lower,
-                   self.tau_syn > constants.tau_syn_range.upper]):
-            raise ValueError(
-                "Target synaptic time constant is out of allowed range "
-                + "in the respective fit function.")
+    holdoff_time: pq.Quantity = 0 * pq.us
 
 
 NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
@@ -427,6 +350,90 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
         return result
 
 
+def check_target(target: NeuronCalibTarget):
+    if not isinstance(target.tau_mem, pq.Quantity):
+        raise TypeError(
+            "Membrane time constant is not given as a "
+            "`quantities.Quantity`.")
+    if not isinstance(target.tau_syn, pq.Quantity):
+        raise TypeError(
+            "Synaptic time constant is not given as a "
+            "`quantities.Quantity`.")
+    if not isinstance(target.refractory_time, pq.Quantity):
+        raise TypeError(
+            "Refractory time is not given as a "
+            "`quantities.Quantity`.")
+    if not isinstance(target.holdoff_time, pq.Quantity):
+        raise TypeError(
+            "Holdoff time is not given as a "
+            "`quantities.Quantity`.")
+    if target.holdoff_time.size not in [1, halco.NeuronConfigOnDLS.size]:
+        raise ValueError("Holdoff time needs to have size 1 or "
+                         f"{halco.NeuronConfigOnDLS.size}.")
+
+    base.check_values(
+        "leak",
+        target.leak,
+        base.ParameterRange(50, 160))
+    base.check_values(
+        "reset",
+        target.reset,
+        base.ParameterRange(50, 160))
+    base.check_values(
+        "threshold",
+        target.threshold,
+        base.ParameterRange(50, 220))
+    base.check_values(
+        "tau_mem",
+        target.tau_mem,
+        base.ParameterRange(0.5 * pq.us, 60 * pq.us))
+    base.check_values(
+        "tau_syn",
+        target.tau_syn,
+        base.ParameterRange(0.3 * pq.us, 30 * pq.us))
+    base.check_values(
+        "i_synin_gm",
+        target.i_synin_gm,
+        base.ParameterRange(30, 800))
+    base.check_values(
+        "e_coba_reversal",
+        target.e_coba_reversal,
+        base.ParameterRange(-np.inf, np.inf))
+    base.check_values(
+        "e_coba_reference",
+        target.e_coba_reference,
+        base.ParameterRange(60, 160))
+    base.check_values(
+        "membrane_capacitance",
+        target.membrane_capacitance,
+        base.ParameterRange(
+            hal.NeuronConfig.MembraneCapacitorSize.min,
+            hal.NeuronConfig.MembraneCapacitorSize.max))
+    base.check_values(
+        "refractory_time",
+        target.refractory_time,
+        base.ParameterRange(40 * pq.ns, 32 * pq.us))
+    base.check_values(
+        "synapse_dac_bias",
+        target.synapse_dac_bias,
+        base.ParameterRange(30, hal.CapMemCell.Value.max))
+    base.check_values(
+        "holdoff_time",
+        target.holdoff_time,
+        base.ParameterRange(0 * pq.ns, 4 * pq.us))
+
+    if np.any([target.tau_mem < constants.tau_mem_range.lower,
+               target.tau_mem > constants.tau_mem_range.upper]):
+        raise ValueError(
+            "Target membrane time constant is out of allowed range "
+            + "in the respective fit function.")
+    if np.any([target.tau_syn < constants.tau_syn_range.lower,
+               target.tau_syn > constants.tau_syn_range.upper]):
+        raise ValueError(
+            "Target synaptic time constant is out of allowed range "
+            + "in the respective fit function.")
+
+
 def calibrate(
         connection: hxcomm.ConnectionHandle,
         target: Optional[NeuronCalibTarget] = None,
@@ -461,7 +468,7 @@ def calibrate(
         options = NeuronCalibOptions()
 
     # process target
-    target.check()
+    check_target(target)
 
     # create result object
     calib_result = _CalibResultInternal()
@@ -575,7 +582,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     if target is None:
         target = NeuronCalibTarget()
 
-    target.check()
+    check_target(target)
 
     # apply given calibration result
     builder = base.WriteRecordingPlaybackProgramBuilder()

@@ -2,7 +2,7 @@
 Calibrates all CADC channels on Hicann-X for a given dynamic range.
 """
 
-from typing import ClassVar, Dict, Optional, Union
+from typing import Optional, Union
 import os
 from dataclasses import dataclass, field
 
@@ -35,28 +35,6 @@ class CADCCalibTarget(base.CalibTarget):
     read_range: base.ParameterRange = field(
         default_factory=lambda: base.ParameterRange(
             hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)))
-    feasible_ranges: ClassVar[Dict[str, base.ParameterRange]] = \
-        {"dynamic_range": base.ParameterRange(
-            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)),
-         "read_range": base.ParameterRange(
-            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220))}
-
-    def check_values(self):
-        """
-        Check whether the given parameters are possible within the
-        CapMem and CADC value ranges.
-        """
-
-        super().check_values()
-
-        if np.any(np.array(self.dynamic_range) < hal.CapMemCell.Value.min):
-            raise ValueError("CADC dynamic_range is below CapMem range.")
-        if np.any(np.array(self.dynamic_range) > hal.CapMemCell.Value.max):
-            raise ValueError("CADC dynamic_range is above CapMem range.")
-        if np.any(np.array(self.read_range) < hal.CADCSampleQuad.Value.min):
-            raise ValueError("CADC read_range is below CADC value range.")
-        if np.any(np.array(self.read_range) > hal.CADCSampleQuad.Value.max):
-            raise ValueError("CADC read_range is above CADC value range.")
 
 
 @dataclass
@@ -542,7 +520,25 @@ def calibrate(
     if options is None:
         options = CADCCalibOptions()
 
-    target.check()
+    base.check_values(
+        "dynamic_range",
+        base.ParameterRange(
+            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)),
+        target.dynamic_range)
+    base.check_values(
+        "read_range",
+        base.ParameterRange(
+            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)),
+        target.read_range)
+
+    if np.any(np.array(target.dynamic_range) < hal.CapMemCell.Value.min):
+        raise ValueError("CADC dynamic_range is below CapMem range.")
+    if np.any(np.array(target.dynamic_range) > hal.CapMemCell.Value.max):
+        raise ValueError("CADC dynamic_range is above CapMem range.")
+    if np.any(np.array(target.read_range) < hal.CADCSampleQuad.Value.min):
+        raise ValueError("CADC read_range is below CADC value range.")
+    if np.any(np.array(target.read_range) > hal.CADCSampleQuad.Value.max):
+        raise ValueError("CADC read_range is above CADC value range.")
 
     log = logger.get("calix.common.cadc_calibration.calibrate")
 
