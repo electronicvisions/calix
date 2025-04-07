@@ -65,10 +65,10 @@ def calibrate(
     # The key into the cache is defined by the parameters target, options.
     # As the data-holding parameters are mutable, we define a custom hashing
     # function
-    str_to_hash = repr(target) + repr(options) +\
-        repr(connection.get_unique_identifier()) +\
-        repr(pyccalix.helpers.get_repo_state())
-    filename = str(sha256(str_to_hash.encode("utf-8")).hexdigest())
+    bytes_to_hash = pickle.dumps(target) + pickle.dumps(options) +\
+        repr(connection.get_unique_identifier()).encode("utf-8") +\
+        repr(pyccalix.helpers.get_repo_state()).encode("utf-8")
+    filename = str(sha256(bytes_to_hash).hexdigest())
 
     # search for existing cache
     for path in cache_paths:
