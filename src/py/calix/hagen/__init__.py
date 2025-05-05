@@ -90,7 +90,7 @@ class HagenSyninCalibResult(base.CalibResult):
         Apply the calib to the chip.
 
         Assumes the chip to be initialized already, which can be done using
-        the stadls ExperimentInit().
+        the stadls DigitalInit().
 
         :param builder: Builder or dumper to append instructions to.
         """
@@ -161,7 +161,7 @@ class HagenCalibResult(base.CalibResult):
         Apply the calib to the chip.
 
         Assumes the chip to be initialized already, which can be done using
-        the stadls ExperimentInit().
+        the stadls DigitalInit().
 
         :param builder: Builder or dumper to append instructions to.
         """
@@ -249,7 +249,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     Calibrate neurons, calibrate synapse drivers.
 
     The chip has to be initialized first, which can be done using the
-    stadls ExperimentInit().
+    stadls DigitalInit().
 
     The individual calibrations' default parameters can be overwritten
     by providing the appropriate arguments.

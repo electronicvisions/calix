@@ -13,7 +13,7 @@ import calix.scripts.calix_generate_default_calibration as calib_generator
 class ConnectionSetup(unittest.TestCase):
     """
     Base class for hardware tests:
-    Provides connection and ExperimentInit() initialization
+    Provides connection and DigitalInit() initialization
     during setup and disconnects during teardown.
 
     :cvar conn_manager: Connection context manager.

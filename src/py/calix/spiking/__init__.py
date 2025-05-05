@@ -66,7 +66,7 @@ class SpikingCalibResult(base.CalibResult):
         Apply the calib to the chip.
 
         Assumes the chip to be initialized already, which can be done using
-        the stadls ExperimentInit().
+        the stadls DigitalInit().
 
         :param builder: Builder to append instructions to.
         """
@@ -88,7 +88,7 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     Calibrate neurons.
 
     The chip has to be initialized first, which can be done using the
-    stadls ExperimentInit().
+    stadls DigitalInit().
 
     The individual calibrations' default parameters can be overwritten
     by providing cadc_ or neuron_kwargs, respectively.
