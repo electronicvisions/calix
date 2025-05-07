@@ -597,7 +597,7 @@ class ThresholdCalibMADC(madc_base.Calib):
 
         max_reads = np.empty(halco.NeuronConfigOnDLS.size, dtype=int)
         for neuron_id, neuron_samples in enumerate(samples):
-            max_reads[neuron_id] = np.max(neuron_samples["value"][50:-50])
+            max_reads[neuron_id] = np.max(neuron_samples["value"][200:-200])
         # the first and last 50 samples are cut off since they may contain
         # bad data (the first few MADC samples may not be plausible,
         # the last few samples may already be acquired at the next neuron)
