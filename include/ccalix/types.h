@@ -9,7 +9,8 @@ struct GENPYBIND(inline_base("*")) PotentialInVolt
 {
 	constexpr explicit PotentialInVolt(value_type const value = 0.) GENPYBIND(implicit_conversion) :
 	    base_t(value)
-	{}
+	{
+	}
 
 	GENPYBIND_MANUAL({
 		parent.def("as_quantity", [&parent](GENPYBIND_PARENT_TYPE const& self) {

@@ -17,7 +17,8 @@ SpikingCalibOptions::SpikingCalibOptions(
     correlation_options(correlation_options),
     stp_options(stp_options),
     refine_potentials(refine_potentials)
-{}
+{
+}
 
 template <typename Archive>
 void SpikingCalibOptions::serialize(Archive& ar, std::uint32_t const)
