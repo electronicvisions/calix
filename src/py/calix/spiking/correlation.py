@@ -66,7 +66,7 @@ class TimeConstantCalib(base.Calib):
         other quadrants using corresponding offsets to the coordinates.
     :ivar log: Logger used to log outputs.
     :ivar branches: Correlation branch to consider. Choose from causal,
-        acausal or both, using the Enum CorrelationBranches.
+        acausal or both, using the Enum CorrelationCalibOptions.Branches.
     """
 
     def __init__(self, target: Optional[pq.Quantity] = 5 * pq.us, *,

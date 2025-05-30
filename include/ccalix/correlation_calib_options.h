@@ -26,7 +26,7 @@ struct GENPYBIND(visible) CorrelationCalibOptions : public CalibOptions
 	};
 
 	/*
-	 * Correlation traces to consider during calibration. Use the Enum type CorrelationBranches to
+	 * Correlation traces to consider during calibration. Use the Enum type Branches to
 	 * select from causal, acausal or both.
 	 */
 	Branches branches{Branches::BOTH};

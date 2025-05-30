@@ -13,6 +13,7 @@ import quantities as pq
 from dlens_vx_v3 import logger
 from dlens_vx_v3.hxcomm import ManagedConnection
 
+from pyccalix import CorrelationCalibOptions
 import calix.spiking
 from calix.spiking import correlation
 from calix.scripts.calix_generate_default_calibration import \
@@ -46,7 +47,7 @@ class CorrelationCalibRecorder(CalibRecorder):
     calibration_options = calix.spiking.SpikingCalibOptions(
         correlation_options=correlation.CorrelationCalibOptions(
             calibrate_synapses=True,
-            branches=correlation.CorrelationBranches.CAUSAL,
+            branches=CorrelationCalibOptions.Branches.CAUSAL,
             default_amp_calib=1, v_res_meas=0.95 * pq.V))
 
 
