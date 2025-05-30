@@ -44,11 +44,15 @@ class CorrelationCalibRecorder(CalibRecorder):
         correlation_target=correlation.CorrelationCalibTarget(
             amplitude=1.5, time_constant=30 * pq.us)
     )
+
+    correlation_options = CorrelationCalibOptions()
+    correlation_options.calibrate_synapses = True
+    correlation_options.branches = CorrelationCalibOptions.Branches.CAUSAL
+    correlation_options.v_res_meas = 0.95
+    correlation_options.default_amp_calib = 1
+
     calibration_options = calix.spiking.SpikingCalibOptions(
-        correlation_options=correlation.CorrelationCalibOptions(
-            calibrate_synapses=True,
-            branches=CorrelationCalibOptions.Branches.CAUSAL,
-            default_amp_calib=1, v_res_meas=0.95 * pq.V))
+        correlation_options=correlation_options)
 
 
 class CorrelationCalib(RecorderAndDumper):
