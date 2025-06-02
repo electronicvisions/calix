@@ -57,7 +57,8 @@ def capmem_noise(start: int = -5, end: int = 6,
 
 def capmem_set_quadrant_cells(
         builder: base.WriteRecordingPlaybackProgramBuilder,
-        config: Dict[halco.CapMemCellOnCapMemBlock, Union[int, np.ndarray]]
+        config: Dict[halco.CapMemCellOnCapMemBlock, Union[
+            int, np.ndarray, np.number]]
 ) -> base.WriteRecordingPlaybackProgramBuilder:
     """
     Set multiple CapMem cells that are global per quadrant to the same
@@ -74,10 +75,12 @@ def capmem_set_quadrant_cells(
         for cell, value in config.items():
             coord = halco.CapMemCellOnDLS(cell, capmem_block)
 
+            # when accessing a scalar value with `[]` a ValueError is raised
+            # when accessing an `np.number` with `[]` an IndexError is raised
             try:
                 builder.write(coord, hal.CapMemCell(
                     hal.CapMemCell.Value(value[capmem_block_id])))
-            except TypeError:
+            except (TypeError, IndexError):
                 builder.write(coord, hal.CapMemCell(
                     hal.CapMemCell.Value(value)))
 
