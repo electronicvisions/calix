@@ -96,15 +96,17 @@ class NeuronCalibTarget(base.CalibTarget):
     leak: Union[int, np.ndarray] = 80
     reset: Union[int, np.ndarray] = 70
     threshold: Union[int, np.ndarray] = 125
-    tau_mem: pq.Quantity = 10. * pq.us
-    tau_syn: pq.Quantity = 10. * pq.us
+    tau_mem: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
+    tau_syn: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
     i_synin_gm: Union[int, np.ndarray] = 500
     e_coba_reversal: Optional[np.ndarray] = None
     e_coba_reference: Optional[np.ndarray] = None
     membrane_capacitance: Union[int, np.ndarray] = 63
-    refractory_time: pq.Quantity = 2 * pq.us
+    refractory_time: pq.Quantity = field(
+        default_factory=lambda: 2 * pq.us)
     synapse_dac_bias: int = 600
-    holdoff_time: pq.Quantity = 0 * pq.us
+    holdoff_time: pq.Quantity = field(
+        default_factory=lambda: 0 * pq.us)
 
 
 NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
