@@ -9,6 +9,7 @@ from waflib.extras.symwaf2ic import describe_project
 def depends(dep):
     dep("code-format")
     dep("haldls")
+    dep("dapr")
     dep.execute()
 
     def recurse(deps, name, alldeps):
@@ -62,6 +63,7 @@ def build(bld):
         source=bld.path.ant_glob("src/cc/ccalix/**/*.cpp"),
         use=[
             "ccalix_includes",
+            "dapr",
             "stadls_vx_v3",
             "halco_hicann_dls_vx_v3",
             "haldls_vx_v3",
