@@ -61,7 +61,9 @@ class StatefulConnection:
     def __init__(
             self,
             connection: hxcomm.ConnectionHandle,
-            init: sta.ExperimentInit = sta.ExperimentInit()):
+            init: Optional[sta.ExperimentInit] = None):
+        if init is None:
+            init = sta.ExperimentInit(connection.get_hwdb_entry())
         self.connection = connection
         self.reinit = sta.ReinitStackEntry(self.connection)
         self.init = init
