@@ -59,6 +59,7 @@ class Recorder(ABC):
         samples, but only after this time has elapsed, the sampling_time
         starts and samples are returned. This works around a bug, see
         issue 4008 for details.
+    :ivar neurons: Neurons to be recorded, default: all 512
     """
 
     def __init__(self):
@@ -77,6 +78,9 @@ class Recorder(ABC):
         self.madc_input_frequency = hal.ADPLL().calculate_output_frequency(
             output=hal.ADPLL().Output.dco)  # default MADC clock
         self.madc_config = hal.MADCConfig()
+
+        # neurons to be recorded
+        self.neurons: np.ndarray = np.arange(512)
 
     def prepare_recording(self, connection: hxcomm.ConnectionHandle):
         """
@@ -215,14 +219,28 @@ class Recorder(ABC):
         madc_control.enable_pre_amplifier = True
         builder.write(halco.MADCControlOnDLS(), madc_control)
 
-        # connect first neurons to MADC already:
+        # get neuron_coordinates for chosen neurons
+        neuron_coordinates = \
+            [halco.NeuronConfigOnDLS(
+                halco.NeuronConfigOnNeuronConfigBlock(neuron % 128),
+                halco.NeuronConfigBlockOnDLS(neuron // 128))
+                for neuron in self.neurons]
+
+        # connect first even and first odd neurons to MADC already:
         # this minimizes drift in voltages once sampling begins
-        builder.write(
-            halco.NeuronConfigOnDLS(0),
-            self.neuron_config_readout(halco.NeuronConfigOnDLS(0)))
-        builder.write(
-            halco.NeuronConfigOnDLS(1),
-            self.neuron_config_readout(halco.NeuronConfigOnDLS(1)))
+        idx_even_neurons = np.where(self.neurons % 2 == 0)[0]
+        idx_odd_neurons = np.where(self.neurons % 2 == 1)[0]
+
+        if idx_even_neurons.size != 0:
+            builder.write(
+                neuron_coordinates[idx_even_neurons[0]],
+                self.neuron_config_readout(
+                    neuron_coordinates[idx_even_neurons[0]]))
+        if idx_odd_neurons.size != 0:
+            builder.write(
+                neuron_coordinates[idx_odd_neurons[0]],
+                self.neuron_config_readout(
+                    neuron_coordinates[idx_odd_neurons[0]]))
 
         mux_config = hal.ReadoutSourceSelection.SourceMultiplexer()
         mux_config.neuron_even[halco.HemisphereOnDLS(0)] = True
@@ -247,7 +265,8 @@ class Recorder(ABC):
         builder = helpers.wait(builder, initial_wait)
 
         switching_time_tickets = []
-        for neuron_coord in halco.iter_all(halco.NeuronConfigOnDLS):
+
+        for neuron_idx, neuron_coord in enumerate(neuron_coordinates):
             # connect neuron to shared line
             builder.write(
                 neuron_coord, self.neuron_config_readout(neuron_coord))
@@ -272,7 +291,7 @@ class Recorder(ABC):
 
             # trigger MADC sampling
             current_time = initial_wait + self.dead_time \
-                + self.wait_between_neurons * int(neuron_coord.toEnum())
+                + self.wait_between_neurons * neuron_idx
             builder.block_until(
                 halco.TimerOnDLS(),
                 hal.Timer.Value(
@@ -280,7 +299,7 @@ class Recorder(ABC):
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
             madc_control = hal.MADCControl()
             madc_control.enable_power_down_after_sampling = \
-                int(neuron_coord.toEnum()) == halco.NeuronConfigOnDLS.max
+                neuron_idx == len(self.neurons) - 1
             madc_control.start_recording = True
             madc_control.wake_up = False
             madc_control.enable_pre_amplifier = True
@@ -319,7 +338,7 @@ class Recorder(ABC):
 
             # wait for sampling to finish
             current_time = initial_wait + self.wait_between_neurons \
-                * (int(neuron_coord.toEnum()) + 1)
+                * ((neuron_idx) + 1)
             builder.block_until(
                 halco.TimerOnDLS(),
                 hal.Timer.Value(
@@ -383,8 +402,9 @@ class Recorder(ABC):
         # split MADC samples by neuron
         switching_indices = np.searchsorted(
             madc_samples["chip_time"], switching_times)
+
         neuron_samples = []
-        for neuron_id in range(halco.NeuronConfigOnDLS.size):
+        for neuron_id in range(len(self.neurons)):
             neuron_slice = slice(switching_indices[neuron_id * 2],
                                  switching_indices[neuron_id * 2 + 1])
             neuron_samples.append(madc_samples[neuron_slice])
@@ -395,12 +415,14 @@ class Recorder(ABC):
             * self.sampling_time.rescale(pq.s) * 0.95)
         n_samples_received = np.array([len(res) for res in neuron_samples])
         if np.any(n_samples_received < n_samples_required):
+            neurons_too_few = self.neurons[
+                np.where(n_samples_received < n_samples_required)[0]]
             raise exceptions.TooFewSamplesError(
                 "Too few MADC samples were received. "
                 + f"Expected more than {n_samples_required} samples. "
                 + os.linesep
                 + "Neurons with too few samples:" + os.linesep
-                + f"{np.where(n_samples_received < n_samples_required)[0]}"
+                + f"{neurons_too_few}"
                 + os.linesep
                 + "Sample count per neuron:" + os.linesep
                 + f"{n_samples_received}")
