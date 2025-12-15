@@ -44,7 +44,7 @@ class ConnectionSetup(unittest.TestCase):
             cls.conn_manager.__enter__())  # pylint: disable=unnecessary-dunder-call
 
         # extend target_directory by connection id
-        cls.target_directory /= cls.connection.get_unique_identifier()
+        cls.target_directory /= cls.connection.get_unique_identifier()[0]
 
     @classmethod
     def apply_calibration(cls, identifier: str) -> base.CalibResult:

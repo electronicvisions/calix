@@ -66,7 +66,7 @@ def calibrate(
     # As the data-holding parameters are mutable, we define a custom hashing
     # function
     bytes_to_hash = pickle.dumps(target) + pickle.dumps(options) +\
-        repr(connection.get_unique_identifier()).encode("utf-8") +\
+        repr(connection.get_unique_identifier()[0]).encode("utf-8") +\
         repr(pyccalix.helpers.get_repo_state()).encode("utf-8")
     filename = str(sha256(bytes_to_hash).hexdigest())
 

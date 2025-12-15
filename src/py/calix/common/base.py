@@ -81,7 +81,7 @@ class StatefulConnection:
             connection: hxcomm.ConnectionHandle,
             init: Optional[sta.DigitalInit] = None):
         if init is None:
-            init = sta.DigitalInit(connection.get_hwdb_entry())
+            init = sta.DigitalInit(connection.get_hwdb_entry()[0])
         self.connection = connection
         self.reinit = sta.ReinitStackEntry(self.connection)
         self.init = StatefulConnectionInit(init)
@@ -110,7 +110,7 @@ class StatefulConnection:
         self.reinit.set(sta_builder.done(), enforce=False)
 
     def get_unique_identifier(self):
-        return self.connection.get_unique_identifier()
+        return self.connection.get_unique_identifier()[0]
 
 
 def run(connection: StatefulConnection,

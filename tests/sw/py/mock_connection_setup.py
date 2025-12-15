@@ -13,7 +13,7 @@ class ConnectionSetup(unittest.TestCase):
     :cvar connection: Connection to chip to use.
     """
 
-    conn_manager = hxcomm.ManagedZeroMockConnection()
+    conn_manager = hxcomm.ManagedMultiZeroMockConnection()
     connection = None
 
     @classmethod
