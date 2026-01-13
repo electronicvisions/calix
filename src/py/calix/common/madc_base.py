@@ -50,7 +50,7 @@ class Recorder(ABC):
         wait_before_stimulation and dead_time.
     :ivar madc_input_frequency: Expected input clock frequency for the
         MADC, supplied by the PLL. Defaults to 500 MHz, which is present
-        after the default stadls DigitalInit.
+        after the default stadls SystemInit.
     :ivar madc_config: Static configuration of the MADC. Written during
         prepare_recording() and used to obtain the sample rate. The number
         of samples is calculated automatically based on the sampling_time.
@@ -72,7 +72,7 @@ class Recorder(ABC):
         self.dead_time = 1 * pq.us
         self.invalid_samples_time = 8 * pq.us  # see issue 4008
 
-        # Assume MADC input frequency to be unchanged after sta.DigitalInit:
+        # Assume MADC input frequency to be unchanged after sta.SystemInit:
         # This should be replaced by looking it up from a chip object,
         # see issue 3955.
         self.madc_input_frequency = hal.ADPLL().calculate_output_frequency(

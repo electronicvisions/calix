@@ -60,7 +60,7 @@ class WriteRecordingPlaybackProgramBuilder:
 
 
 class StatefulConnectionInit(sta.PlaybackGenerator):
-    def __init__(self, sta_init: sta.DigitalInit):
+    def __init__(self, sta_init: sta.SystemInit):
         super().__init__()
         self.sta_init = sta_init
 
@@ -79,9 +79,9 @@ class StatefulConnection:
     def __init__(
             self,
             connection: hxcomm.ConnectionHandle,
-            init: Optional[sta.DigitalInit] = None):
+            init: Optional[sta.SystemInit] = None):
         if init is None:
-            init = sta.DigitalInit(connection.get_hwdb_entry()[0])
+            init = sta.SystemInit(connection.get_hwdb_entry()[0])
         self.connection = connection
         self.reinit = sta.ReinitStackEntry(self.connection)
         self.init = StatefulConnectionInit(init)

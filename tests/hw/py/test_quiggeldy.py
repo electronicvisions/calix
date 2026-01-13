@@ -17,7 +17,7 @@ class TestQuiggeldy(QuiggeldyConnectionSetup):
 
     @staticmethod
     def thread_reset_chip_state():
-        builder, _ = sta.generate(sta.DigitalInit())
+        builder, _ = sta.generate(sta.SystemInit())
         builder.write(halco.ChipOnDLS(), lola.Chip())
         builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
         program = builder.done()

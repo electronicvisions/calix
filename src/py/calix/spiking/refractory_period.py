@@ -12,7 +12,7 @@ from dlens_vx_v3 import hal, halco, lola, logger
 
 
 # Assume refractory clock frequency yo be unchanged after
-# sta.DigitalInit:
+# sta.SystemInit:
 # This should be replaced by looking it up from a chip object,
 # see issue 3955.
 _clock_base_frequency = hal.ADPLL().calculate_output_frequency(
