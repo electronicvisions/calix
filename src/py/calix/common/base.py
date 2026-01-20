@@ -59,6 +59,22 @@ class WriteRecordingPlaybackProgramBuilder:
         return self.builder.empty() and self.dumper.empty()
 
 
+class StatefulConnectionInit(sta.PlaybackGenerator):
+    def __init__(self, sta_init: sta.DigitalInit):
+        super().__init__()
+        self.sta_init = sta_init
+
+    def generate(self):
+        builder, _ = sta.generate(self.sta_init)
+        builder.write(halco.ChipOnDLS(), lola.Chip())
+        builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
+        builder.write(halco.TimerOnDLS(), hal.Timer())
+        builder.block_until(halco.TimerOnDLS(), hal.Timer.Value(
+            int(hal.Timer.Value.fpga_clock_cycles_per_us)
+            * int(capmem_level_off_time.rescale(pq.us))))
+        return builder, None
+
+
 class StatefulConnection:
     def __init__(
             self,
@@ -68,17 +84,10 @@ class StatefulConnection:
             init = sta.DigitalInit(connection.get_hwdb_entry())
         self.connection = connection
         self.reinit = sta.ReinitStackEntry(self.connection)
-        self.init = init
+        self.init = StatefulConnectionInit(init)
         self.dumper = sta.PlaybackProgramBuilderDumper()
-        self.dumper.write(halco.ChipOnDLS(), lola.Chip())
 
-        builder, _ = sta.generate(init)
-        builder.write(halco.ChipOnDLS(), lola.Chip())
-        builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
-        builder.write(halco.TimerOnDLS(), hal.Timer())
-        builder.block_until(halco.TimerOnDLS(), hal.Timer.Value(
-            int(hal.Timer.Value.fpga_clock_cycles_per_us)
-            * int(capmem_level_off_time.rescale(pq.us))))
+        builder, _ = sta.generate(self.init)
         self.reinit.set(builder.done(), enforce=True)
 
     def update_reinit(self, dumperdone: sta.DumperDone):
