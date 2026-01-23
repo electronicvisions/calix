@@ -886,10 +886,10 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
             boundaries = (
                 [0,
                  constants.tau_mem_range.lower.rescale(pq.us).magnitude,
-                 p_0['offset'] - 10],
-                [p_0['scale'] + 10,
+                 0],
+                [hal.MADCSampleFromChip.Value.max,
                  constants.tau_mem_range.upper.rescale(pq.us).magnitude,
-                 p_0['offset'] + 10])
+                 hal.MADCSampleFromChip.Value.max])
 
             try:
                 popt, _ = curve_fit(
