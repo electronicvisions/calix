@@ -16,6 +16,8 @@ This is called after the synaptic inputs are calibrated.
 from typing import Optional, Tuple, Union, List
 import numbers
 import os
+from multiprocessing import pool
+from functools import partial
 import numpy as np
 import quantities as pq
 from scipy.optimize import curve_fit
@@ -651,6 +653,7 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
             + self._wait_before_stimulation
         self.wait_between_neurons = 10 * self.sampling_time
         self.adjust_bias_range: bool = True
+        self.pool: pool.Pool | None = None
 
     def prelude(self, connection: hxcomm.ConnectionHandle):
         """
@@ -810,18 +813,23 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
         builder.write(neuron_coord, config)
         return builder
 
-    # pylint: disable=too-many-locals
-    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+    @staticmethod
+    def fit_taumem(neuron_id: int, neuron_data: np.ndarray,
+                   data_range: slice,
+                   taumem_range_lower: float, taumem_range_upper: float
+                   ) -> float:
         """
-        Evaluates the obtained MADC samples.
+        Fit membrane time constant for one neuron.
 
-        To each neuron's MADC samples, an exponential decay is fitted,
-        and the resulting time constant is returned.
+        :param neuron_id: Index of chosen neuron.
+        :param neuron_data: Samples of chosen neuron.
+        :param data_range: Slice of samples that is used for the fit.
+        :param taumem_range_lower: Lower bound for the result in us.
+        :param taumem_range_upper: Upper bound for the result in us.
 
-        :param samples: MADC samples obtained for each neuron.
-
-        :return: Numpy array of fitted synaptic input time constants.
+        :return: Fitted membrane time constant in us
         """
+
         def fitfunc(time, scale, tau, offset):
             return scale * np.exp(-time / tau) + offset
 
@@ -857,68 +865,89 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
                 return 0
             return fit_start_index
 
-        start = int(self._wait_before_stimulation.rescale(pq.s)
+        neuron_samples = neuron_data[data_range]
+
+        # only fit to lower half of exponential decay
+        start = find_exponential_start(neuron_samples)
+        neuron_samples = neuron_samples[start:]
+
+        if len(neuron_samples) < 100:
+            raise AssertionError(
+                "Number of MADC samples to fit membrane time constant is "
+                + f"too small: {len(neuron_samples)}.")
+
+        # estimate start values for fit
+        p_0 = {}
+        p_0['offset'] = np.mean(neuron_samples["value"][-10:])
+        p_0['scale'] = np.max(neuron_samples["value"]) - p_0['offset']
+        index_tau = np.argmin(neuron_samples["value"]
+                              > p_0['offset'] + p_0['scale'] / np.e)
+        p_0['tau'] = neuron_samples["chip_time"][index_tau] - \
+            neuron_samples["chip_time"][0]
+
+        # for small time constants the estimation of tau might fail ->
+        # cut at bounds
+        p_0['tau'] = min(
+            max(taumem_range_lower, p_0['tau']),
+            taumem_range_upper)
+
+        boundaries = (
+            [0, taumem_range_lower, 0],
+            [hal.MADCSampleFromChip.Value.max,
+             taumem_range_upper,
+             hal.MADCSampleFromChip.Value.max])
+
+        try:
+            popt, _ = curve_fit(
+                fitfunc,
+                neuron_samples["chip_time"]
+                - neuron_samples["chip_time"][0],
+                neuron_samples["value"],
+                p0=[p_0['scale'], p_0['tau'], p_0['offset']],
+                bounds=boundaries)
+        except RuntimeError as error:
+            raise exceptions.CalibNotSuccessful(
+                f"Fitting to MADC samples failed for neuron {neuron_id}. "
+                + str(error))
+        return popt[1]
+
+    # pylint: disable=too-many-locals
+    def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
+        """
+        Evaluates the obtained MADC samples.
+
+        To each neuron's MADC samples, an exponential decay is fitted,
+        and the resulting time constant is returned.
+
+        :param samples: MADC samples obtained for each neuron.
+
+        :return: Numpy array of fitted synaptic input time constants.
+        """
+
+        # remove unreliable samples
+        start = int((self._wait_before_stimulation).rescale(pq.s)
                     * self.madc_config.calculate_sample_rate(
                         self.madc_input_frequency))
         stop = int(int(self.madc_config.number_of_samples) * 0.95)
-        tau_mem_range_lower_us = constants.tau_mem_range.lower.rescale(
-            pq.us).magnitude
-        tau_mem_range_upper_us = constants.tau_mem_range.upper.rescale(
-            pq.us).magnitude
 
-        neuron_fits = []
-        for neuron_id, neuron_data in enumerate(samples):
-            # remove unreliable samples
-            neuron_samples = neuron_data[start:stop]
+        lower = constants.tau_mem_range.lower.rescale(pq.us).magnitude
+        upper = constants.tau_mem_range.upper.rescale(pq.us).magnitude
 
-            # only fit to lower half of exponential decay
-            start = find_exponential_start(neuron_samples)
-            neuron_samples = neuron_samples[start:]
+        fit_taumem_par = partial(
+            self.fit_taumem,
+            data_range=slice(start, stop),
+            taumem_range_lower=lower,
+            taumem_range_upper=upper)
 
-            if len(neuron_samples) < 100:
-                raise AssertionError(
-                    "Number of MADC samples to fit membrane time constant is "
-                    + f"too small: {len(neuron_samples)}.")
+        if self.pool is not None:
+            results = self.pool.starmap(fit_taumem_par,
+                                        zip(self.neurons, samples))
+        else:
+            results = []
+            for neuron_id, neuron_samples in zip(self.neurons, samples):
+                results.append(fit_taumem_par(neuron_id, neuron_samples))
 
-            # estimate start values for fit
-            p_0 = {}
-            p_0['offset'] = np.mean(neuron_samples["value"][-10:])
-            p_0['scale'] = np.max(neuron_samples["value"]) - p_0['offset']
-            index_tau = np.argmin(neuron_samples["value"]
-                                  > p_0['offset'] + p_0['scale'] / np.e)
-            p_0['tau'] = neuron_samples["chip_time"][index_tau] - \
-                neuron_samples["chip_time"][0]
-
-            # for small time constants the estimation of tau might fail ->
-            # cut at bounds
-            p_0['tau'] = min(
-                max(tau_mem_range_lower_us,
-                    p_0['tau']),
-                tau_mem_range_upper_us)
-
-            boundaries = (
-                [0,
-                 tau_mem_range_lower_us,
-                 0],
-                [hal.MADCSampleFromChip.Value.max,
-                 tau_mem_range_upper_us,
-                 hal.MADCSampleFromChip.Value.max])
-
-            try:
-                popt, _ = curve_fit(
-                    fitfunc,
-                    neuron_samples["chip_time"]
-                    - neuron_samples["chip_time"][0],
-                    neuron_samples["value"],
-                    p0=[p_0['scale'], p_0['tau'], p_0['offset']],
-                    bounds=boundaries)
-            except RuntimeError as error:
-                raise exceptions.CalibNotSuccessful(
-                    f"Fitting to MADC samples failed for neuron {neuron_id}. "
-                    + str(error))
-            neuron_fits.append(popt[1])  # store time constant of exponential
-
-        return np.array(neuron_fits) * pq.us
+        return np.array(results) * pq.us
 
 
 class LeakBiasCalib(base.Calib):
