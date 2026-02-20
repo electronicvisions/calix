@@ -491,7 +491,7 @@ class SynBiasCalib(base.Calib):
                 # such as noise induced by the measurement before, can decay
                 # back to a resting potential before we continue with the
                 # next measurement.
-                builder = helpers.wait(builder, 1000 * pq.us)
+                builder = helpers.wait_us(builder, 1000)
 
             base.run(connection, builder)
 

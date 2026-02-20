@@ -6,7 +6,6 @@ matrices on the synaptic input line.
 from typing import Tuple, List, Union
 import time
 import numpy as np
-import quantities as pq
 
 from dlens_vx_v3 import lola, halco, hal, logger, hxcomm
 
@@ -311,7 +310,7 @@ class Multiplication:
         # disabling switches, the lines have charged long enough.
         # However, this may change if faster or more parallel writes
         # are used.
-        charge_time = 0 * pq.us
+        charge_time_us = 0
 
         # enable all reset connections
         config = hal.ColumnCurrentQuad.ColumnCurrentSwitch()
@@ -329,7 +328,7 @@ class Multiplication:
                 coord, self._synram_coord), quad_config)
 
         # wait an additional time
-        builder = helpers.wait(builder, charge_time)
+        builder = helpers.wait_us(builder, charge_time_us)
 
         # disable all reset connections
         config.enable_debug_excitatory = False
@@ -369,7 +368,7 @@ class Multiplication:
 
             # Reset synapse lines
             builder.copy_back(self.cached_reset_synin)
-            helpers.wait(builder, 10 * pq.us)
+            helpers.wait_us(builder, 10)
 
             pyccalix.hagen.send_vectors(
                 builder.builder, vector, num_sends=self.num_sends,
@@ -455,7 +454,7 @@ class Multiplication:
 
         # Read synaptic input baseline potentials (after reset)
         builder.copy_back(self.cached_reset_synin)
-        helpers.wait(builder, 2 * pq.us)
+        helpers.wait_us(builder, 2)
         read_tickets = builder.read(halco.CADCSampleRowOnDLS(
             block=halco.SynapseRowOnSynram(), synram=self._synram_coord))
         base.run(connection, builder)

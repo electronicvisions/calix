@@ -294,7 +294,7 @@ class CorrelationMeasurement:
             else:  # post before pre
                 pyccalix.spiking.send_prepulse(
                     builder.builder, synram, self.address)
-            helpers.wait(builder, 1 * pq.ms)
+            helpers.wait_us(builder, 1000)
 
             # Reset correlations
             pyccalix.spiking.reset_correlation(builder.builder, quad, synram)

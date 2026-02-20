@@ -71,8 +71,8 @@ class _SpikeCounterCalib(base.Calib):
         builder = base.WriteRecordingPlaybackProgramBuilder()
 
         # Start timing-critical program: reset timer, wait a bit
-        initial_wait = 100 * pq.us
-        builder = helpers.wait(builder, initial_wait)
+        initial_wait_us = 100
+        builder = helpers.wait_us(builder, initial_wait_us)
         builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
         # Reset spike counters
@@ -90,7 +90,8 @@ class _SpikeCounterCalib(base.Calib):
         # Wait for accumulation time
         builder.block_until(halco.TimerOnDLS(), hal.Timer.Value(
             int(int(hal.Timer.Value.fpga_clock_cycles_per_us)
-                * (self.accumulation_time + initial_wait).rescale(pq.us))))
+                * (self.accumulation_time.rescale(pq.us).magnitude
+                   + initial_wait_us))))
 
         # Read spike counters
         tickets = []

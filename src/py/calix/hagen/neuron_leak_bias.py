@@ -175,6 +175,9 @@ class MembraneTimeConstCalibCADC(base.Calib):
         read_tickets = []
         read_positions = []
 
+        target_time_const_us = self.target_time_const.rescale(
+            pq.us).magnitude
+
         runs_in_builder = 0
         builder = base.WriteRecordingPlaybackProgramBuilder()
         for target_neuron in halco.iter_all(halco.NeuronConfigOnDLS):
@@ -183,7 +186,7 @@ class MembraneTimeConstCalibCADC(base.Calib):
                           hal.NeuronReset())
 
             # Wait for time constant
-            builder = helpers.wait(builder, self.target_time_const)
+            builder = helpers.wait_us(builder, target_time_const_us)
 
             # Read CADC results, save ticket
             # Trigger measurement, causal read

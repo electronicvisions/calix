@@ -36,6 +36,30 @@ def wait(builder: base.WriteRecordingPlaybackProgramBuilder,
     return builder
 
 
+def wait_us(builder: base.WriteRecordingPlaybackProgramBuilder,
+            waiting_time_us: float) \
+        -> base.WriteRecordingPlaybackProgramBuilder:
+    """
+    Waits for a given amount of time.
+
+    This function appends instructions to the given builder which
+    first reset the timer and then wait until the given time is reached.
+
+    :param builder: Builder to add wait instruction to.
+    :param waiting_time_us: Time to wait for in us.
+
+    :return: Builder with wait instruction added to.
+    """
+
+    # Returning the modified builder is regarded as bad style.
+    # This returning should be removed, also elsewhere, cf. issue 3952
+    builder.write(halco.TimerOnDLS(), hal.Timer())
+    builder.block_until(halco.TimerOnDLS(), hal.Timer.Value(int(
+        waiting_time_us
+        * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
+    return builder
+
+
 def capmem_noise(start: int = -5, end: int = 6,
                  size: Optional[Union[int, Tuple[int]]] = None
                  ) -> Union[int, np.ndarray]:

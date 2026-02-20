@@ -236,20 +236,22 @@ def cadc_read_neurons_repetitive(
 
     read_tickets = []
 
+    wait_time_us = wait_time.rescale(pq.us).magnitude
+
     for _ in range(n_reads):
         # Trigger neuron resets if desired
         if reset:
             builder = reset_neurons(builder, synram=synram)
 
             # wait the time a vector needs to be input
-            builder = helpers.wait(builder, 30 * pq.us)
+            builder = helpers.wait_us(builder, 30)
 
         # Read CADCs
         builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
         read_tickets.append(ticket)
 
         # Wait before next measurement
-        builder = helpers.wait(builder, wait_time)
+        builder = helpers.wait_us(builder, wait_time_us)
 
     base.run(connection, builder)
 

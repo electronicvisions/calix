@@ -276,7 +276,7 @@ class ResetPotentialCalib(base.Calib):
         for synram in halco.iter_all(halco.SynramOnDLS):
             # trigger neuron resets
             builder = neuron_helpers.reset_neurons(builder, synram)
-            builder = helpers.wait(builder, 10 * pq.us)
+            builder = helpers.wait_us(builder, 10)
 
             # read membrane potentials
             builder, ticket = cadc_helpers.cadc_read_row(builder, synram)
@@ -370,7 +370,7 @@ class BaselineCalib(cadc.ChannelOffsetCalib):
 
         for run in range(n_reads):
             builder = neuron_helpers.reset_neurons(builder)
-            builder = helpers.wait(builder, 30 * pq.us)
+            builder = helpers.wait_us(builder, 30)
             results[run] = cadc_helpers.read_cadcs(connection, builder)
             builder = base.WriteRecordingPlaybackProgramBuilder()
 
