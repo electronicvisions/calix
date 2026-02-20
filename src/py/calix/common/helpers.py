@@ -132,6 +132,12 @@ def capmem_set_neuron_cells(
                                           capmem_row,
                                           config[capmem_row])
 
-    builder.dumper.copy_back(dumper)
+    # flash cocos before appending instructions to the dumper.
+    # This is needed to keep the correct ordering of instructions.
+    for coord, cfg in builder.cocos.items():
+        builder.dumper.write(coord, cfg)
+    builder.cocos = {}
+
     builder.builder.merge_back(sta.convert_to_builder(dumper))
+    builder.dumper.merge_back(dumper)
     return builder
