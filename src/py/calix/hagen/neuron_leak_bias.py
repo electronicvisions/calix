@@ -523,13 +523,18 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
             refractory = leak_potential - samples['value'] > diff / 2
             return np.arange(len(refractory))[refractory][-1]
 
+        start = int(self._wait_before_stimulation.rescale(pq.s)
+                    * self.madc_config.calculate_sample_rate(
+                        self.madc_input_frequency))
+        stop = int(int(self.madc_config.number_of_samples) * 0.95)
+        tau_mem_range_lower_us = constants.tau_mem_range.lower.rescale(
+            pq.us).magnitude
+        tau_mem_range_upper_us = constants.tau_mem_range.upper.rescale(
+            pq.us).magnitude
+
         neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
             # remove unreliable samples
-            start = int(self._wait_before_stimulation.rescale(pq.s)
-                        * self.madc_config.calculate_sample_rate(
-                            self.madc_input_frequency))
-            stop = int(int(self.madc_config.number_of_samples) * 0.95)
             neuron_samples = neuron_data[start:stop]
 
             # only fit to exponential rise
@@ -548,16 +553,16 @@ class MembraneTimeConstCalibReset(madc_base.Calib):
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
             p_0['tau'] = min(
-                max(constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                max(tau_mem_range_lower_us,
                     p_0['tau']),
-                constants.tau_mem_range.upper.rescale(pq.us).magnitude)
+                tau_mem_range_upper_us)
 
             boundaries = (
                 [-p_0['offset'],
-                 constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                 tau_mem_range_lower_us,
                  p_0['offset'] - 10],
                 [0,
-                 constants.tau_mem_range.upper.rescale(pq.us).magnitude,
+                 tau_mem_range_upper_us,
                  p_0['offset'] + 10])
 
             try:
@@ -849,13 +854,18 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
                 return 0
             return fit_start_index
 
+        start = int(self._wait_before_stimulation.rescale(pq.s)
+                    * self.madc_config.calculate_sample_rate(
+                        self.madc_input_frequency))
+        stop = int(int(self.madc_config.number_of_samples) * 0.95)
+        tau_mem_range_lower_us = constants.tau_mem_range.lower.rescale(
+            pq.us).magnitude
+        tau_mem_range_upper_us = constants.tau_mem_range.upper.rescale(
+            pq.us).magnitude
+
         neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
             # remove unreliable samples
-            start = int(self._wait_before_stimulation.rescale(pq.s)
-                        * self.madc_config.calculate_sample_rate(
-                            self.madc_input_frequency))
-            stop = int(int(self.madc_config.number_of_samples) * 0.95)
             neuron_samples = neuron_data[start:stop]
 
             # only fit to lower half of exponential decay
@@ -879,16 +889,16 @@ class MembraneTimeConstCalibOffset(madc_base.Calib):
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
             p_0['tau'] = min(
-                max(constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                max(tau_mem_range_lower_us,
                     p_0['tau']),
-                constants.tau_mem_range.upper.rescale(pq.us).magnitude)
+                tau_mem_range_upper_us)
 
             boundaries = (
                 [0,
-                 constants.tau_mem_range.lower.rescale(pq.us).magnitude,
+                 tau_mem_range_lower_us,
                  0],
                 [hal.MADCSampleFromChip.Value.max,
-                 constants.tau_mem_range.upper.rescale(pq.us).magnitude,
+                 tau_mem_range_upper_us,
                  hal.MADCSampleFromChip.Value.max])
 
             try:

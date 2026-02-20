@@ -276,7 +276,11 @@ class CorrelationMeasurement:
              halco.SynapseRowOnSynram.size, halco.CADCChannelType.size),
             dtype=int)
 
-        for delay_id, delay in enumerate(self.delays):
+        wait_between_pairs_us = self.wait_between_pairs.rescale(
+            pq.us).magnitude
+        delays_us = self.delays.rescale(pq.us).magnitude
+
+        for delay_id, delay in enumerate(delays_us):
             builder = base.WriteRecordingPlaybackProgramBuilder()
 
             # reach "stable pattern":
@@ -304,11 +308,11 @@ class CorrelationMeasurement:
             builder.write(halco.TimerOnDLS(), hal.Timer())  # reset timer
             for event_id in range(self.n_events):
                 # initial wait
-                time_offset = self.wait_between_pairs * (event_id + 1)
+                time_offset = wait_between_pairs_us * (event_id + 1)
                 builder.block_until(
                     halco.TimerOnDLS(),
                     hal.Timer.Value(
-                        int(time_offset.rescale(pq.us).magnitude * int(
+                        int(time_offset * int(
                             hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 if delay > 0:  # pre before post
@@ -322,8 +326,7 @@ class CorrelationMeasurement:
                 builder.block_until(
                     halco.TimerOnDLS(),
                     hal.Timer.Value(
-                        int((time_offset + np.abs(delay)).rescale(pq.us)
-                            .magnitude
+                        int((time_offset + np.abs(delay))
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 if delay > 0:  # pre before post
@@ -444,14 +447,16 @@ class CorrelationMeasurement:
             "p0": [20, 5, 0],
             "bounds": ([0, 0.1, 0], [255, 100, 255])}
 
+        delays_us = self.delays.rescale(pq.us).magnitude
+
         for column_id in range(results.shape[1]):
             for row_id in range(results.shape[2]):
                 # causal fit
                 try:
                     popt = curve_fit(
                         self.fitfunc,
-                        self.delays[self.delays > 0].rescale(pq.us).magnitude,
-                        results[self.delays > 0, column_id, row_id, 0],
+                        delays_us[delays_us > 0],
+                        results[delays_us > 0, column_id, row_id, 0],
                         **fit_parameters)[0]
                 except RuntimeError:
                     popt = [np.nan, np.nan]
@@ -463,8 +468,8 @@ class CorrelationMeasurement:
                 try:
                     popt = curve_fit(
                         self.fitfunc,
-                        -self.delays[self.delays < 0].rescale(pq.us).magnitude,
-                        results[self.delays < 0, column_id, row_id, 1],
+                        -delays_us[delays_us < 0],
+                        results[delays_us < 0, column_id, row_id, 1],
                         **fit_parameters)[0]
                 except RuntimeError:
                     popt = [np.nan, np.nan]

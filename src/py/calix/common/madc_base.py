@@ -188,7 +188,7 @@ class Recorder(ABC):
 
         raise NotImplementedError
 
-    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-statements,too-many-locals
     def build_measurement_program(
             self, builder: base.WriteRecordingPlaybackProgramBuilder) -> Tuple[
                 base.WriteRecordingPlaybackProgramBuilder, List[
@@ -262,6 +262,16 @@ class Recorder(ABC):
         builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.systime)
 
         initial_wait = 1000 * pq.us
+
+        dead_time_us = self.dead_time.rescale(pq.us).magnitude
+        initial_wait_us = initial_wait.rescale(pq.us).magnitude
+        wait_between_neurons_us = self.wait_between_neurons.rescale(
+            pq.us).magnitude
+        invalid_samples_time_us = self.invalid_samples_time.rescale(
+            pq.us).magnitude
+        wait_before_stimulation_us = self._wait_before_stimulation.rescale(
+            pq.us).magnitude
+
         builder = helpers.wait(builder, initial_wait)
 
         switching_time_tickets = []
@@ -290,12 +300,12 @@ class Recorder(ABC):
             builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
 
             # trigger MADC sampling
-            current_time = initial_wait + self.dead_time \
-                + self.wait_between_neurons * neuron_idx
+            current_time = initial_wait_us + dead_time_us \
+                + wait_between_neurons_us * neuron_idx
             builder.block_until(
                 halco.TimerOnDLS(),
                 hal.Timer.Value(
-                    int(current_time.rescale(pq.us)
+                    int(current_time
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
             madc_control = hal.MADCControl()
             madc_control.enable_power_down_after_sampling = \
@@ -313,36 +323,36 @@ class Recorder(ABC):
             builder.write(halco.MADCControlOnDLS(), madc_control)
 
             # read something once valid samples are returned (to get time)
-            current_time += self.invalid_samples_time
+            current_time += invalid_samples_time_us
             builder.block_until(
                 halco.TimerOnDLS(),
                 hal.Timer.Value(
-                    int(current_time.rescale(pq.us)
+                    int(current_time
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
             switching_time_tickets.append(builder.read(
                 halco.NullPayloadReadableOnFPGA()))
 
             # wait before stimulation
-            current_time += self._wait_before_stimulation
+            current_time += wait_before_stimulation_us
             builder.block_until(
                 halco.TimerOnDLS(),
                 hal.Timer.Value(
-                    int((current_time).rescale(pq.us)
+                    int(current_time
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
             # stimulate
             builder = self.stimulate(
                 builder, neuron_coord,
-                int((current_time).rescale(pq.us)
+                int(current_time
                     * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
             # wait for sampling to finish
-            current_time = initial_wait + self.wait_between_neurons \
+            current_time = initial_wait_us + wait_between_neurons_us \
                 * ((neuron_idx) + 1)
             builder.block_until(
                 halco.TimerOnDLS(),
                 hal.Timer.Value(
-                    int(current_time.rescale(pq.us)
+                    int(current_time
                         * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
             # read something once valid samples end (to get time)

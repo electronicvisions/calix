@@ -447,6 +447,9 @@ class SynBiasCalib(base.Calib):
         results = []
         baselines = []
 
+        wait_between_events_us = self.wait_between_events.rescale(
+            pq.us).magnitude
+
         for _ in range(self.n_runs):
             for synram in halco.iter_all(halco.SynramOnDLS):
                 # Measure baseline
@@ -461,7 +464,7 @@ class SynBiasCalib(base.Calib):
                     builder.block_until(
                         halco.TimerOnDLS(),
                         hal.Timer.Value(
-                            int(i * self.wait_between_events.rescale(pq.us)
+                            int(i * wait_between_events_us
                                 * int(
                                     hal.Timer.Value.fpga_clock_cycles_per_us)))
                     )
@@ -475,7 +478,7 @@ class SynBiasCalib(base.Calib):
                     halco.TimerOnDLS(),
                     hal.Timer.Value(
                         int((self.n_events + 1)
-                            * self.wait_between_events.rescale(pq.us)
+                            * wait_between_events_us
                             * int(hal.Timer.Value.fpga_clock_cycles_per_us))))
 
                 # final measurement in the same builder
@@ -767,6 +770,7 @@ class SynTimeConstantCalib(madc_base.Calib):
         config.enable_readout = True
         return config
 
+    # pylint: disable=too-many-locals
     def evaluate(self, samples: List[np.ndarray]) -> np.ndarray:
         """
         Evaluates the obtained MADC samples.
@@ -782,6 +786,11 @@ class SynTimeConstantCalib(madc_base.Calib):
 
         def fitfunc(time_t, scale, tau, offset):
             return scale * np.exp(-time_t / tau) + offset
+
+        tau_syn_range_lower_us = constants.tau_syn_range.lower.rescale(
+            pq.us).magnitude
+        tau_syn_range_upper_us = constants.tau_syn_range.upper.rescale(
+            pq.us).magnitude
 
         neuron_fits = []
         for neuron_id, neuron_data in enumerate(samples):
@@ -803,10 +812,7 @@ class SynTimeConstantCalib(madc_base.Calib):
                 neuron_data["chip_time"][0]
             # for small time constants the estimation of tau might fail ->
             # cut at bounds
-            tau = min(
-                max(constants.tau_syn_range.lower.rescale(pq.us).magnitude,
-                    tau),
-                constants.tau_syn_range.upper.rescale(pq.us).magnitude)
+            tau = min(max(tau_syn_range_lower_us, tau), tau_syn_range_upper_us)
 
             # if the synaptic input line is floating (due to a too low bias
             # current), the recorded trace is constant -> register high time
@@ -817,10 +823,10 @@ class SynTimeConstantCalib(madc_base.Calib):
 
             boundaries = (
                 [-offset,
-                 constants.tau_syn_range.lower.rescale(pq.us).magnitude,
+                 tau_syn_range_lower_us,
                  offset - 10],
                 [0,
-                 constants.tau_syn_range.upper.rescale(pq.us).magnitude,
+                 tau_syn_range_upper_us,
                  offset + 10])
 
             try:
