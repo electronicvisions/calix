@@ -118,13 +118,19 @@ def build(bld):
 
     bld(name='calix_pyhwtests',
         tests=bld.path.ant_glob('tests/hw/py/**/*.py'),
-        features='use pytest pylint pycodestyle',
+        features='use pytest',
         use=['calix_pylib', 'quiggeldy'],
         install_path='${PREFIX}/bin/tests',
-        pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
-        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
         skip_run=not bld.env.BBS_HARDWARE_AVAILABLE,
         test_timeout=45 * 60
+        )
+
+    bld(name='calix_pyhwtests_python_code_analysis',
+        tests=bld.path.ant_glob('tests/hw/py/**/*.py'),
+        features='use pylint pycodestyle',
+        use=['calix_pylib', 'quiggeldy'],
+        pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
+        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle")
         )
 
     if bld.env.DOXYGEN:
