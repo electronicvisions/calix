@@ -23,9 +23,10 @@ class WriteRecordingPlaybackProgramBuilder:
         self.dumper = sta.PlaybackProgramBuilderDumper()
         self.cocos = {}
 
-    def done(self):
-        for coord, config in self.cocos.items():
-            self.dumper.write(coord, config)
+    def done(self, update_dumper: bool = True):
+        if update_dumper:
+            for coord, config in self.cocos.items():
+                self.dumper.write(coord, config)
         self.cocos = {}
         return self.builder.done(), self.dumper.done()
 
@@ -131,9 +132,12 @@ def run(connection: StatefulConnection,
     """
 
     builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
-    program, dumperdone = builder.done()
+    is_quiggeldy = isinstance(
+        connection, hxcomm.QuiggeldyConnectionHandle)
+    program, dumperdone = builder.done(update_dumper=is_quiggeldy)
     sta.run(connection.connection, [program])
-    connection.update_reinit(dumperdone)
+    if is_quiggeldy:
+        connection.update_reinit(dumperdone)
     return program
 
 
