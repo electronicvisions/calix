@@ -88,7 +88,7 @@ class StatefulConnection:
         self.dumper = sta.PlaybackProgramBuilderDumper()
 
         builder, _ = sta.generate(self.init)
-        self.reinit.set(builder.done(), enforce=True)
+        self.reinit.set([builder.done()], enforce=True)
 
     def update_reinit(self, dumperdone: sta.DumperDone):
         dumperdone.remove_block_until()
@@ -107,7 +107,7 @@ class StatefulConnection:
         sta_builder.block_until(
             halco.TimerOnDLS(), hal.Timer.Value(
                 hal.Timer.Value.fpga_clock_cycles_per_us * 1000 * 100))
-        self.reinit.set(sta_builder.done(), enforce=False)
+        self.reinit.set([sta_builder.done()], enforce=False)
 
     def get_unique_identifier(self):
         return self.connection.get_unique_identifier()[0]
@@ -132,7 +132,7 @@ def run(connection: StatefulConnection,
 
     builder.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
     program, dumperdone = builder.done()
-    sta.run(connection.connection, program)
+    sta.run(connection.connection, [program])
     connection.update_reinit(dumperdone)
     return program
 
