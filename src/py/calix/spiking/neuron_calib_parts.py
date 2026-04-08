@@ -19,6 +19,7 @@ from dlens_vx_v3 import halco, hal, hxcomm
 from calix.common import algorithms, base, synapse, helpers
 from calix.hagen import neuron_helpers, neuron_leak_bias, neuron_synin, \
     neuron_potentials, neuron_synin_coba
+from calix.multicomp.neuron_icc_bias import ICCMADCCalib
 from calix import constants
 
 if TYPE_CHECKING:
@@ -569,3 +570,58 @@ def disable_synin_and_threshold(
 
     neuron_helpers.reconfigure_synaptic_input(
         connection, excitatory_biases=0, inhibitory_biases=0)
+
+
+def calibrate_tau_icc(
+        connection: hxcomm.ConnectionHandle,
+        tau_icc: pq.Quantity,
+        calib_result: neuron._CalibResultInternal):
+    """
+    Calibrate inter-compartment conductance.
+
+    :param connection: Connection to chip to run on.
+    :param tau_icc: Target time constant of inter-compartment
+        conductance. If NaN, the inter-compartment conductance
+        is not calibrated.
+    :param calib_result: Calib result to store parameters in.
+    """
+    if np.all(np.isnan(tau_icc)):
+        return
+    # we currently do not support calibrating only some of the
+    # conductances
+    if np.any(np.isnan(tau_icc)):
+        raise RuntimeError(
+            "Invalid calibration configuration: inter-compartment conductance "
+            "targets must be either all NaN or all defined.")
+
+    # disable synaptic inputs initially
+    neuron_helpers.reconfigure_synaptic_input(
+        connection, excitatory_biases=0, inhibitory_biases=0)
+
+    # calibrate tau_icc
+    neuron_configs_nmda = [hal.NeuronConfig(config) for config in
+                           calib_result.neuron_configs]
+    calibration = ICCMADCCalib(target=tau_icc,
+                               neuron_configs=neuron_configs_nmda)
+    calibration.prepare_for_measurement(connection)
+    result = calibration.run(
+        connection, algorithm=algorithms.NoisyBinarySearch())
+
+    # save calibration results
+    for neuron_config_nmda, neuron_config in zip(neuron_configs_nmda,
+                                                 calib_result.neuron_configs):
+        neuron_config.enable_divide_multicomp_conductance_bias = \
+            neuron_config_nmda.enable_divide_multicomp_conductance_bias
+        neuron_config.enable_multiply_multicomp_conductance_bias = \
+            neuron_config_nmda.enable_multiply_multicomp_conductance_bias
+    calib_result.i_bias_nmda = result.calibrated_parameters
+    calib_result.success = np.all([
+        calib_result.success, result.success], axis=0)
+
+    # restore pre tau_icc neuron configs
+    builder = base.WriteRecordingPlaybackProgramBuilder()
+    for neuron_coord, neuron_config in zip(
+            halco.iter_all(halco.NeuronConfigOnDLS),
+            calib_result.neuron_configs):
+        builder.write(neuron_coord, neuron_config)
+    base.run(connection, builder)

@@ -91,6 +91,9 @@ class NeuronCalibTarget(base.CalibTarget):
         period is the time at the end of the refractory period in which the
         clamping to the reset voltage is already released but new spikes can
         still not be generated.
+    :ivar tau_icc: Time constant of the inter-compartment conductance.
+        If the value is NaN, the inter-compartment conductance is not
+        calibrated.
     """
 
     leak: Union[int, np.ndarray] = 80
@@ -107,6 +110,7 @@ class NeuronCalibTarget(base.CalibTarget):
     synapse_dac_bias: int = 600
     holdoff_time: pq.Quantity = field(
         default_factory=lambda: 0 * pq.us)
+    tau_icc: pq.Quantity = field(default_factory=lambda: np.nan * pq.us)
 
 
 NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
@@ -137,7 +141,9 @@ NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
         halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().refractory_time,
     synapse_dac_bias=NeuronCalibTarget().synapse_dac_bias,
     holdoff_time=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().holdoff_time
+        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().holdoff_time,
+    tau_icc=np.ones(
+        halco.AtomicNeuronOnDLS.size) * np.nan * pq.us
 )
 
 
@@ -161,6 +167,9 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
         default_factory=lambda: np.zeros(
             halco.NeuronConfigOnDLS.size, dtype=int))
     e_syn_inh_rev: np.ndarray = field(
+        default_factory=lambda: np.zeros(
+            halco.NeuronConfigOnDLS.size, dtype=int))
+    i_bias_nmda: np.ndarray = field(
         default_factory=lambda: np.zeros(
             halco.NeuronConfigOnDLS.size, dtype=int))
     clock_settings: Optional[refractory_period.Settings] = None
@@ -290,6 +299,9 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
         atomic_neuron.inhibitory_input.v_rev_coba = hal.CapMemCell.Value(
             self.e_syn_inh_rev[neuron_id])
 
+        atomic_neuron.multicompartment.i_bias_nmda = hal.CapMemCell.Value(
+            self.i_bias_nmda[neuron_id])
+
         return atomic_neuron
 
     def to_neuron_calib_result(
@@ -352,6 +364,10 @@ def check_target(target: NeuronCalibTarget):
         raise TypeError(
             "Holdoff time is not given as a "
             "`quantities.Quantity`.")
+    if not isinstance(target.tau_icc, pq.Quantity):
+        raise TypeError(
+            "Inter-compartment time constant is not given as a "
+            "`quantities.Quantity`.")
     if target.holdoff_time.size not in [1, halco.NeuronConfigOnDLS.size]:
         raise ValueError("Holdoff time needs to have size 1 or "
                          f"{halco.NeuronConfigOnDLS.size}.")
@@ -406,6 +422,10 @@ def check_target(target: NeuronCalibTarget):
         "holdoff_time",
         target.holdoff_time,
         base.ParameterRange(0 * pq.ns, 4 * pq.us))
+    base.check_values(
+        "tau_icc",
+        target.tau_icc,
+        base.ParameterRange(0.1 * pq.us, 30 * pq.us))
 
     if np.any([target.tau_mem < constants.tau_mem_range.lower,
                target.tau_mem > constants.tau_mem_range.upper]):
@@ -528,6 +548,10 @@ def calibrate(
     calib_result.v_leak = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
+
+    # calibrate inter-compartment conductance
+    neuron_calib_parts.calibrate_tau_icc(
+        connection, target.tau_icc, calib_result)
 
     # print warning in case of failed neurons
     n_neurons_failed = np.sum(np.invert(calib_result.success))
