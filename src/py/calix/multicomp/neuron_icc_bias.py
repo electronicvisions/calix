@@ -1,11 +1,12 @@
+from typing import Optional, List
+
 import numpy as np
 import quantities as pq
+from scipy.optimize import curve_fit
 
-from typing import Optional, List
-from dlens_vx_v3 import halco, sta, hxcomm, hal
+from dlens_vx_v3 import halco, hxcomm, hal
 
 from calix import constants
-from scipy.optimize import curve_fit
 from calix.common import algorithms, base, exceptions, madc_base, helpers
 from calix.hagen import neuron_helpers, neuron_potentials, neuron_leak_bias
 
@@ -245,7 +246,7 @@ class ICCMADCCalib(madc_base.Calib):
 
     def stimulate(self, builder,
                   neuron_coord: halco.NeuronConfigOnDLS,
-                  stimulation_wait: hal.Timer.Value
+                  stimulation_time: hal.Timer.Value
                   ) -> base.WriteRecordingPlaybackProgramBuilder:
         """
         Enables the inter-compartment conductance (ICC) between the
@@ -258,7 +259,7 @@ class ICCMADCCalib(madc_base.Calib):
 
         :param builder: Builder to append instructions to.
         :param neuron_coord: Coordinate of neuron which is currently recorded.
-        :param stimulation_wait: Timer value at beginning of stimulation.
+        :param stimulation_time: Timer value at beginning of stimulation.
 
         :return: Builder with instructions appended.
         """
@@ -293,7 +294,7 @@ class ICCMADCCalib(madc_base.Calib):
         builder.block_until(
             halco.TimerOnDLS(),
             hal.Timer.Value(
-                int(stimulation_wait) + int(self.sampling_time.rescale(pq.us))
+                int(stimulation_time) + int(self.sampling_time.rescale(pq.us))
                 * int(hal.Timer.Value.fpga_clock_cycles_per_us)))
 
         builder.write(
