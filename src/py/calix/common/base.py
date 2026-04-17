@@ -80,16 +80,32 @@ class StatefulConnection:
     def __init__(
             self,
             connection: hxcomm.ConnectionHandle,
+            chip_on_connection: int = 0,
             init: Optional[sta.SystemInit] = None):
+        """
+        Construct StatefulConnection operating on a single chip of a hxcomm
+        connection, which manages access to possibly multiple chips.
+
+        :param connection: Hxcomm connection connecting to possibly multiple
+                           chips
+        :param chip_on_connection: Index of chip on connection to calibrate and
+                                   operate on
+        :param init: Optional custom initialization routine generator
+        """
         if init is None:
             init = sta.SystemInit(connection.get_hwdb_entry()[0])
         self.connection = connection
+        self.chip_on_connection = chip_on_connection
         self.reinit = sta.ReinitStackEntry(self.connection)
         self.init = StatefulConnectionInit(init)
         self.dumper = sta.PlaybackProgramBuilderDumper()
 
         builder, _ = sta.generate(self.init)
-        self.reinit.set([builder.done()], enforce=True)
+        reinit_programs = [
+            sta.PlaybackProgram() if chip != self.chip_on_connection
+            else builder.done()
+            for chip in range(len(self.connection))]
+        self.reinit.set(reinit_programs, enforce=True)
 
     def update_reinit(self, dumperdone: sta.DumperDone):
         dumperdone.remove_block_until()
@@ -108,10 +124,14 @@ class StatefulConnection:
         sta_builder.block_until(
             halco.TimerOnDLS(), hal.Timer.Value(
                 hal.Timer.Value.fpga_clock_cycles_per_us * 1000 * 100))
-        self.reinit.set([sta_builder.done()], enforce=False)
+        reinit_programs = [
+            sta.PlaybackProgram() if chip != self.chip_on_connection
+            else sta_builder.done()
+            for chip in range(len(self.connection))]
+        self.reinit.set(reinit_programs, enforce=False)
 
     def get_unique_identifier(self):
-        return self.connection.get_unique_identifier()[0]
+        return self.connection.get_unique_identifier()[self.chip_on_connection]
 
 
 def run(connection: StatefulConnection,
@@ -135,7 +155,11 @@ def run(connection: StatefulConnection,
     is_quiggeldy = isinstance(
         connection, hxcomm.QuiggeldyConnectionHandle)
     program, dumperdone = builder.done(update_dumper=is_quiggeldy)
-    sta.run(connection.connection, [program])
+    programs = [
+        sta.PlaybackProgram() if chip != connection.chip_on_connection
+        else program
+        for chip in range(len(connection.connection))]
+    sta.run(connection.connection, programs)
     if is_quiggeldy:
         connection.update_reinit(dumperdone)
     return program
