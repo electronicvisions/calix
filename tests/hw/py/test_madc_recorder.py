@@ -48,10 +48,10 @@ class TestMADCRecorder(ConnectionSetup):
         for neuron_id in range(n_neurons_to_plot):
             expected_filename = f"trace_neuron{neuron_id}.png"
 
-        self.assertGreater(
-            os.path.getsize(expected_filename), 0,
-            "File size of expected plotted figure "
-            + f"{expected_filename} is zero.")
+            self.assertGreater(
+                os.path.getsize(expected_filename), 0,
+                "File size of expected plotted figure "
+                + f"{expected_filename} is zero.")
 
         # assert the traces are sensible: There should not be major
         # edges in the trace after a few initial samples, that
