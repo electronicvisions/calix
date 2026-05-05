@@ -61,12 +61,21 @@ class TestNeuronCalib(ConnectionSetup):
         e_coba_reversal[0, self.__class__.n_neurons_in_coba_mode:] = np.inf
         e_coba_reversal[1, self.__class__.n_neurons_in_coba_mode:] = -np.inf
 
+        neuron_target = calix.spiking.neuron.NeuronCalibTarget()
+        neuron_target.cuba_synin = calix.spiking.neuron.NeuronCalibTarget\
+            .CalibratedCubaSynapticInput()  # pylint: disable=no-member
+        neuron_target.cuba_synin.i_synin_gm.from_numpy(np.array([180, 250]))
+        for nrn in halco.iter_all(halco.AtomicNeuronOnDLS):
+            neuron_target.coba_synin.e_coba_reference[nrn][0] = 150  # pylint: disable=no-member
+            neuron_target.coba_synin.e_coba_reference[nrn][1] = None  # pylint: disable=no-member
+            neuron_target.coba_synin.e_coba_reversal[nrn][0] = \
+                e_coba_reversal[0][nrn.toEnum().value()]  # pylint: disable=no-member
+            neuron_target.coba_synin.e_coba_reversal[nrn][1] = \
+                e_coba_reversal[1][nrn.toEnum().value()]  # pylint: disable=no-member
+        target = calix.spiking.SpikingCalibTarget()
+        target.neuron_target = neuron_target
         self.__class__.calib_result = calix.calibrate(
-            calix.spiking.SpikingCalibTarget(
-                neuron_target=calix.spiking.neuron.NeuronCalibTarget(
-                    i_synin_gm=np.array([180, 250]),
-                    e_coba_reference=np.array([150, np.nan]),
-                    e_coba_reversal=e_coba_reversal)),
+            target,
             cache_paths=[],  # don't cache in tests
             connection=self.connection)
 

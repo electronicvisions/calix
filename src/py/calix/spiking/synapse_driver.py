@@ -10,7 +10,7 @@ import numpy as np
 
 from dlens_vx_v3 import hal, halco, sta, hxcomm, logger
 
-from pyccalix import STPCalibOptions
+from pyccalix import STPCalibOptions, STPCalibTarget
 from calix import constants
 from calix.common import algorithms, base, helpers
 import calix.hagen.synapse_driver as hagen_driver
@@ -208,36 +208,6 @@ class STPOffsetCalib(base.Calib):
         ).INFO(
             "Deviation of synapse driver amplitudes after offset calib: "
             + f"{np.std(results):4.2f}")
-
-
-@dataclass
-class STPCalibTarget(base.CalibTarget):
-    """
-    Target for STP calibration.
-
-    The STP voltages, which affect the dynamic range of the amplitudes,
-    are set here. They are currently not calibrated, but can be set per
-    quadrant.
-
-    :param v_charge_0: STP v_charge (fully modulated state) for
-        voltage set 0, in CapMem LSB. You can choose the two voltage
-        sets to be, e.g., depressing and facilitating. By default, we
-        select voltage set 0 to be facilitating and voltage set 1 to
-        be depressing.
-    :param v_recover_0: STP v_recover (fully recovered state) for
-        voltage set 0, in CapMem LSB. Note that a utilization of some
-        0.2 happens before processing each event, so the voltage applied
-        to the comparator never actually reaches v_recover.
-    :param v_charge_1: STP v_charge (fully modulated state) for
-        voltage set 1, in CapMem LSB.
-    :param v_recover_1: STP v_recover (fully recovered state) for
-        voltage set 1, in CapMem LSB.
-    """
-
-    v_charge_0 = 100
-    v_recover_0 = 400
-    v_charge_1 = 330
-    v_recover_1 = 50
 
 
 @dataclass

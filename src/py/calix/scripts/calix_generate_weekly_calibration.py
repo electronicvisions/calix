@@ -12,6 +12,7 @@ import quantities as pq
 
 from dlens_vx_v3 import logger
 from dlens_vx_v3.hxcomm import ManagedConnection
+from dlens_vx_v3.halco import iter_all, AtomicNeuronOnDLS
 
 from pyccalix import CorrelationCalibOptions
 import calix.spiking
@@ -32,27 +33,23 @@ class CorrelationCalibRecorder(CalibRecorder):
     """
 
     calibration_type = "correlation"
-    calibration_target = calix.spiking.SpikingCalibTarget(
-        neuron_target=calix.spiking.neuron.NeuronCalibTarget(
-            tau_syn=5 * pq.us,
-            tau_mem=20 * pq.us,
-            reset=80,
-            leak=100,
-            threshold=130,
-            synapse_dac_bias=1000,
-            i_synin_gm=400),
-        correlation_target=correlation.CorrelationCalibTarget(
-            amplitude=1.5, time_constant=30 * pq.us)
-    )
-
-    correlation_options = CorrelationCalibOptions()
-    correlation_options.calibrate_synapses = True
-    correlation_options.branches = CorrelationCalibOptions.Branches.CAUSAL
-    correlation_options.v_res_meas = 0.95
-    correlation_options.default_amp_calib = 1
-
-    calibration_options = calix.spiking.SpikingCalibOptions(
-        correlation_options=correlation_options)
+    calibration_target = calix.spiking.SpikingCalibTarget()
+    for an in iter_all(AtomicNeuronOnDLS):
+        calibration_target.neuron_target.tau_syn[an].fill(5e-6)  # pq.s
+    calibration_target.neuron_target.tau_mem.fill(20e-6)  # pq.s
+    calibration_target.neuron_target.reset.fill(80)
+    calibration_target.neuron_target.leak.fill(100)
+    calibration_target.neuron_target.threshold.fill(130)
+    calibration_target.neuron_target.synapse_dac_bias.fill(1000)
+    calibration_target.neuron_target.cuba_synin.i_synin_gm = 400
+    calibration_target.correlation_target.amplitude = 1.5
+    calibration_target.correlation_target.time_constant = 30e-6  # pq.s
+    calibration_options = calix.spiking.SpikingCalibOptions()
+    calibration_options.correlation_options.calibrate_synapses = True
+    calibration_options.correlation_options.branches = \
+        correlation.CorrelationBranches.CAUSAL
+    calibration_options.correlation_options.default_amp_calib = 1
+    calibration_options.correlation_options.v_res_meas = 0.95  # pq.V
 
 
 class CorrelationCalib(RecorderAndDumper):

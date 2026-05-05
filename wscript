@@ -25,6 +25,7 @@ def depends(dep):
 
 
 def options(opt):
+    opt.load('gtest')
     opt.load('pytest')
     opt.load('pylint')
     opt.load('pycodestyle')
@@ -34,6 +35,7 @@ def options(opt):
 
 
 def configure(cfg):
+    cfg.load('gtest')
     cfg.load('python')
     cfg.check_python_version()
     cfg.load('pytest')
@@ -66,6 +68,14 @@ def build(bld):
         ],
         uselib='CALIX',
         export_defines=bld.env.DEFINES_CALIX)
+
+    bld(target='ccalix_swtests',
+        source=bld.path.ant_glob('tests/sw/cc/ccalix/test-*.cpp'),
+        features='gtest cxx cxxprogram',
+        use=['ccalix', 'GTEST'],
+        install_path='${PREFIX}/bin',
+        test_main='tests/sw/cc/ccalix/main.cpp'
+        )
 
     bld(target="pyccalix",
         features="genpybind cxx cxxshlib pyext pyembed",

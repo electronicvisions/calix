@@ -12,7 +12,7 @@ import quantities as pq
 
 from dlens_vx_v3 import hal, halco, lola, hxcomm, logger
 
-from pyccalix import CorrelationCalibOptions
+from pyccalix import CorrelationCalibOptions, CorrelationCalibTarget
 from calix.common import algorithms, base, exceptions
 from calix.hagen import helpers
 from calix.spiking import correlation_measurement
@@ -341,24 +341,6 @@ class AmplitudeCalib(base.Calib):
 
 
 @dataclass
-class CorrelationCalibTarget(base.CalibTarget):
-    """
-    Target parameters for correlation calibration.
-
-    :ivar amplitude: Target correlation amplitude (at delay 0) for
-        all synapses, per correlated event. Feasible targets range from
-        some 0.2 to 2.0, higher amplitudes will likely require adjusting
-        v_res_meas.
-    :ivar time_constant: Target correlation time constant for all
-        synapses. Feasible targets range from some 2 to 30 us.
-    """
-
-    amplitude: float = 0.5
-    time_constant: pq.Quantity = field(
-        default_factory=lambda: 5 * pq.us)
-
-
-@dataclass
 class CorrelationCalibResult(base.CalibResult):
     """
     Result of a synapse correlation sensor calibration.
@@ -460,8 +442,9 @@ def calibrate_synapses(connection: hxcomm.ConnectionHandle,
                 (amplitudes - calib_result.target.amplitude) \
                 / calib_result.target.amplitude
             time_constant_score[amp_calib, time_calib, :, :] = \
-                (time_constants - calib_result.target.time_constant) \
-                / calib_result.target.time_constant
+                (time_constants - calib_result.target
+                 .time_constant.as_quantity()) \
+                / calib_result.target.time_constant.as_quantity()
 
     # calculate best calibration bits: least squared deviation
     deviations = \
@@ -520,7 +503,7 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
         base.ParameterRange(0.2, 2))
     base.check_values(
         "time_constant",
-        target.time_constant,
+        target.time_constant.as_quantity(),
         base.ParameterRange(2 * pq.us, 30 * pq.us))
 
     options.check()
@@ -544,7 +527,7 @@ def calibrate(connection: hxcomm.ConnectionHandle, *,
 
     # calibrate CapMem time constant
     calibration = TimeConstantCalib(
-        target=target.time_constant, branches=options.branches,
+        target=target.time_constant.as_quantity(), branches=options.branches,
         amp_calib=options.default_amp_calib.value(),
         time_calib=options.default_time_calib.value())
     calib_result.i_bias_ramp = \

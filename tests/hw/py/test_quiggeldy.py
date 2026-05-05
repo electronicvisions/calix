@@ -36,7 +36,7 @@ class TestQuiggeldy(QuiggeldyConnectionSetup):
             with tempfile.TemporaryDirectory() as temp_dir:
                 target = calix.spiking.SpikingCalibTarget()
                 target.neuron_target = \
-                    calix.spiking.neuron.NeuronCalibTarget().DenseDefault
+                    calix.spiking.neuron.NeuronCalibTarget()
                 calibrate(target, cache_paths=[Path(temp_dir)],
                           connection=self.connection)
 

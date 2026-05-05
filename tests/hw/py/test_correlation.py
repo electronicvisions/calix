@@ -107,6 +107,7 @@ class TestCorrelation(ConnectionSetup):
             * 0.8,
             "Too few synapses show time dependency of acausal correlation.")
 
+    # pylint: disable=too-many-locals
     def test_02_capmem_calibration(self):
         """
         Calibrate correlation CapMem parameters and assert the
@@ -122,9 +123,11 @@ class TestCorrelation(ConnectionSetup):
         # calibrate amplitudes and time constants
         options = correlation.CorrelationCalibOptions()
         options.calibrate_synapses = False
+        target = correlation.CorrelationCalibTarget()
+        target.amplitude = 0.5
+        target.time_constant = 5e-6  # s
         calib_result = correlation.calibrate(
-            self.connection, target=correlation.CorrelationCalibTarget(
-                amplitude=0.5, time_constant=5 * pq.us),
+            self.connection, target=target,
             options=options)
 
         # check correlation parameters in a few quad columns
@@ -184,7 +187,7 @@ class TestCorrelation(ConnectionSetup):
                 + f"Time constants {tau_percentiles[quadrant]}")
 
         amp_percentiles = np.array(amp_percentiles)
-        tau_percentiles = np.array(tau_percentiles)
+        tau_percentiles = np.array(tau_percentiles) * taus.units
         allowed_relative_deviation = 2.
         self.assertFalse(
             np.any(amp_percentiles < (calib_result.target.amplitude
@@ -195,12 +198,14 @@ class TestCorrelation(ConnectionSetup):
                                       * allowed_relative_deviation)),
             "Correlation amplitudes are higher than expected.")
         self.assertFalse(
-            np.any(tau_percentiles < (calib_result.target.time_constant
-                                      / allowed_relative_deviation)),
+            np.any(tau_percentiles < (
+                calib_result.target.time_constant.as_quantity()
+                / allowed_relative_deviation)),
             "Correlation time constants are smaller than expected.")
         self.assertFalse(
-            np.any(tau_percentiles > (calib_result.target.time_constant
-                                      * allowed_relative_deviation)),
+            np.any(tau_percentiles > (
+                calib_result.target.time_constant.as_quantity()
+                * allowed_relative_deviation)),
             "Correlation time constants are larger than expected.")
 
         # Check whether performing actual fits yields similar results:
@@ -220,8 +225,9 @@ class TestCorrelation(ConnectionSetup):
             err_msg="Median amplitude obtained from fits does not match "
             + "the value estimated by direct calculations.")
         np.testing.assert_allclose(
-            np.median(taus).rescale(pq.us).magnitude,
-            tau_percentiles[0, 1], rtol=0.3, atol=1,
+            np.median(taus).magnitude,
+            tau_percentiles[0, 1].magnitude,
+            rtol=0.3, atol=1,
             err_msg="Median time constant obtained from fits does not match "
             + "the value estimated by direct calculations.")
 

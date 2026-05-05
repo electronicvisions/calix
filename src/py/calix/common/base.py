@@ -11,7 +11,7 @@ import numpy as np
 import quantities as pq
 from dlens_vx_v3 import halco, hal, sta, logger, hxcomm, lola
 
-from pyccalix import CalibOptions
+from pyccalix import CalibOptions, CalibTarget
 from calix.common.boundary_check import check_range_boundaries
 from calix.constants import capmem_level_off_time
 from calix.common.parameter_range import ParameterRange
@@ -185,25 +185,12 @@ def check_values(name, value, feasible_range: ParameterRange):
 
     if not isinstance(value, np.ndarray):
         value = np.array(value)
-    if np.any([value < feasible_range.lower,
-               value > feasible_range.upper]):
+    if np.any([value[np.not_equal(value, None)] < feasible_range.lower,
+               value[np.not_equal(value, None)] > feasible_range.upper]):
         log.WARN(
             f"Parameter {name} was chosen at {value}, which is "
             + f"outside the standard range of {feasible_range}. "
             + "Please expect imperfect results.")
-
-
-@dataclass
-class CalibTarget(ABC):
-    """
-    Data structure for collecting targets for higher-level calibration
-    functions into one logical unit.
-
-    Targets are parameters that directly affect how a circuit is
-    configured. They have a standard range, where the circuits will
-    work well. Exceeding the standard range may work better for some
-    instances (e.g., neurons) than others.
-    """
 
 
 class TopLevelCalibTarget(CalibTarget):
@@ -211,6 +198,9 @@ class TopLevelCalibTarget(CalibTarget):
     :class:`CalibTarget` that can be calibrated for as part of the public
     calix API via :func:`calix.calibrate`.
     """
+    def __init__(self):
+        CalibTarget.__init__(self)
+
     @abstractmethod
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,

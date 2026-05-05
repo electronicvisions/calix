@@ -2,75 +2,18 @@
 Dataclasses for hagen neuron calib target and result.
 """
 
-from typing import Dict, Optional, Union
+from typing import Dict
 from dataclasses import dataclass, field
 
 import numpy as np
-import quantities as pq
 
 from dlens_vx_v3 import sta, halco, hal, lola
 
-from pyccalix import NeuronCalibOptions
+from pyccalix import NeuronCalibOptions, HagenNeuronCalibTarget \
+    as NeuronCalibTarget
 from calix.common import base, helpers
 from calix.hagen import neuron_helpers
 from calix import constants
-
-
-@dataclass
-class NeuronCalibTarget(base.CalibTarget):
-    """
-    Target parameters for the neuron calibration.
-
-    :ivar target_leak_read: Target CADC read at resting potential
-        of the membrane. Due to the low leak bias currents, the spread
-        of resting potentials may be high even after calibration.
-    :ivar tau_mem: Targeted membrane time constant while calibrating the
-        synaptic inputs.
-        Too short values can not be achieved with this calibration routine.
-        The default value of 60 us should work.
-        If a target_noise is given (default), this setting does not affect
-        the final leak bias currents, as those are determined by
-        reaching the target noise.
-    :ivar tau_syn: Controls the synaptic input time constant.
-        If set to 0 us, the minimum synaptic input time constant will be
-        used, which means different synaptic input time constants per
-        neuron. If a single different Quantity is given, it is used for
-        all synaptic inputs of all neurons, excitatory and inhibitory.
-        If an array of Quantities is given, it can be shaped
-        (2, 512) for the excitatory and inhibitory synaptic input
-        of each neuron. It can also be shaped (2,) for the excitatory
-        and inhibitory synaptic input of all neurons, or shaped (512,)
-        for both inputs per neuron.
-    :ivar i_synin_gm: Target synaptic input OTA bias current.
-        The amplitudes of excitatory inputs using this target current are
-        measured, and the median of all neurons' amplitudes is taken as target
-        for calibration of the synaptic input strengths.
-        The inhibitory synaptic input gets calibrated to match the excitatory.
-        Some 300 LSB are proposed here. Choosing high values yields
-        higher noise and lower time constants on the neurons, choosing
-        low values yields less gain in a multiplication.
-    :ivar target_noise: Noise amplitude in an integration process to
-        aim for when searching the optimum leak OTA bias current,
-        given as the standard deviation of successive reads in CADC LSB.
-        Higher noise settings mean longer membrane time constants but
-        impact reproducibility.
-        Set target_noise to None to skip optimization of noise amplitudes
-        entirely. In this case, the original membrane time constant
-        calibration is used for leak bias currents.
-    :ivar synapse_dac_bias: Synapse DAC bias current that is desired.
-        Can be lowered in order to reduce the amplitude of a spike
-        at the input of the synaptic input OTA. This can be useful
-        to avoid saturation when using larger synaptic time constants.
-    """
-
-    target_leak_read: Union[int, np.ndarray] = 120
-    tau_mem: pq.Quantity = field(
-        default_factory=lambda: 60 * pq.us)
-    tau_syn: pq.Quantity = field(
-        default_factory=lambda: 0.32 * pq.us)
-    i_synin_gm: int = 450
-    target_noise: Optional[float] = None
-    synapse_dac_bias: int = hal.CapMemCell.Value.max
 
 
 @dataclass

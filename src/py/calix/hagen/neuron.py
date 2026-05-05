@@ -93,45 +93,36 @@ def calibrate(
     if options is None:
         options = NeuronCalibOptions()
 
-    if not isinstance(target.tau_mem, pq.Quantity):
-        raise TypeError(
-            "Membrane time constant is not given as a "
-            "`quantities.quantity.Quantity`.")
-    if not isinstance(target.tau_syn, pq.Quantity):
-        raise TypeError(
-            "Synaptic time constant is not given as a "
-            "`quantities.quantity.Quantity`.")
-
-    if np.any([target.tau_mem < constants.tau_mem_range.lower,
-               target.tau_mem > constants.tau_mem_range.upper]):
+    if np.any([target.tau_mem.as_quantity() < constants.tau_mem_range.lower,
+               target.tau_mem.as_quantity() > constants.tau_mem_range.upper]):
         raise ValueError(
             "Target membrane time constant is out of allowed range "
             + "in the respective fit function.")
-    if np.any([target.tau_syn < constants.tau_syn_range.lower,
-               target.tau_syn > constants.tau_syn_range.upper]):
+    if np.any([target.tau_syn.as_quantity() < constants.tau_syn_range.lower,
+               target.tau_syn.as_quantity() > constants.tau_syn_range.upper]):
         raise ValueError(
             "Target synaptic time constant is out of allowed range "
             + "in the respective fit function.")
 
     base.check_values(
-        "target_leak_read",
-        target.target_leak_read,
+        "leak",
+        target.leak.to_numpy(),
         base.ParameterRange(100, 140))
     base.check_values(
         "tau_syn",
-        target.tau_syn,
+        target.tau_syn.as_quantity(),
         base.ParameterRange(0.3 * pq.us, 20 * pq.us))
     base.check_values(
         "tau_mem",
-        target.tau_mem,
+        target.tau_mem.as_quantity(),
         base.ParameterRange(20 * pq.us, 100 * pq.us))
     base.check_values(
         "i_synin_gm",
-        target.i_synin_gm,
+        target.i_synin_gm.value(),
         base.ParameterRange(30, 600))
     base.check_values(
         "target_noise",
-        target.target_noise,
+        target.target_noise.to_numpy() if target.target_noise else None,
         base.ParameterRange(1.0, 2.5))
     base.check_values(
         "synapse_dac_bias",
@@ -176,40 +167,34 @@ def calibrate(
     base.run(connection, builder)
 
     # Calibrate synaptic input time constant using MADC
-    if np.all(target.tau_syn == 0 * pq.us):
+    if np.all(target.tau_syn.as_quantity() == 0):
         pass
-    elif np.ndim(target.tau_syn) > 0 \
-            and target.tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.ExcSynTimeConstantCalib(
-            target=target.tau_syn[0])
-        calib_result.i_syn_exc_tau = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch()
-        ).calibrated_parameters
-        calibration = neuron_synin.InhSynTimeConstantCalib(
-            target=target.tau_syn[1])
-        calib_result.i_syn_inh_tau = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch()
-        ).calibrated_parameters
     else:
         calibration = neuron_synin.ExcSynTimeConstantCalib(
-            target=target.tau_syn)
+            target=target.tau_syn.as_quantity().T[0])
         calib_result.i_syn_exc_tau = calibration.run(
             connection, algorithm=algorithms.NoisyBinarySearch()
         ).calibrated_parameters
         calibration = neuron_synin.InhSynTimeConstantCalib(
-            target=target.tau_syn)
+            target=target.tau_syn.as_quantity().T[1])
         calib_result.i_syn_inh_tau = calibration.run(
-            connection, algorithm=algorithms.NoisyBinarySearch(),
+            connection, algorithm=algorithms.NoisyBinarySearch()
         ).calibrated_parameters
 
     # Calibrate leak potential at target leak read
     calibration = neuron_potentials.LeakPotentialCalib(
-        target.target_leak_read)
+        target.leak.to_numpy())
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     # Calibrate membrane time constant using reset
+    target_time_const = target.tau_mem.as_quantity()
+    if not np.all(np.isclose(
+            target_time_const.data, target_time_const[0].data)):
+        raise ValueError("This calibration routine only supports a single "
+                         "'target_time_const' for all enurons . Please "
+                         "choose a value of size one.")
     calibration = neuron_leak_bias.MembraneTimeConstCalibCADC(
-        target_time_const=target.tau_mem, target_amplitude=50)
+        target_time_const=target_time_const[0], target_amplitude=50)
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_bias_leak = result.calibrated_parameters
@@ -225,12 +210,13 @@ def calibrate(
 
     # Enable and calibrate excitatory synaptic input amplitudes to median
     neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=target.i_synin_gm)
+        connection, excitatory_biases=target.i_synin_gm.value())
 
     exc_synin_calibration = neuron_synin.ExcSynBiasCalib(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
-            target.i_synin_gm + 250, hal.CapMemCell.Value.max)))
+            target.i_synin_gm.value() + 250,
+            hal.CapMemCell.Value.max)))
     result = exc_synin_calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_exc_gm = result.calibrated_parameters
@@ -239,12 +225,14 @@ def calibrate(
 
     # Disable exc. synaptic input, enable and calibrate inhibitory
     neuron_helpers.reconfigure_synaptic_input(
-        connection, excitatory_biases=0, inhibitory_biases=target.i_synin_gm)
+        connection, excitatory_biases=0,
+        inhibitory_biases=target.i_synin_gm.value())
 
     calibration = neuron_synin.InhSynBiasCalib(
         target_leak_read=target_cadc_reads,
         parameter_range=base.ParameterRange(0, min(
-            target.i_synin_gm + 250, hal.CapMemCell.Value.max)),
+            target.i_synin_gm.value() + 250,
+            hal.CapMemCell.Value.max)),
         target=exc_synin_calibration.target)
     calibration.n_events = exc_synin_calibration.n_events
     result = calibration.run(

@@ -42,9 +42,12 @@ class NeuronThresholdTest(ConnectionSetup):
 
         # using hagen mode calib: set syn. input bias and tau_syn
         # more suitable for spiking operation
-        neuron.calibrate(
-            self.connection,
-            neuron.NeuronCalibTarget(i_synin_gm=300, tau_syn=2 * pq.us))
+        target = neuron.NeuronCalibTarget()
+        target.i_synin_gm = 300
+        for atomic_neuron in halco.iter_all(halco.AtomicNeuronOnDLS):
+            # pylint: disable=unsubscriptable-object
+            target.tau_syn[atomic_neuron].fill(2e-6)  # s
+        neuron.calibrate(self.connection, target)
 
     @staticmethod
     def preconfigure(connection: hxcomm.ConnectionHandle,

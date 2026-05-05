@@ -10,32 +10,10 @@ import numpy as np
 
 from dlens_vx_v3 import halco, hal, sta, logger, hxcomm
 
-from pyccalix import CADCCalibOptions
+from pyccalix import CADCCalibOptions, CADCCalibTarget
 from calix.common import helpers, algorithms, base, \
     cadc_helpers, cadc_evaluation
 from calix import constants
-
-
-@dataclass
-class CADCCalibTarget(base.CalibTarget):
-    """
-    Target parameters for the CADC calibration.
-
-    :ivar dynamic_range: CapMem settings (LSB) at the minimum and maximum
-        of the desired dynamic range. By default, the full dynamic range
-        of the CADC is used, which corresponds to some 0.15 to 1.05 V.
-        The voltages are configured as `stp_v_charge_0`, which gets
-        connected to the CADCs via the CapMem debug readout.
-    :ivar read_range: Target CADC reads at the lower and upper end of
-        the dynamic range.
-    """
-
-    dynamic_range: base.ParameterRange = field(
-        default_factory=lambda: base.ParameterRange(
-            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)))
-    read_range: base.ParameterRange = field(
-        default_factory=lambda: base.ParameterRange(
-            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)))
 
 
 @dataclass
@@ -506,22 +484,26 @@ def calibrate(
 
     base.check_values(
         "dynamic_range",
+        target.dynamic_range.to_tuple(),
         base.ParameterRange(
-            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)),
-        target.dynamic_range)
+            hal.CapMemCell.Value(70), hal.CapMemCell.Value(550)))
     base.check_values(
         "read_range",
+        target.read_range.to_tuple(),
         base.ParameterRange(
-            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)),
-        target.read_range)
+            hal.CADCSampleQuad.Value(20), hal.CADCSampleQuad.Value(220)))
 
-    if np.any(np.array(target.dynamic_range) < hal.CapMemCell.Value.min):
+    if np.any(np.array(target.dynamic_range.to_tuple())
+              < hal.CapMemCell.Value.min):
         raise ValueError("CADC dynamic_range is below CapMem range.")
-    if np.any(np.array(target.dynamic_range) > hal.CapMemCell.Value.max):
+    if np.any(np.array(target.dynamic_range.to_tuple())
+              > hal.CapMemCell.Value.max):
         raise ValueError("CADC dynamic_range is above CapMem range.")
-    if np.any(np.array(target.read_range) < hal.CADCSampleQuad.Value.min):
+    if np.any(np.array(target.read_range.to_tuple())
+              < hal.CADCSampleQuad.Value.min):
         raise ValueError("CADC read_range is below CADC value range.")
-    if np.any(np.array(target.read_range) > hal.CADCSampleQuad.Value.max):
+    if np.any(np.array(target.read_range.to_tuple())
+              > hal.CADCSampleQuad.Value.max):
         raise ValueError("CADC read_range is above CADC value range.")
 
     log = logger.get("calix.common.cadc_calibration.calibrate")
@@ -564,7 +546,8 @@ def calibrate(
     if options.calibrate_offsets:
         # Part 3: Channel offsets
         calibration = ChannelOffsetCalib(
-            int(np.mean(target.dynamic_range)))
+            int(np.mean([target.dynamic_range.lower.value(),
+                         target.dynamic_range.upper.value()])))
         result = calibration.run(
             connection, algorithms.LinearPrediction(
                 probe_parameters=0,

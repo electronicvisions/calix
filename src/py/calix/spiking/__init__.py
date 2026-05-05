@@ -6,13 +6,16 @@ from warnings import warn
 
 from dlens_vx_v3 import hxcomm, hal, halco
 
-from pyccalix import SpikingCalibOptions
+from pyccalix import SpikingCalibOptions, SpikingCalibTarget \
+    as SpikingCalibTargetBase
 from calix.common import base, cadc
-from calix.spiking import neuron, correlation, synapse_driver
+from calix.spiking import neuron, correlation, synapse_driver, \
+    neuron_calib_parts
 
 
 @dataclass
-class SpikingCalibTarget(base.TopLevelCalibTarget):
+class SpikingCalibTarget(
+        base.TopLevelCalibTarget, SpikingCalibTargetBase):
     """
     Data class containing targets for spiking neuron calibration.
 
@@ -22,14 +25,9 @@ class SpikingCalibTarget(base.TopLevelCalibTarget):
         correlation sensors. If None, they will not be calibrated.
     :ivar stp_target: Target for STP calibration.
     """
-
-    cadc_target: cadc.CADCCalibTarget = field(
-        default_factory=cadc.CADCCalibTarget)
-    neuron_target: neuron.NeuronCalibTarget = field(
-        default_factory=neuron.NeuronCalibTarget)
-    correlation_target: Optional[correlation.CorrelationCalibTarget] = None
-    stp_target: synapse_driver.STPCalibTarget = field(
-        default_factory=synapse_driver.STPCalibTarget)
+    def __init__(self):
+        base.TopLevelCalibTarget.__init__(self)
+        SpikingCalibTargetBase.__init__(self)
 
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,
@@ -133,7 +131,8 @@ def calibrate(connection: hxcomm.ConnectionHandle,
     # Also, precise potentials will not be as important in COBA mode.
     if options.refine_potentials or (
             options.refine_potentials is None
-            and target.neuron_target.e_coba_reversal is None):
+            and not neuron_calib_parts.COBAParameters(
+                target.neuron_target).calibrate_coba):
         # re-calibrate CADCs
         # The newly set CapMem cells during the neuron calibration introduce
         # crosstalk on the CapMem, which means the previous CADC calibration

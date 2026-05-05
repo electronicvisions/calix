@@ -12,29 +12,19 @@ import numpy as np
 
 from dlens_vx_v3 import hxcomm, halco, hal, lola
 
-from pyccalix import HagenSyninCalibOptions, HagenCalibOptions
+from pyccalix import HagenSyninCalibOptions, HagenCalibOptions, \
+    HagenSyninCalibTarget as HagenSyninCalibTargetBase, \
+    HagenCalibTarget as HagenCalibTargetBase
 from calix.common import algorithms, base, cadc, synapse, helpers
 from calix.hagen import neuron, synapse_driver, neuron_helpers, multiplication
 from calix import constants
 
 
-@dataclass
-class HagenSyninCalibTarget(base.TopLevelCalibTarget):
-    """
-    Dataclass collecting target parameters for Hagen-mode calibrations.
-    with integration on synaptic input lines.
-
-    :ivar cadc_target: Target parameters for CADC calibration.
-    :ivar synapse_dac_bias: Target synapse DAC bias current.
-        Controls the charge emitted to the synaptic input line by a
-        multiplication.
-    """
-
-    cadc_target: cadc.CADCCalibTarget = field(
-        default_factory=lambda: cadc.CADCCalibTarget(
-            dynamic_range=base.ParameterRange(
-                hal.CapMemCell.Value(150), hal.CapMemCell.Value(340))))
-    synapse_dac_bias: int = 800
+class HagenSyninCalibTarget(
+        base.TopLevelCalibTarget, HagenSyninCalibTargetBase):
+    def __init__(self):
+        base.TopLevelCalibTarget.__init__(self)
+        HagenSyninCalibTargetBase.__init__(self)
 
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,
@@ -43,22 +33,11 @@ class HagenSyninCalibTarget(base.TopLevelCalibTarget):
         return calibrate_for_synin_integration(connection, self, options)
 
 
-@dataclass
-class HagenCalibTarget(base.TopLevelCalibTarget):
-    """
-    Dataclass collecting target parameters for Hagen-mode calibrations
-    with integration on membranes.
-
-    :ivar cadc_target: Target parameters for CADC calibration.
-    :ivar neuron_target: Target parameters for neuron calibration.
-    """
-
-    cadc_target: cadc.CADCCalibTarget = field(
-        default_factory=lambda: cadc.CADCCalibTarget(
-            dynamic_range=base.ParameterRange(
-                hal.CapMemCell.Value(150), hal.CapMemCell.Value(500))))
-    neuron_target: neuron.NeuronCalibTarget = field(
-        default_factory=neuron.NeuronCalibTarget)
+class HagenCalibTarget(
+        base.TopLevelCalibTarget, HagenCalibTargetBase):
+    def __init__(self):
+        base.TopLevelCalibTarget.__init__(self)
+        HagenCalibTargetBase.__init__(self)
 
     def calibrate(self,
                   connection: hxcomm.ConnectionHandle,
@@ -225,10 +204,12 @@ class HagenCalibResult(base.CalibResult):
         options = HagenSyninCalibOptions()
         options.cadc_options = cadc_options
         options.synapse_driver_options = self.options.synapse_driver_options
+        target = HagenSyninCalibTarget()
+        target.cadc_target = cadc_target
+        target.synapse_dac_bias = synapse_dac_bias
         result = HagenSyninCalibResult(
-            target=HagenSyninCalibTarget(
-                cadc_target=cadc_target, synapse_dac_bias=synapse_dac_bias),
             options=options,
+            target=target,
             cadc_result=cadc_result,
             synapse_driver_result=self.synapse_driver_result,
             syn_i_bias_dac=calibrated_dac_bias)
@@ -270,9 +251,10 @@ def calibrate(connection: hxcomm.ConnectionHandle,
         options = HagenCalibOptions()
 
     # preparations for synapse driver calib: calibrate CADC to smaller range
-    cadc.calibrate(connection, cadc.CADCCalibTarget(
-        dynamic_range=base.ParameterRange(
-            hal.CapMemCell.Value(150), hal.CapMemCell.Value(340))))
+    cadc_target = cadc.CADCCalibTarget()
+    cadc_target.dynamic_range.lower = 150
+    cadc_target.dynamic_range.upper = 340
+    cadc.calibrate(connection, cadc_target)
     builder = base.WriteRecordingPlaybackProgramBuilder()
     neuron_helpers.configure_chip(builder)
     base.run(connection, builder)

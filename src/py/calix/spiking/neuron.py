@@ -2,7 +2,6 @@
 Provides an interface for calibrating LIF neurons.
 """
 
-import numbers
 from typing import Optional, Union, List
 from dataclasses import dataclass, field
 
@@ -11,7 +10,7 @@ import quantities as pq
 
 from dlens_vx_v3 import sta, halco, hal, hxcomm, lola, logger
 
-from pyccalix import NeuronCalibOptions
+from pyccalix import NeuronCalibOptions, NeuronCalibTarget
 from calix.common import algorithms, base
 from calix.hagen import neuron_helpers, neuron_potentials, \
     neuron_dataclasses
@@ -19,132 +18,6 @@ from calix.hagen.neuron_dataclasses import NeuronCalibResult
 from calix.spiking import neuron_threshold, refractory_period, \
     neuron_calib_parts
 from calix import constants
-
-
-@dataclass
-class NeuronCalibTarget(base.CalibTarget):
-    """
-    Target parameters for the neuron calibration.
-
-    Calib target parameters:
-    :ivar leak: Target CADC read at leak (resting) potential.
-    :ivar reset: Target CADC read at reset potential.
-    :ivar threshold: Target CADC read near spike threshold.
-    :ivar tau_mem: Membrane time constant.
-    :ivar tau_syn: Synaptic input time constant.
-        If a single float value is given, it is used for all synaptic
-        inputs on all neurons, excitatory and inhibitory.
-        If a numpy array of floats is given, it can be shaped
-        (2, 512) for the excitatory and inhibitory synaptic input
-        of each neuron. It can also be shaped (2,) for the excitatory
-        and inhibitory synaptic input of all neurons, or shaped (512,)
-        for both inputs per neuron.
-    :ivar i_synin_gm: Synaptic input strength as CapMem bias current.
-        Here, if a single value is given, both excitatory and inhibitory
-        synaptic inputs are calibrated to a target measured as the median
-        of all neurons at this setting.
-        If an array shaped (2,) is given, the values are used as excitatory
-        and inhibitory target values, respectively.
-        If an array (512,) or (2, 512) is given, the synaptic input
-        strength is NOT calibrated, as this array would already be
-        the result of calibration. Instead, the values are set up
-        per neuron and used during the later parts, i.e. synaptic
-        input reference calibration.
-    :ivar e_coba_reversal: COBA synaptic input reversal potential.
-        At this potential, the synaptic input strength will be zero.
-        The distance between COBA reversal and reference potential
-        determines the strength of the amplitude modulation.
-        Note that in biological context, the difference between reference
-        and reversal potentials is a scaling factor for the conductance
-        achieved by an input event.
-        Optional: If None, the synaptic input will use CUBA mode for all
-        neurons.
-        Given as an array (2,) for excitatory and inhibitory synaptic
-        input, respectively; or an array (2, 512) for individual targets
-        per neuron. Given in CADC units. The values may exceed the dynamic
-        range of leak and CADC. In this case, the calibration is performed
-        at a lower, linearly interpolated value.
-        You can also disable COBA modulation per neuron by setting np.inf
-        or -np.inf as reversal potentials for excitatory and inhibitory
-        synaptic inputs, respectively.
-    :ivar e_coba_reference: COBA synaptic input reference potential:
-        At this potential, the original CUBA synaptic input strength,
-        given via i_synin_gm, is not modified by COBA modulation.
-        Optional: If None or numpy.nan, the midpoint between leak and
-        threshold will be used.
-        Given as an array (2,) for excitatory and inhibitory synaptic
-        input, respectively; or an array (2, 512) for individual targets
-        per neuron. Given in CADC units. The values must be reachable by
-        the leak term, and the dynamic range of the CADC must allow for
-        measurement of synaptic input amplitudes on top of this potential.
-        We recommend choosing a value between the leak and threshold.
-    :ivar membrane_capacitance: Selected membrane capacitance.
-        The available range is 0 to approximately 2.2 pF, represented
-        as 0 to 63 LSB.
-    :ivar refractory_time: Refractory time, given with a unit as
-        `quantities.quantity.Quantity`.
-    :ivar synapse_dac_bias: Synapse DAC bias current that is desired.
-        Can be lowered in order to reduce the amplitude of a spike
-        at the input of the synaptic input OTA. This can be useful
-        to avoid saturation when using larger synaptic time constants.
-    :ivar holdoff_time: Target length of the holdoff period. The holdoff
-        period is the time at the end of the refractory period in which the
-        clamping to the reset voltage is already released but new spikes can
-        still not be generated.
-    :ivar tau_icc: Time constant of the inter-compartment conductance.
-        If the value is NaN, the inter-compartment conductance is not
-        calibrated.
-    """
-
-    leak: Union[int, np.ndarray] = 80
-    reset: Union[int, np.ndarray] = 70
-    threshold: Union[int, np.ndarray] = 125
-    tau_mem: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
-    tau_syn: pq.Quantity = field(default_factory=lambda: 10. * pq.us)
-    i_synin_gm: Union[int, np.ndarray] = 500
-    e_coba_reversal: Optional[np.ndarray] = None
-    e_coba_reference: Optional[np.ndarray] = None
-    membrane_capacitance: Union[int, np.ndarray] = 63
-    refractory_time: pq.Quantity = field(
-        default_factory=lambda: 2 * pq.us)
-    synapse_dac_bias: int = 600
-    holdoff_time: pq.Quantity = field(
-        default_factory=lambda: 0 * pq.us)
-    tau_icc: pq.Quantity = field(default_factory=lambda: np.nan * pq.us)
-
-
-NeuronCalibTarget.DenseDefault = NeuronCalibTarget(
-    leak=np.ones(
-        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget().leak,
-    reset=np.ones(
-        halco.AtomicNeuronOnDLS.size, dtype=int) * NeuronCalibTarget().reset,
-    threshold=np.ones(halco.AtomicNeuronOnDLS.size, dtype=int)
-    * NeuronCalibTarget().threshold,
-    tau_mem=np.ones(halco.AtomicNeuronOnDLS.size)
-    * NeuronCalibTarget().tau_mem,
-    tau_syn=np.ones((
-        halco.SynapticInputOnNeuron.size,
-        halco.AtomicNeuronOnDLS.size)) * NeuronCalibTarget().tau_syn,
-    i_synin_gm=np.ones(
-        halco.SynapticInputOnNeuron.size,
-        dtype=int) * NeuronCalibTarget().i_synin_gm,
-    e_coba_reversal=np.repeat(
-        np.array([np.inf, -np.inf])[:, np.newaxis],
-        halco.AtomicNeuronOnDLS.size, axis=1),
-    e_coba_reference=np.ones((
-        halco.SynapticInputOnNeuron.size,
-        halco.AtomicNeuronOnDLS.size)) * np.nan,
-    membrane_capacitance=np.ones(
-        halco.AtomicNeuronOnDLS.size,
-        dtype=int) * NeuronCalibTarget().membrane_capacitance,
-    refractory_time=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().refractory_time,
-    synapse_dac_bias=NeuronCalibTarget().synapse_dac_bias,
-    holdoff_time=np.ones(
-        halco.AtomicNeuronOnDLS.size) * NeuronCalibTarget().holdoff_time,
-    tau_icc=np.ones(
-        halco.AtomicNeuronOnDLS.size) * np.nan * pq.us
-)
 
 
 @dataclass
@@ -200,54 +73,27 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
             the reversal potential for each neuron individually.
         """
 
-        def find_neuron_value(array: Union[numbers.Integral, np.ndarray],
-                              index: int) -> numbers.Integral:
-            """
-            Extract the value for a given (neuron) index from either
-            an array of values or return the input number, if the
-            input is not an array.
-
-            :param array: Array or single number. We try to index the
-                array, or directly return the number if it's not an array.
-
-            :return: Array value at the given (neuron) index.
-            """
-
-            try:
-                return array[index]
-            except IndexError:
-                return array[()]
-            except TypeError:
-                return array
-
         if e_coba_reversal is None:
-            e_coba_reversal = np.array([np.inf, -np.inf])
+            e_coba_reversal = np.array(
+                [[None, None]] * halco.AtomicNeuronOnDLS.size)
 
         self.neuron_configs = []
-        if np.ndim(tau_syn) > 0 \
-                and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-            tau_syn_exc = tau_syn[0]
-            tau_syn_inh = tau_syn[1]
-        else:
-            tau_syn_exc = tau_syn
-            tau_syn_inh = tau_syn
 
-        for neuron_id in range(halco.NeuronConfigOnDLS.size):
+        for atomic_neuron in halco.iter_all(halco.AtomicNeuronOnDLS):
             config = neuron_helpers.neuron_config_default()
             config.enable_threshold_comparator = True
             config.enable_synaptic_input_excitatory_coba_mode = \
-                find_neuron_value(e_coba_reversal[0], neuron_id) < np.inf
+                e_coba_reversal[atomic_neuron][0] is not None
             config.enable_synaptic_input_inhibitory_coba_mode = \
-                find_neuron_value(e_coba_reversal[1], neuron_id) > -np.inf
+                e_coba_reversal[atomic_neuron][1] is not None
 
             if readout_neuron is not None:
-                if int(readout_neuron.toNeuronConfigOnDLS().toEnum()
-                       ) == neuron_id:
+                if readout_neuron == atomic_neuron:
                     config.enable_readout = True
 
-            tau_exc = find_neuron_value(tau_syn_exc, neuron_id)
-            tau_inh = find_neuron_value(tau_syn_inh, neuron_id)
-            c_mem = find_neuron_value(membrane_capacitance, neuron_id)
+            tau_exc = tau_syn[atomic_neuron][0]
+            tau_inh = tau_syn[atomic_neuron][1]
+            c_mem = membrane_capacitance[atomic_neuron]
             config.membrane_capacitor_size = \
                 hal.NeuronConfig.MembraneCapacitorSize(c_mem)
 
@@ -348,92 +194,76 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
 
 
 def check_target(target: NeuronCalibTarget):
-    if not isinstance(target.tau_mem, pq.Quantity):
-        raise TypeError(
-            "Membrane time constant is not given as a "
-            "`quantities.Quantity`.")
-    if not isinstance(target.tau_syn, pq.Quantity):
-        raise TypeError(
-            "Synaptic time constant is not given as a "
-            "`quantities.Quantity`.")
-    if not isinstance(target.refractory_time, pq.Quantity):
-        raise TypeError(
-            "Refractory time is not given as a "
-            "`quantities.Quantity`.")
-    if not isinstance(target.holdoff_time, pq.Quantity):
-        raise TypeError(
-            "Holdoff time is not given as a "
-            "`quantities.Quantity`.")
-    if not isinstance(target.tau_icc, pq.Quantity):
-        raise TypeError(
-            "Inter-compartment time constant is not given as a "
-            "`quantities.Quantity`.")
     if target.holdoff_time.size not in [1, halco.NeuronConfigOnDLS.size]:
         raise ValueError("Holdoff time needs to have size 1 or "
                          f"{halco.NeuronConfigOnDLS.size}.")
 
     base.check_values(
         "leak",
-        target.leak,
+        target.leak.to_numpy(),
         base.ParameterRange(50, 160))
     base.check_values(
         "reset",
-        target.reset,
+        target.reset.to_numpy(),
         base.ParameterRange(50, 160))
     base.check_values(
         "threshold",
-        target.threshold,
+        target.threshold.to_numpy(),
         base.ParameterRange(50, 220))
     base.check_values(
         "tau_mem",
-        target.tau_mem,
+        target.tau_mem.as_quantity(),
         base.ParameterRange(0.5 * pq.us, 60 * pq.us))
     base.check_values(
         "tau_syn",
-        target.tau_syn,
+        target.tau_syn.as_quantity(),
         base.ParameterRange(0.3 * pq.us, 30 * pq.us))
     base.check_values(
         "i_synin_gm",
-        target.i_synin_gm,
+        target.cuba_synin.i_synin_gm.value() if isinstance(
+            target.cuba_synin,
+            NeuronCalibTarget.CalibratedMatchingCubaSynapticInput)
+        else target.cuba_synin.i_synin_gm.to_numpy(),
         base.ParameterRange(30, 800))
     base.check_values(
         "e_coba_reversal",
-        target.e_coba_reversal,
+        np.array([list(e) for e in target.coba_synin.e_coba_reversal]),
         base.ParameterRange(-np.inf, np.inf))
     base.check_values(
         "e_coba_reference",
-        target.e_coba_reference,
+        np.array([list(e) for e in target.coba_synin.e_coba_reference]),
         base.ParameterRange(60, 160))
     base.check_values(
         "membrane_capacitance",
-        target.membrane_capacitance,
+        target.membrane_capacitance.to_numpy(),
         base.ParameterRange(
             hal.NeuronConfig.MembraneCapacitorSize.min,
             hal.NeuronConfig.MembraneCapacitorSize.max))
     base.check_values(
         "refractory_time",
-        target.refractory_time,
+        target.refractory_time.as_quantity(),
         base.ParameterRange(40 * pq.ns, 32 * pq.us))
     base.check_values(
         "synapse_dac_bias",
-        target.synapse_dac_bias,
+        target.synapse_dac_bias.value(),
         base.ParameterRange(30, hal.CapMemCell.Value.max))
     base.check_values(
         "holdoff_time",
-        target.holdoff_time,
+        target.holdoff_time.as_quantity(),
         base.ParameterRange(0 * pq.ns, 4 * pq.us))
-    base.check_values(
-        "tau_icc",
-        target.tau_icc,
-        base.ParameterRange(0.1 * pq.us, 30 * pq.us))
+    if target.tau_icc is not None:
+        base.check_values(
+            "tau_icc",
+            target.tau_icc.as_quantity(),
+            base.ParameterRange(0.1 * pq.us, 30 * pq.us))
 
-    if np.any([target.tau_mem < constants.tau_mem_range.lower,
-               target.tau_mem > constants.tau_mem_range.upper]):
+    if np.any([target.tau_mem.as_quantity() < constants.tau_mem_range.lower,
+               target.tau_mem.as_quantity() > constants.tau_mem_range.upper]):
         raise ValueError(
             "Target membrane time constant is out of allowed range "
             + "in the respective fit function.")
-    if np.any([target.tau_syn < constants.tau_syn_range.lower,
-               target.tau_syn > constants.tau_syn_range.upper]):
+    if np.any([target.tau_syn.as_quantity() < constants.tau_syn_range.lower,
+               target.tau_syn.as_quantity() > constants.tau_syn_range.upper]):
         raise ValueError(
             "Target synaptic time constant is out of allowed range "
             + "in the respective fit function.")
@@ -479,11 +309,12 @@ def calibrate(
     calib_result = _CalibResultInternal()
     calib_result.set_neuron_configs_default(
         target.membrane_capacitance, target.tau_syn, options.readout_neuron,
-        target.e_coba_reversal)
+        target.coba_synin.e_coba_reversal)
 
     # Calculate refractory time
     calib_result.clock_settings = refractory_period.calculate_settings(
-        tau_ref=target.refractory_time, holdoff_time=target.holdoff_time)
+        tau_ref=target.refractory_time.as_quantity(),
+        holdoff_time=target.holdoff_time.as_quantity())
 
     # Configure chip for calibration
     builder = base.WriteRecordingPlaybackProgramBuilder()
@@ -494,16 +325,16 @@ def calibrate(
     neuron_calib_parts.disable_synin_and_threshold(connection, calib_result)
 
     neuron_calib_parts.calibrate_tau_syn(
-        connection, target.tau_syn, calib_result)
+        connection, target.tau_syn.as_quantity().T, calib_result)
 
     neuron_calib_parts.calibrate_synapse_dac_bias(
-        connection, target.synapse_dac_bias, calib_result)
+        connection, target.synapse_dac_bias.value(), calib_result)
 
     # calibrate threshold
     calibration = neuron_threshold.ThresholdCalibCADC()
     calib_result.v_threshold = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch(),
-        target=target.threshold
+        target=target.threshold.to_numpy()
     ).calibrated_parameters
 
     # bring chip into a state for synin calibration
@@ -527,14 +358,15 @@ def calibrate(
     neuron_calib_parts.disable_synin_and_threshold(connection, calib_result)
 
     # calibrate leak
-    calibration = neuron_potentials.LeakPotentialCalib(target.leak)
+    calibration = neuron_potentials.LeakPotentialCalib(target.leak.to_numpy())
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
     neuron_calib_parts.calibrate_tau_mem(
-        connection, target.tau_mem, calib_result)
+        connection, target.tau_mem.as_quantity(), calib_result)
 
     # calibrate reset
-    calibration = neuron_potentials.ResetPotentialCalib(target.reset)
+    calibration = neuron_potentials.ResetPotentialCalib(
+        target.reset.to_numpy())
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.v_reset = result.calibrated_parameters
@@ -542,7 +374,7 @@ def calibrate(
         calib_result.success, result.success], axis=0)
 
     # calibrate leak
-    calibration = neuron_potentials.LeakPotentialCalib(target.leak)
+    calibration = neuron_potentials.LeakPotentialCalib(target.leak.to_numpy())
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.v_leak = result.calibrated_parameters
@@ -550,8 +382,9 @@ def calibrate(
         calib_result.success, result.success], axis=0)
 
     # calibrate inter-compartment conductance
-    neuron_calib_parts.calibrate_tau_icc(
-        connection, target.tau_icc, calib_result)
+    if target.tau_icc is not None:
+        neuron_calib_parts.calibrate_tau_icc(
+            connection, target.tau_icc.as_quantity(), calib_result)
 
     # print warning in case of failed neurons
     n_neurons_failed = np.sum(np.invert(calib_result.success))
@@ -602,7 +435,7 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     calibration = neuron_threshold.ThresholdCalibCADC()
     v_threshold = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch(),
-        target=target.threshold
+        target=target.threshold.to_numpy()
     ).calibrated_parameters
 
     # disable threshold (necessary before calibrating leak and reset)
@@ -614,13 +447,15 @@ def refine_potentials(connection: hxcomm.ConnectionHandle,
     base.run(connection, builder)
 
     # calibrate reset
-    calibration = neuron_potentials.ResetPotentialCalib(target.reset)
+    calibration = neuron_potentials.ResetPotentialCalib(
+        target.reset.to_numpy())
     v_reset = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch()
     ).calibrated_parameters
 
     # calibrate leak
-    calibration = neuron_potentials.LeakPotentialCalib(target.leak)
+    calibration = neuron_potentials.LeakPotentialCalib(
+        target.leak.to_numpy())
     v_leak = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch()
     ).calibrated_parameters

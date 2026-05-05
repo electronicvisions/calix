@@ -30,10 +30,8 @@ if TYPE_CHECKING:
 class SyninParameters:
     """
     Collection of parameters for synaptic input calibration.
-
     Contains decisions that are set automatically based on
     the shape of targets for the calibration:
-
     :ivar i_synin_gm: Target bias currents for synaptic input OTAs,
         with shapes modified to match the needs of the calibration
         routines.
@@ -42,14 +40,14 @@ class SyninParameters:
     :ivar equalize_synin: Decide whether excitatory and inhibitory
       synaptic input strengths are equalized.
     """
-
     def __init__(self, target: neuron.NeuronCalibTarget):
         """
         :param target: Target parameters for neuron calib.
         """
-
-        self.i_synin_gm = deepcopy(target.i_synin_gm)
-
+        try:
+            self.i_synin_gm = target.cuba_synin.i_synin_gm.to_numpy().T
+        except AttributeError:
+            self.i_synin_gm = target.cuba_synin.i_synin_gm.value()
         if not isinstance(self.i_synin_gm, np.ndarray) \
                 and np.ndim(self.i_synin_gm) > 0:
             self.i_synin_gm = np.array(self.i_synin_gm)
@@ -85,38 +83,40 @@ class COBAParameters:
         :param target: Neuron calibration target parameters.
         """
 
-        self.e_coba_reversal = deepcopy(target.e_coba_reversal)
-        self.e_coba_reference = deepcopy(target.e_coba_reference)
+        self.e_coba_reversal = np.array(
+            [[np.nan, np.nan]] * halco.NeuronConfigOnDLS.size)
+        self.e_coba_reference = np.array(
+            [[np.nan, np.nan]] * halco.NeuronConfigOnDLS.size)
+        for atomic_neuron in halco.iter_all(halco.AtomicNeuronOnDLS):
+            for synin in halco.iter_all(halco.SynapticInputOnNeuron):
+                self.e_coba_reversal[atomic_neuron.toEnum().value()][
+                    synin.value()] = \
+                    target.coba_synin.e_coba_reversal[atomic_neuron][synin] \
+                    if target.coba_synin.e_coba_reversal[atomic_neuron][synin]\
+                    is not None else [np.inf, -np.inf][synin.value()]
+                self.e_coba_reference[atomic_neuron.toEnum().value()][
+                    synin.value()] = \
+                    target.coba_synin.e_coba_reference[atomic_neuron][synin] \
+                    if target.coba_synin.e_coba_reference[atomic_neuron][
+                        synin] \
+                    is not None else np.nan
 
-        if self.e_coba_reversal is None:
+        self.e_coba_reference = np.array(
+            self.e_coba_reference, dtype=float).T
+        self.e_coba_reversal = np.array(
+            self.e_coba_reversal, dtype=float).T
+
+        if (not np.any(self.e_coba_reversal[0] < np.inf)) and \
+                (not np.any(self.e_coba_reversal[1] > -np.inf)):
             self.calibrate_coba = False
             return
 
         self.calibrate_coba = True
 
-        if self.e_coba_reference is None:
-            self.e_coba_reference = np.array([np.nan, np.nan])
-        else:
-            self.e_coba_reference = np.array(
-                self.e_coba_reference, dtype=float)
-        if self.e_coba_reference.shape == ():
-            self.e_coba_reference = np.tile(
-                self.e_coba_reference,
-                (halco.SynapticInputOnNeuron.size,
-                 halco.NeuronConfigOnDLS.size))
-        elif self.e_coba_reference.shape \
-                == (halco.SynapticInputOnNeuron.size,):
-            self.e_coba_reference = np.repeat(
-                self.e_coba_reference[:, np.newaxis],
-                halco.NeuronConfigOnDLS.size, axis=1)
-
         # fill COBA reference potential with defaults where necessary
         default_e_coba_reference = np.mean(
-            np.array(
-                [np.broadcast_to(target.leak, halco.NeuronConfigOnDLS.size),
-                 np.broadcast_to(target.threshold,
-                                 halco.NeuronConfigOnDLS.size)]),
-            axis=0)
+            np.array([
+                target.leak.to_numpy(), target.threshold.to_numpy()]), axis=0)
         default_e_coba_reference = np.repeat(
             default_e_coba_reference[np.newaxis],
             halco.SynapticInputOnNeuron.size, axis=0)
@@ -136,30 +136,18 @@ def calibrate_tau_syn(
     :param calib_result: Calib result to store parameters in.
     """
 
-    if np.ndim(tau_syn) > 0 \
-            and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.ExcSynTimeConstantCalib(
-            neuron_configs=calib_result.neuron_configs,
-            target=tau_syn[0])
-    else:
-        calibration = neuron_synin.ExcSynTimeConstantCalib(
-            neuron_configs=calib_result.neuron_configs,
-            target=tau_syn)
+    calibration = neuron_synin.ExcSynTimeConstantCalib(
+        neuron_configs=calib_result.neuron_configs,
+        target=tau_syn[0])
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_exc_tau = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
 
-    if np.ndim(tau_syn) > 0 \
-            and tau_syn.shape[0] == halco.SynapticInputOnNeuron.size:
-        calibration = neuron_synin.InhSynTimeConstantCalib(
-            neuron_configs=calib_result.neuron_configs,
-            target=tau_syn[1])
-    else:
-        calibration = neuron_synin.InhSynTimeConstantCalib(
-            neuron_configs=calib_result.neuron_configs,
-            target=tau_syn)
+    calibration = neuron_synin.InhSynTimeConstantCalib(
+        neuron_configs=calib_result.neuron_configs,
+        target=tau_syn[1])
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_inh_tau = result.calibrated_parameters
