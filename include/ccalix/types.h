@@ -39,4 +39,22 @@ struct GENPYBIND(inline_base("*")) PotentialInVolt
 	})
 };
 
+
+struct GENPYBIND(inline_base("*")) CapacitanceInFarad
+    : public halco::common::detail::BaseType<CapacitanceInFarad, double>
+{
+	constexpr explicit CapacitanceInFarad(value_type const value = 0.)
+	    GENPYBIND(implicit_conversion) :
+	    base_t(value)
+	{
+	}
+
+	GENPYBIND_MANUAL({
+		parent.def("as_quantity", [&parent](GENPYBIND_PARENT_TYPE const& self) {
+			auto pq = pybind11::module_::import("quantities");
+			return pq.attr("Quantity")(self.value(), pq.attr("F"));
+		});
+	})
+};
+
 } // namespace ccalix
