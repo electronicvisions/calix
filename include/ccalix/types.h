@@ -4,6 +4,25 @@
 
 namespace ccalix GENPYBIND_TAG_CCALIX {
 
+/**
+ * Time in seconds.
+ */
+struct GENPYBIND(inline_base("*")) TimeInS : public halco::common::detail::BaseType<TimeInS, double>
+{
+	constexpr explicit TimeInS(value_type const value = 0) GENPYBIND(implicit_conversion) :
+	    base_t(value)
+	{
+	}
+
+	GENPYBIND_MANUAL({
+		parent.def("as_quantity", [&parent](GENPYBIND_PARENT_TYPE const& self) {
+			auto pq = pybind11::module_::import("quantities");
+			return pq.attr("Quantity")(self.value(), pq.attr("s"));
+		});
+	})
+};
+
+
 struct GENPYBIND(inline_base("*")) PotentialInVolt
     : public halco::common::detail::BaseType<PotentialInVolt, double>
 {
