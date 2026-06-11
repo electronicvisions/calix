@@ -173,9 +173,9 @@ class MADCCharacterization(adc_characterization.ADCCharacterization):
         std_traces = []
         for start_index, stop_index in zip(boundaries[:-1], boundaries[1:]):
             mean_traces.append(np.mean(
-                madc_samples['value'][start_index + stop_index]))
+                madc_samples['value'][start_index:stop_index]))
             std_traces.append(np.std(
-                madc_samples['value'][start_index + stop_index]))
+                madc_samples['value'][start_index:stop_index]))
 
         assert len(self.test_values) == len(mean_traces)
         assert len(std_traces) == len(mean_traces)
