@@ -52,7 +52,6 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
     def set_neuron_configs_default(
             self, membrane_capacitance: Union[
                 hal.NeuronConfig.MembraneCapacitorSize, np.ndarray],
-            tau_syn: pq.Quantity,
             readout_neuron: Optional[halco.AtomicNeuronOnDLS] = None,
             e_coba_reversal: Optional[np.ndarray] = None):
         """
@@ -60,8 +59,6 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
         otherwise default values.
 
         :param membrane_capacitance: Desired membrane capacitance (in LSB).
-        :param tau_syn: Synaptic input time constant. Used to
-            decide whether the high resistance mode is enabled.
         :param readout_neuron: Neuron to enable readout for.
         :param e_coba_reversal: COBA-mode reversal potential. Used to
             decide whether to enable COBA mode on a per-neuron basis:
@@ -91,21 +88,9 @@ class _CalibResultInternal(neuron_dataclasses.CalibResultInternal):
                 if readout_neuron == atomic_neuron:
                     config.enable_readout = True
 
-            tau_exc = tau_syn[atomic_neuron][0]
-            tau_inh = tau_syn[atomic_neuron][1]
             c_mem = membrane_capacitance[atomic_neuron]
             config.membrane_capacitor_size = \
                 hal.NeuronConfig.MembraneCapacitorSize(c_mem)
-
-            # min. tau_syn with high resistance mode: some 20 us
-            if tau_exc < 20 * pq.us:
-                config.enable_synaptic_input_excitatory_high_resistance = False
-            else:
-                config.enable_synaptic_input_excitatory_high_resistance = True
-            if tau_inh < 20 * pq.us:
-                config.enable_synaptic_input_inhibitory_high_resistance = False
-            else:
-                config.enable_synaptic_input_inhibitory_high_resistance = True
 
             self.neuron_configs.append(config)
 
@@ -308,7 +293,7 @@ def calibrate(
     # create result object
     calib_result = _CalibResultInternal()
     calib_result.set_neuron_configs_default(
-        target.membrane_capacitance, target.tau_syn, options.readout_neuron,
+        target.membrane_capacitance, options.readout_neuron,
         target.coba_synin.e_coba_reversal)
 
     # Calculate refractory time

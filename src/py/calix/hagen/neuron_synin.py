@@ -656,6 +656,15 @@ class SynTimeConstantCalib(madc_base.Calib):
 
         raise NotImplementedError
 
+    @staticmethod
+    @abstractmethod
+    def _set_high_resistance(config: hal.NeuronConfig, enable: bool):
+        """
+        Set high resistance switch for synapse input.
+        """
+
+        raise NotImplementedError
+
     def prelude(self, connection: hxcomm.ConnectionHandle) -> None:
         """
         Prepares chip for calibration.
@@ -692,6 +701,29 @@ class SynTimeConstantCalib(madc_base.Calib):
 
         # run program
         base.run(connection, builder)
+
+        # decide whether high_resistance is required:
+        for neuron_id in range(self.n_instances):
+            self._set_high_resistance(
+                self.neuron_config_default[neuron_id], True)
+
+        # measure at low bias current: If time constant is still
+        # bigger than the target, then disable high resistance mode.
+        builder = base.WriteRecordingPlaybackProgramBuilder()
+        builder = self.configure_parameters(
+            builder, parameters=np.ones(self.n_instances, dtype=int)
+            # use 90% of maximum value to leave headroom for capmem noise
+            # and later binary search
+            * int(hal.CapMemCell.Value.max * 0.9)
+            + helpers.capmem_noise(size=self.n_instances))
+        minimum_timeconstant = self.measure_results(connection, builder)
+        disable_high_resistance = minimum_timeconstant > self.target
+
+        # set up in neuron configs
+        for neuron_id in range(self.n_instances):
+            self._set_high_resistance(
+                self.neuron_config_default[neuron_id],
+                not disable_high_resistance[neuron_id])
 
     def configure_parameters(
             self, builder: base.WriteRecordingPlaybackProgramBuilder,
@@ -843,6 +875,23 @@ class SynTimeConstantCalib(madc_base.Calib):
 
         return np.array(neuron_fits) * pq.us
 
+    def postlude(self, connection: hxcomm.ConnectionHandle):
+        """
+        Restore original readout configuration.
+
+        The base class postlude is overwritten to _not_ restore
+        the original neuron configuration, as high_resistance
+        may be altered by this routine.
+
+        :param connection: Connection to the chip to calibrate.
+        """
+
+        # restore original readout config
+        builder = base.WriteRecordingPlaybackProgramBuilder()
+        builder.write(halco.ReadoutSourceSelectionOnDLS(),
+                      self.original_readout_config)
+        base.run(connection, builder)
+
 
 class ExcSynTimeConstantCalib(SynTimeConstantCalib):
     """
@@ -853,6 +902,10 @@ class ExcSynTimeConstantCalib(SynTimeConstantCalib):
     _row_mode = hal.SynapseDriverConfig.RowMode.excitatory
     _readout_source = hal.NeuronConfig.ReadoutSource.exc_synin
 
+    @staticmethod
+    def _set_high_resistance(config, enable):
+        config.enable_synaptic_input_excitatory_high_resistance = enable
+
 
 class InhSynTimeConstantCalib(SynTimeConstantCalib):
     """
@@ -862,6 +915,10 @@ class InhSynTimeConstantCalib(SynTimeConstantCalib):
     _bias_current_coord = halco.CapMemRowOnCapMemBlock.i_bias_synin_inh_tau
     _row_mode = hal.SynapseDriverConfig.RowMode.inhibitory
     _readout_source = hal.NeuronConfig.ReadoutSource.inh_synin
+
+    @staticmethod
+    def _set_high_resistance(config, enable):
+        config.enable_synaptic_input_inhibitory_high_resistance = enable
 
 
 class SynReferenceCalibMADC(madc_base.Calib):

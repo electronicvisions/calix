@@ -136,8 +136,10 @@ def calibrate_tau_syn(
     :param calib_result: Calib result to store parameters in.
     """
 
+    neuron_configs = deepcopy(calib_result.neuron_configs)
+
     calibration = neuron_synin.ExcSynTimeConstantCalib(
-        neuron_configs=calib_result.neuron_configs,
+        neuron_configs=neuron_configs,
         target=tau_syn[0])
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
@@ -146,13 +148,21 @@ def calibrate_tau_syn(
         calib_result.success, result.success], axis=0)
 
     calibration = neuron_synin.InhSynTimeConstantCalib(
-        neuron_configs=calib_result.neuron_configs,
+        neuron_configs=calibration.neuron_config_default,
         target=tau_syn[1])
     result = calibration.run(
         connection, algorithm=algorithms.NoisyBinarySearch())
     calib_result.i_syn_inh_tau = result.calibrated_parameters
     calib_result.success = np.all([
         calib_result.success, result.success], axis=0)
+
+    # set possibly modified high resistance switch in calib result
+    for result_config, calib_config in zip(
+            calib_result.neuron_configs, calibration.neuron_config_default):
+        result_config.enable_synaptic_input_excitatory_high_resistance = \
+            calib_config.enable_synaptic_input_excitatory_high_resistance
+        result_config.enable_synaptic_input_inhibitory_high_resistance = \
+            calib_config.enable_synaptic_input_inhibitory_high_resistance
 
 
 def calibrate_synapse_dac_bias(
@@ -239,17 +249,12 @@ def prepare_for_synin_calib(
     calibration = neuron_potentials.LeakPotentialCalib(120)
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
 
-    # ensure syn. input high resistance mode is off
     neuron_configs_synin_calib = []
     for neuron_coord, neuron_config in zip(
             halco.iter_all(halco.NeuronConfigOnDLS),
             calib_result.neuron_configs):
         neuron_config = hal.NeuronConfig(neuron_config)  # copy
         neuron_config.enable_threshold_comparator = False
-        neuron_config.enable_synaptic_input_excitatory_high_resistance = \
-            False
-        neuron_config.enable_synaptic_input_inhibitory_high_resistance = \
-            False
         neuron_config.enable_synaptic_input_excitatory = False
         neuron_config.enable_synaptic_input_inhibitory = False
         builder.write(neuron_coord, neuron_config)
