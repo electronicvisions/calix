@@ -14,7 +14,7 @@ from dlens_vx_v3 import logger
 from dlens_vx_v3.hxcomm import ManagedConnection
 from dlens_vx_v3.halco import iter_all, AtomicNeuronOnDLS
 
-from pyccalix import CorrelationCalibOptions
+from pyccalix import CorrelationCalibOptions, CorrelationCalibTarget
 import calix.spiking
 from calix.spiking import correlation
 from calix.scripts.calix_generate_default_calibration import \
@@ -42,12 +42,13 @@ class CorrelationCalibRecorder(CalibRecorder):
     calibration_target.neuron_target.threshold.fill(130)
     calibration_target.neuron_target.synapse_dac_bias = 1000
     calibration_target.neuron_target.cuba_synin.i_synin_gm = 400
+    calibration_target.correlation_target = CorrelationCalibTarget()
     calibration_target.correlation_target.amplitude = 1.5
     calibration_target.correlation_target.time_constant = 30e-6  # pq.s
     calibration_options = calix.spiking.SpikingCalibOptions()
     calibration_options.correlation_options.calibrate_synapses = True
     calibration_options.correlation_options.branches = \
-        correlation.CorrelationBranches.CAUSAL
+        CorrelationCalibOptions.Branches.CAUSAL
     calibration_options.correlation_options.default_amp_calib = 1
     calibration_options.correlation_options.v_res_meas = 0.95  # pq.V
 
