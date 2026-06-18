@@ -40,7 +40,7 @@ class CorrelationCalibRecorder(CalibRecorder):
     calibration_target.neuron_target.reset.fill(80)
     calibration_target.neuron_target.leak.fill(100)
     calibration_target.neuron_target.threshold.fill(130)
-    calibration_target.neuron_target.synapse_dac_bias.fill(1000)
+    calibration_target.neuron_target.synapse_dac_bias = 1000
     calibration_target.neuron_target.cuba_synin.i_synin_gm = 400
     calibration_target.correlation_target.amplitude = 1.5
     calibration_target.correlation_target.time_constant = 30e-6  # pq.s
