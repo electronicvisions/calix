@@ -18,6 +18,7 @@
 #include "ccalix/stp_calib_options.h"
 #include "ccalix/stp_calib_target.h"
 #include "ccalix/synapse_driver_calib_options.h"
+#include "ccalix/trafo/collection_2d.h"
 #include "ccalix/trafo/interpolating_collection.h"
 #include "ccalix/trafo/linear.h"
 #include "ccalix/trafo/outside_domain_exception.h"
