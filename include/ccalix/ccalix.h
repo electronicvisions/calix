@@ -23,6 +23,7 @@
 #include "ccalix/trafo/linear.h"
 #include "ccalix/trafo/outside_domain_exception.h"
 #include "ccalix/trafo/polynomial.h"
+#include "ccalix/trafo/polynomial_1d.h"
 #include "ccalix/trafo/transformation.h"
 #include "ccalix/translation/cadc_calib_param.h"
 #include "ccalix/translation/cadc_on_dls.h"
