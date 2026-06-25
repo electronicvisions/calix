@@ -146,6 +146,7 @@ void NeuronCalibTarget::serialize(Archive& ar, std::uint32_t const)
 	ar(CEREAL_NVP(refractory_time));
 	ar(CEREAL_NVP(holdoff_time));
 	ar(CEREAL_NVP(synapse_dac_bias));
+	ar(CEREAL_NVP(tau_icc));
 }
 
 } // namespace ccalix
