@@ -140,7 +140,8 @@ def build(bld):
         features='use pylint pycodestyle',
         use=['calix_pylib', 'quiggeldy'],
         pylint_config=join(get_toplevel_path(), "code-format", "pylintrc"),
-        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle")
+        pycodestyle_config=join(get_toplevel_path(), "code-format", "pycodestyle"),
+        test_timeout=60
         )
 
     if bld.env.DOXYGEN:
