@@ -130,8 +130,8 @@ if __name__ == '__main__':
     if args.plot:
         fig, ax = plt.subplots()
         plot_linear_fit(ax, calib_res, fit_res)
-        fig.savefig('madc_calibration_residuals.pdf')
+        fig.savefig('madc_calibration_plot.pdf')
 
         fig, ax = plt.subplots()
         plot_residuals(ax, calib_res, fit_res)
-        fig.savefig('madc_calibration_plot.pdf')
+        fig.savefig('madc_calibration_residuals.pdf')

@@ -20,11 +20,11 @@ def main(connection: StatefulConnection,
          stop_value: float,
          n_steps: int):
     # calibrate CADCs
-    cadc_result = cadc.calibrate(stateful_connection)
+    cadc_result = cadc.calibrate(connection)
 
     calibration = CADCCharacterization(
         np.linspace(args.start_value, args.stop_value, args.n_steps) * pq.V)
-    calib_result = calibration.run(stateful_connection)
+    calib_result = calibration.run(connection)
 
     # Perform linear fit
     slope = []
