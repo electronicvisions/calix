@@ -339,12 +339,18 @@ def calibrate(
     # leave state with synin-calib configuration
     neuron_calib_parts.finalize_synin_calib(connection, calib_result)
 
-    # set desired neuron configs, disable syn. input and spikes again
+    # disable synaptic input and spikes
     neuron_calib_parts.disable_synin_and_threshold(connection, calib_result)
 
     # calibrate leak
     calibration = neuron_potentials.LeakPotentialCalib(target.leak.to_numpy())
     calibration.run(connection, algorithm=algorithms.NoisyBinarySearch())
+
+    # enable synaptic input again
+    neuron_helpers.reconfigure_synaptic_input(
+        connection,
+        excitatory_biases=calib_result.i_syn_exc_gm,
+        inhibitory_biases=calib_result.i_syn_inh_gm)
 
     neuron_calib_parts.calibrate_tau_mem(
         connection, target.tau_mem.as_quantity(), calib_result)
