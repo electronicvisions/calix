@@ -191,6 +191,34 @@ class SpikingCalibRecorder2(CalibRecorder):
         return calibration_target
 
 
+class SpikingCalibRecorder3(SpikingCalibRecorder2):
+    """
+    Recorder for a third Spiking-Mode calibration.
+
+    In contrast to the "spiking2" calibration, we use a longer membrane time
+    constant of 12us, as well as a long refractory time constant of 30us.
+
+    This calibration will, among other uses, be used in the jaxsnn demo
+    notebooks, for the yin-yang example where tau_mem=2*tau_syn is required by
+    the analytical spike-time solvers. The longer refractory time constant
+    enables single-spike neurons if the time frame is restricted accordingly.
+    """
+    calibration_type = "spiking3"
+
+    @property
+    def calibration_target(self) -> TopLevelCalibTarget:
+        """
+        Calibration target to be calibrated for.
+        """
+        calibration_target = super().calibration_target
+        calibration_target.neuron_target.tau_mem.fill(12e-6)  # pq.s
+        calibration_target.neuron_target.refractory_time.fill(30e-6)  # pq.s
+        for an in iter_all(AtomicNeuronOnDLS):
+            calibration_target.neuron_target.tau_syn[an].fill(6e-6)  # pq.s
+
+        return calibration_target
+
+
 class CalixFormatDumper(CalibDumper):
     """
     Dumper for the calix-internal data format.
@@ -265,6 +293,13 @@ class SpikingCalib2(RecorderAndDumper):
                CocoListJsonFormatDumper()]
 
 
+class SpikingCalib3(RecorderAndDumper):
+    recorder = SpikingCalibRecorder3()
+    dumpers = [CalixFormatDumper(),
+               CocoListPortableBinaryFormatDumper(),
+               CocoListJsonFormatDumper()]
+
+
 def run_and_save_all(deployment_folder: Path):
     """
     Executes all available default calibrations and saves them to all
@@ -274,7 +309,7 @@ def run_and_save_all(deployment_folder: Path):
     """
     with ManagedConnection() as connection:
         for calib in [HagenCalib(), HagenSyninCalib(),
-                      SpikingCalib(), SpikingCalib2()]:
+                      SpikingCalib(), SpikingCalib2(), SpikingCalib3()]:
             calib.record_and_dump(
                 StatefulConnection(connection), deployment_folder)
 
