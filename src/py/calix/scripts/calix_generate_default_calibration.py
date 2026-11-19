@@ -171,17 +171,24 @@ class SpikingCalibRecorder2(CalibRecorder):
     This calibration will, among other uses, be used in the demo
     notebooks, for the yin-yang example.
     """
-
     calibration_type = "spiking2"
-    calibration_target = SpikingCalibTarget()
-    calibration_target.neuron_target.leak.fill(80)
-    calibration_target.neuron_target.reset.fill(80)
-    calibration_target.neuron_target.threshold.fill(150)
-    calibration_target.neuron_target.tau_mem.fill(6e-6)  # pq.s
-    for an in iter_all(AtomicNeuronOnDLS):
-        calibration_target.neuron_target.tau_syn[an].fill(6e-6)  # pq.s
-    calibration_target.neuron_target.cuba_synin.i_synin_gm = 500
-    calibration_target.neuron_target.synapse_dac_bias = 1000
+
+    @property
+    def calibration_target(self) -> TopLevelCalibTarget:
+        """
+        Calibration target to be calibrated for.
+        """
+        calibration_target = SpikingCalibTarget()
+        calibration_target.neuron_target.leak.fill(80)
+        calibration_target.neuron_target.reset.fill(80)
+        calibration_target.neuron_target.threshold.fill(150)
+        calibration_target.neuron_target.tau_mem.fill(6e-6)  # pq.s
+        for an in iter_all(AtomicNeuronOnDLS):
+            calibration_target.neuron_target.tau_syn[an].fill(6e-6)  # pq.s
+        calibration_target.neuron_target.cuba_synin.i_synin_gm = 500
+        calibration_target.neuron_target.synapse_dac_bias = 1000
+
+        return calibration_target
 
 
 class CalixFormatDumper(CalibDumper):
